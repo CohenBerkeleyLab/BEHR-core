@@ -8,7 +8,7 @@ where y = number of scanlines in the orbit, with 60 scenes per scanline
 returns array (60,y,2,5), 2=lon,lat, 5=corners(5th=center)
 %}
 
-dims = size(Latitude);
+dims = size(Latitude); %JLL 2-18-2014: Latitude should be defined in the main file that calls this script.
 corners = zeros(dims(1),dims(2),2,5);
 
 for y = 1:dims(1)-1;
@@ -25,10 +25,14 @@ for y = 1:dims(1)-1;
     satalt = satalt * 1E-3; %convert to km 
     
     %compute the ground pixel edge lat, lon in the across track direction
+    %JLL 2-18-2014: These points lie on the edge between pixels in their
+    %own rows.
     [latedge, lonedge] = compute_edge_pts(lat, lon);  
     [latedge1, lonedge1] = compute_edge_pts(lat1, lon1);
     
     %compute flight vector
+    %JLL 2-19-2014: The ith row is a 3D-vector connecting the ith edge
+    %points of two adjacent rows
     flightvector = compute_flight_vector(latedge, lonedge, latedge1, lonedge1);
     
     %compute fwhm in the flight direction if not already calculated

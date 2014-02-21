@@ -5,7 +5,7 @@
 %to the center of the ground pixel
 
 function [fwhm] = weight_distance(distance) 
-
+%JLL 2-19-2014: These were commented out when I received the file.
 %nsteps = 1001;
 %start = -50;
 %xend = 50;

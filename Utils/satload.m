@@ -7,6 +7,9 @@ function satload(method)
 %   'states' = load the path to have the state outlines
 
 if strcmp(method,'states')
-   addpath('/Volumes/share/GROUP/SAT/BEHR/Ashley_tools/Ashley/Mapping/tools')
+   addpath('/Volumes/share/GROUP/SAT/BEHR/Ashley_tools/Ashley/Mapping/tools');
    disp('/share/GROUP/SAT/BEHR/Ashley_tools/Ashley/Mapping/tools added to path')
+elseif strcmpi(method,'mod04')
+   addpath(genpath('/Volumes/share/GROUP/SAT/MODIS/MOD04_L2'));
+   disp('MOD04_L2 on the server added to the path')
 end

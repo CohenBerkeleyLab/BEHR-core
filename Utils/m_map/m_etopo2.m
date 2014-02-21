@@ -29,7 +29,7 @@ function [values,longs,lats]=m_etopo2(varargin);
 
 %%% This will have to be set by YOU the USER!
 
-PATHNAME='/Users/Josh/Documents/MATLAB/Utils/m_map/';   % Be sure to end the path with a "/" or
+PATHNAME='/Users/Josh/Documents/MATLAB/BEHR/Utils/m_map/';   % Be sure to end the path with a "/" or
                                      % whatever your separator is.
 
 %%% You probably won't want to change this...
@@ -43,10 +43,10 @@ decmax=500;
 % unreasonable! (PS - I'd appreciate knowing *why* you changed it).
 
 
-
+efid=fopen([PATHNAME 'etopo2_new.raw'],'r','b'); % in big-endian format %JLL 2-21-2014 - changed to reflect current file name
 %%% Don't change anything below this... 
 
-efid=fopen([PATHNAME 'etopo2_2006apr.raw'],'r','b'); % in big-endian format
+%efid=fopen([PATHNAME 'etopo2_2006apr.raw'],'r','b'); % in big-endian format
 %efid=fopen([PATHNAME 'etopo2.i2'],'r','b'); % in big-endian format
 
 if efid==-1,

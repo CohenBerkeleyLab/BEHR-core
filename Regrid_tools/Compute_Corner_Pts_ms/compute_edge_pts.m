@@ -9,8 +9,10 @@ latedge = zeros(n+1,1);
 lonedge = zeros(n+1,1);
 
 %the extrapolations
-
-[x1,y1,z1] = sph2cart(lon(1)*pi/180,lat(1)*pi/180,1);
+%JLL 2-18-2014: Assume that the pixel lat and lon is a linear function of
+%"pixel number" and so calculate the center lat and lon of one imaginary pixel 
+%each to the left and right of the swath.
+[x1,y1,z1] = sph2cart(lon(1)*pi/180,lat(1)*pi/180,1); 
 [x2,y2,z2] = sph2cart(lon(2)*pi/180,lat(2)*pi/180,1);
     
 dx = x1 - x2; dy = y1 - y2; dz = z1 - z2;
@@ -31,7 +33,9 @@ latedge(n+1) = poslat / pi * 180;
     
     
 %the interpolations
-
+%JLL 2-18-2014: Assume that the edge between pixels is halfway in between
+%the center points. Note that only ***edge(2:n) are edge points, ***edge(1)
+%and ***edge(n+1) are the extrapolated center points
 for i = 2:n;
     [x1,y1,z1] = sph2cart(lon(i-1)*pi/180,lat(i-1)*pi/180,1);
     [x2,y2,z2] = sph2cart(lon(i)*pi/180,lat(i)*pi/180,1);

@@ -1,6 +1,9 @@
 %%compute_flight_vector
 %%arr 12/10/2007
 
+%JLL 2-18-2014: The flight vector is the straight line between two points
+%on the earth's surface. It is the chord connecting those points, not the
+%arc across the surface.
 function [flightvector] = compute_flight_vector(lat, lon, lat1, lon1)
 
 earthradius = 6378.5;
