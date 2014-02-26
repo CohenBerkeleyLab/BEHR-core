@@ -57,7 +57,7 @@ function m_gshhs(resolution,varargin);
 % 4/DEc/11 - isstr to ischar
 
 % Root of directories where gshhs_X.b files live
-FILNAME='private/gshhs/';
+FILNAME='/Users/Josh/Documents/MATLAB/BEHR/Utils/m_map/private/gshhs/';
 
 
 res_list = char('c','l','i','h','f') ;

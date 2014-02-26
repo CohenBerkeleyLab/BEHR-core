@@ -22,7 +22,7 @@ function m_gshhs_f(varargin);
 % it's mine, so you can't sell it.
 
 
-FILNAME='private/gshhs/gshhs_f.b';
+FILNAME='/Users/Josh/Documents/MATLAB/BEHR/Utils/m_map/private/gshhs/gshhs_f.b';
 
 % Set current projection to geographic
 Currentmap=m_coord('set');

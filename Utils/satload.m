@@ -5,6 +5,7 @@ function satload(method)
 % (currently) that determines which set of files to load.
 % Methods:
 %   'states' = load the path to have the state outlines
+%   'mod04' = load the modis MOD04_L2 and its subfolders
 
 if strcmp(method,'states')
    addpath('/Volumes/share/GROUP/SAT/BEHR/Ashley_tools/Ashley/Mapping/tools');
