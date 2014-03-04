@@ -4,8 +4,8 @@ function [ info ] = h5group( varargin )
 %Group(z)  Takes a minimum of 2 arguments: 
 %    info: an object returned by the 'h5info' function
 %    group1...groupN: The group indicies.  
-%For example, to list the datasets in hinfo.Group(1).Group(2).Group(1)
-%enter 'h5groupdsets(hinfo, 1, 2, 1)
+%For example, to get hinfo.Group(1).Group(2).Group(1)
+%enter "h5group(hinfo, 1, 2, 1)"
 
 if length(varargin) < 2
     disp('h5group error: needs at least 2 input arguments')
