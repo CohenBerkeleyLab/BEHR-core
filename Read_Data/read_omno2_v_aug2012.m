@@ -5,16 +5,23 @@
 %
 %Josh Laughner <joshlaugh5@gmail.com> 27 Feb 2014
 
+%****************************%
+% CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
+% Allows for quick control over the amount of output to the console.
+% Choose a higher level to keep track of what the script is doing.
+DEBUG_LEVEL = 3;
+%****************************%
+
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
 addpath(genpath('/Users/Josh/Documents/MATLAB/BEHR/Utils'))
 
 %Specify the longitude and latitude ranges of interest for this retrieval.
 %****************************%
-lonmin = -125;  lonmax = -95;
+lonmin = -125;    lonmax = -95;
 latmin = 37.5;    latmax = 50;
 %****************************%
-if lonmin > lonmax
+if lonmin > lonmax %Just in case I enter something backwards...
     error('read_omno2:maxmin','Lonmin is greater than lonmax')
 elseif latmin > latmax
     error('read_omno2:maxmin', 'Latmin is greater than latmax')
@@ -40,7 +47,15 @@ he5_dir = '/Volumes/share/GROUP/SAT/OMI/OMNO2_32';
 %Do not include a trailing separator.
 modis_myd06_dir = '/Volumes/share/GROUP/SAT/MODIS/MYD06_L2';
 
-%Process all files between these dates, in yyyy/mm/d format
+%This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
+%Do not include a trailing separator.
+modis_mcd43_dir = '/Volumes/share/GROUP/SAT/MODIS/MCD43C3';
+
+%This is the directory where the GLOBE data files and their headers (.hdr files) are saved.
+%Do not include a trailing separator.
+globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
+
+%Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 date_start='2007/02/01';
 date_end='2007/02/28';
@@ -84,7 +99,7 @@ last_file=dir(fullfile(mat_dir,'*.mat'));
 file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
 
 if isempty(last_file) || ~strcmp(last_file(end).name(1:l),file_prefix);
-    last_date=date_start;
+    last_date=datestr(datenum(date_start)-1,26);
 else
     last_date=last_file(end).name((l+1):(l+8));
     last_date=([last_date(1:4),'/',last_date(5:6),'/',last_date(7:8)]);
@@ -104,7 +119,7 @@ for j=1:total_days;
     day=date(9:10);
     
     %Prepare a data structure to receive the final data.
-    Data=struct('Longitude',0,'Latitude',0,'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0);
+    Data=struct('Date',date,'Longitude',0,'Latitude',0,'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0,'MODISAlbedo',0,'GLOBETerpres',0);
     
     %Set the file path and name, assuming that the file structure is
     %<he5_directory>/<year>/<month>/...files...  Then figure out how many
@@ -119,7 +134,9 @@ for j=1:total_days;
         disp(['No Data Available For ',month,' ',day,' ',year])
     else
         for e=1:n %For loop over all the swaths in a given day.
-            if e==1 || mod(e,10)==0; fprintf('Swath %u of %s/%s/%s \n',e,month,day,year); end
+            if DEBUG_LEVEL > 0
+                if e==1 || mod(e,10)==0; fprintf('Swath %u of %s/%s/%s \n',e,month,day,year); end
+            end
             %Read in each file, saving the hierarchy as 'hinfo'
             filename= sp_files(e).name;
             hinfo = h5info(fullfile(file_dir,filename));
@@ -197,10 +214,10 @@ for j=1:total_days;
             Lat(x)=NaN;     Lat(y)=NaN;     Lat(isnan(Lat))=[];
             
             if isempty(Lon)==1 || isempty(Lat)==1 || length(Lat)==1;
-                disp('No points within lat/lon boundaries')
+                if DEBUG_LEVEL > 1; disp('No points within lat/lon boundaries'); end
                 continue
             else
-                disp('Founds points within lat/lon boundaries')
+                if DEBUG_LEVEL > 1; disp('Founds points within lat/lon boundaries'); end
                 corners = fxn_corner_coordinates(Latitude, Longitude, SpacecraftLatitude, SpacecraftLongitude, SpacecraftAltitude);
                 E=E+1;
                 lat = corners(:,:,2,5); %Assign the center of each pixel to lat and lon
@@ -211,6 +228,8 @@ for j=1:total_days;
                 loncorn = corners(:,:,1,1:4); loncorn = squeeze(loncorn);
                 a = loncorn(:,:,1); a = a(:); b = loncorn(:,:,2); b = b(:); c = loncorn(:,:,3); c = c(:); d = loncorn(:,:,4); d = d(:);
                 loncorn = [a,b,c,d]; loncorn = loncorn';
+                
+                if DEBUG_LEVEL > 0; disp('Importing OMI data fields'); end
                 
                 %Import the FoV75 corner lat and lons.  These will be
                 %ordered the same as the BEHR-calculated corners, i.e. corner x
@@ -299,9 +318,9 @@ for j=1:total_days;
                 Row(x)=NaN;                         Row(y)=NaN;                         Row(isnan(Row))=[];
                 Swath(x)=NaN;                       Swath(y)=NaN;                       Swath(isnan(Swath))=[];
                 
+                if DEBUG_LEVEL > 0; disp('Saving importing OMI fields to "Data"'); end
                 %Save the imported items to the structure 'Data'.  As is,
-                %these structures will be 1 x n, where n is the number of
-                %valid pixels.
+                %these structures will be vectors.
                 Data(E).Latitude = lat(:);
                 Data(E).Longitude = lon(:);
                 Data(E).Loncorn = loncorn(1:4,:);
@@ -319,21 +338,21 @@ for j=1:total_days;
                 Data(E).Swath = Swath(:);
                 
                 %Add MODIS cloud info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                
+                if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
                 %Convert the OMI date to a Julian calendar day
                 d2=1+datenum(str2double(year),str2double(month),str2double(day))-datenum(str2double(year),1,1);
                 x=numel(num2str(d2));
                 if x==1;
-                    day2=(['00',num2str(d2)]);
+                    julian_day=(['00',num2str(d2)]);
                 elseif x==2;
-                    day2=(['0',num2str(d2)]);
+                    julian_day=(['0',num2str(d2)]);
                 elseif x==3;
-                    day2=num2str(d2);
+                    julian_day=num2str(d2);
                 end
                 
                 %Find all MODIS files that occur after the current OMI file
                 %but before the next OMI file.
-                modis_file=(['MYD06_L2.A',year,day2,'*.hdf']);
+                modis_file=(['MYD06_L2.A',year,julian_day,'*.hdf']);
                 modis_files=dir(fullfile(modis_myd06_dir,year,modis_file));
                 n=length(modis_files);
                 for ii=1:n;
@@ -397,8 +416,146 @@ for j=1:total_days;
                         clear lat1 lat2 lat3 lat4 xx
                     end
                 end
-                clear mod_Data
+                %clear mod_Data
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                
+                %Add MODIS albedo info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                if DEBUG_LEVEL>0; fprintf('\n Adding MODIS albedo information \n'); end
+                alb_dir = fullfile(modis_mcd43_dir,year);
+                
+                %Find the closest MCD file
+                in=[0 1 -1 2 -2 3 -3 4 -4 5 -5 6 -6 7 -7 8 -8 9 -9 10 -10 11 -11 12 -12 13 -13 14 -14 15 -15 16 -16 17 -17 18 -18 19 -19 20 -20 21 -21];
+                for ii=1:length(in);
+                    mcd_date = num2str(str2double(julian_day) + in(ii),'%03g');
+                    alb_filename = fullfile(alb_dir,['MCD43C3.A',year,mcd_date,'*.hdf']);
+                    alb_files = dir(alb_filename);
+                    if DEBUG_LEVEL > 1; fprintf('Looking for %s \n', alb_filename); end
+                    %if exist('alb_filename','file') == 2
+                    if ~isempty(alb_files)
+                        if DEBUG_LEVEL > 0; fprintf('Found mcd43 file %s \n', alb_filename); end
+                        break
+                    elseif ii==length(in)
+                        error('read_omno2:mcd43c3_find','Could not find an MCD43C3 (Albedo) file within 21 days');
+                    end
+                end
+                
+                mcd43_info = hdfinfo(fullfile(alb_dir,alb_files(1).name));
+                band3 = hdfread(hdf_dsetID(mcd43_info,1,1,'Albedo_BSA_Band3'));
+                
+                %MODIS albedo is given in 0.05 degree cells and a single file covers the
+                %full globe, so figure out the lat/lon of the middle of the grid cells as:
+                band3_lat=-90+0.05/2:0.05:90-0.05/2; band3_lats=band3_lat'; band3_lats=repmat(band3_lats,1,7200);
+                band3_lon=-180+0.05/2:0.05:180-0.05/2; band3_lons=repmat(band3_lon,3600,1);
+                
+                %To speed up processing, restrict the MODIS albedo data to
+                %only the area we need to worry about.  This will
+                %significantly speed up the search for albedo values within
+                %each pixel.
+                lat_min=Data(E).Latcorn(:); lat_min(lat_min==0)=[]; lat_min=floor(min(lat_min));
+                lat_max=Data(E).Latcorn(:); lat_max(lat_max==0)=[]; lat_max=ceil(max(lat_max));
+                lon_min=Data(E).Loncorn(:); lon_min(lon_min==0)=[]; lon_min=floor(min(lon_min));
+                lon_max=Data(E).Loncorn(:); lon_max(lon_max==0)=[]; lon_max=ceil(max(lon_max));
+                
+                in_lats = find(band3_lat>=lat_min & band3_lat<=lat_max);
+                in_lons = find(band3_lon>=lon_min & band3_lon<=lon_max);
+                band3=band3(in_lats,in_lons);
+                band3_lats=band3_lats(in_lats,in_lons);
+                band3_lons=band3_lons(in_lats,in_lons);
+                s=size(Data(E).Latitude);
+                c=numel(Data(E).Latitude);
+                MODISAlbedo=zeros(s);
+                
+                %Now actually average the MODIS albedo for each OMI pixel
+                if DEBUG_LEVEL > 0; disp('Averaging MODIS albedo to OMI pixels'); end
+                for k=1:c;
+                    if DEBUG_LEVEL > 2; tic; end
+                    x = [];
+                    x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
+                    x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
+                    x3 = Data(E).Loncorn(3,k);   y3 = Data(E).Latcorn(3,k);
+                    x4 = Data(E).Loncorn(4,k);   y4 = Data(E).Latcorn(4,k);
+                    
+                    
+                    xall=[x1;x2;x3;x4;x1];
+                    yall=[y1;y2;y3;y4;y1];
+                    
+                    xx = inpolygon(band3_lats,band3_lons,yall,xall);
+                    
+                    band3_vals=band3(xx);  band3_zeros=find(band3_vals==0);
+                    band3_vals(band3_zeros)=NaN; band3_vals(isnan(band3_vals))=[];
+                    band3_avg=mean(band3_vals);
+                    
+                    %put in ocean surface albedo from LUT
+                    if isnan(band3_avg)==1;
+                        sza_vec = [5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 89];
+                        alb_vec = [0.038 0.038 0.039 0.039 0.040 0.042 0.044 0.046 0.051 0.058 0.068 0.082 0.101 0.125 0.149 0.158 0.123 0.073];
+                        alb = interp1(sza_vec,alb_vec,Data(d).SolarZenithAngle(k));
+                        band3_avg = alb;
+                    end
+                    
+                    MODISAlbedo(k) = band3_avg;
+                    if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+                end
+                
+                Data(E).MODISAlbedo = MODISAlbedo;
+                
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                
+                %Add GLOBE terrain pressure to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
+                                              
+                %Load the useful GLOBE data
+                [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin,lonmax]);
+                
+                %refvec will contain (1) number of cells per degree, (2)
+                %northwest corner latitude, (3) NW corner longitude.
+                %(2) & (3) might differ from the input latmin & lonmin
+                %because of where the globe cell edges fall
+                cell_size = refvec(1);
+                
+                %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
+                %corner and terpres(end, end) is in the NE corner.
+                
+                if DEBUG_LEVEL > 0; disp('Creating lon/lat matrices for GLOBE data'); end
+                globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
+                globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
+                globe_lat_matrix = globe_lat_matrix';
+                globe_lat_matrix = flipud(globe_lat_matrix);
+                globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
+                
+                globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
+                globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
+                globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
+                
+                for k=1:c
+                    if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of %u \n',k,c); end
+                    if DEBUG_LEVEL > 2; tic; end
+                    x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
+                    x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
+                    x3 = Data(E).Loncorn(3,k);   y3 = Data(E).Latcorn(3,k);
+                    x4 = Data(E).Loncorn(4,k);   y4 = Data(E).Latcorn(4,k);
+                    
+                    
+                    xall=[x1;x2;x3;x4;x1];
+                    yall=[y1;y2;y3;y4;y1];
+                    
+                    xx = inpolygon(globe_lat_matrix,globe_lon_matrix,yall,xall);
+                    
+                    avg_terheight = mean(terpres(xx));
+                    avg_terpres = 1013 .* exp(-avg_terheight / 7640 ); %Convert average terrain altitude to pressure using the average scale height in meters
+                    GLOBETerpres(k) = avg_terpres;
+                    if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',k,c,telap); end
+                end
+                
+                Data(E).GLOBETerpres = GLOBETerpres;
+                
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                
             end %End the section carried out only if there are OMI pixels in the area of interest
             
         end %End the loop over all swaths in a day
