@@ -507,49 +507,60 @@ for j=1:total_days;
                 %Add GLOBE terrain pressure to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
-                                              
-                %Load the useful GLOBE data
-                [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin,lonmax]);
                 
-                %refvec will contain (1) number of cells per degree, (2)
-                %northwest corner latitude, (3) NW corner longitude.
-                %(2) & (3) might differ from the input latmin & lonmin
-                %because of where the globe cell edges fall
-                cell_size = refvec(1);
-                
-                %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
-                %corner and terpres(end, end) is in the NE corner.
-                
-                if DEBUG_LEVEL > 0; disp('Creating lon/lat matrices for GLOBE data'); end
-                globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
-                globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
-                globe_lat_matrix = globe_lat_matrix';
-                globe_lat_matrix = flipud(globe_lat_matrix);
-                globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
-                
-                globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
-                globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
-                globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
-                
-                for k=1:c
-                    if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of %u \n',k,c); end
-                    if DEBUG_LEVEL > 2; tic; end
-                    x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
-                    x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
-                    x3 = Data(E).Loncorn(3,k);   y3 = Data(E).Latcorn(3,k);
-                    x4 = Data(E).Loncorn(4,k);   y4 = Data(E).Latcorn(4,k);
+                GLOBETerpres = zeros(size(Data(E).Latitude));
+                %rowmin = min(Data(E).Row); rowmax = max(Data(E).Row);
+                %for rr = rowmin:rowmax
+                    %Find the lon/lat boundaries of the row
+                    %row_ind = find(Data(E).Row == rr);
+                    %row_lonmin = min(min(Data(E).Loncorn(:,row_ind))); row_lonmax = max(max(Data(E).Loncorn(:,row_ind)));
+                    %row_latmin = min(min(Data(E).Latcorn(:,row_ind))); row_latmax = max(max(Data(E).Latcorn(:,row_ind)));
                     
-                    
-                    xall=[x1;x2;x3;x4;x1];
-                    yall=[y1;y2;y3;y4;y1];
-                    
-                    xx = inpolygon(globe_lat_matrix,globe_lon_matrix,yall,xall);
-                    
-                    avg_terheight = mean(terpres(xx));
-                    avg_terpres = 1013 .* exp(-avg_terheight / 7640 ); %Convert average terrain altitude to pressure using the average scale height in meters
-                    GLOBETerpres(k) = avg_terpres;
-                    if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',k,c,telap); end
-                end
+                    %if DEBUG_LEVEL > 1; fprintf('***** row_lon = %g - %g; row_lat = %g - %g *****\n',row_lonmin, row_lonmax, row_latmin, row_latmax); end
+                    %Load the useful GLOBE data
+                    %[terpres, refvec] = globedem(globe_dir,1,[row_latmin, row_latmax],[row_lonmin, row_lonmax]);
+                    [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
+                    %refvec will contain (1) number of cells per degree, (2)
+                    %northwest corner latitude, (3) NW corner longitude.
+                    %(2) & (3) might differ from the input latmin & lonmin
+                    %because of where the globe cell edges fall
+                    cell_size = refvec(1);
+
+                    %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
+                    %corner and terpres(end, end) is in the NE corner.
+
+                    if DEBUG_LEVEL > 0; disp('\nCreating lon/lat matrices for GLOBE data'); end
+                    globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
+                    globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
+                    globe_lat_matrix = globe_lat_matrix';
+                    globe_lat_matrix = flipud(globe_lat_matrix);
+                    globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
+
+                    globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
+                    globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
+                    globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
+
+                    for k=1:c
+                    %for k=row_ind'; %For loops iterate through columns (apparently), so convert row_ind to a row vector
+                        if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of %u \n',k,c); end
+                        if DEBUG_LEVEL > 2; tic; end
+                        x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
+                        x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
+                        x3 = Data(E).Loncorn(3,k);   y3 = Data(E).Latcorn(3,k);
+                        x4 = Data(E).Loncorn(4,k);   y4 = Data(E).Latcorn(4,k);
+
+
+                        xall=[x1;x2;x3;x4;x1];
+                        yall=[y1;y2;y3;y4;y1];
+
+                        xx = inpolygon(globe_lat_matrix,globe_lon_matrix,yall,xall);
+
+                        avg_terheight = mean(terpres(xx));
+                        avg_terpres = 1013 .* exp(-avg_terheight / 7640 ); %Convert average terrain altitude to pressure using the average scale height in meters
+                        GLOBETerpres(k) = avg_terpres;
+                        if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',k,c,telap); end
+                    end
+                %end
                 
                 Data(E).GLOBETerpres = GLOBETerpres;
                 
