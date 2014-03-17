@@ -45,6 +45,8 @@ for y = 1:dims(1)-1;
     [latcorner, loncorner] = compute_corner_pts(latedge, lonedge, flightvector, fwhm);
     
     for x = 1:dims(2);
+        %JLL 17 Mar 2014: corners will have the structure (<row>, <pixel in
+        %row>, <1=lon, 2=lat>, <corner number, 5 = center>)
         corners(y,x,1,1) = loncorner(x,1);
         corners(y,x,2,1) = latcorner(x,1);
         corners(y,x,1,2) = loncorner(x+1,1);

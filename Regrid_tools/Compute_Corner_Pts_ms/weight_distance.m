@@ -14,7 +14,7 @@ function [fwhm] = weight_distance(distance)
 %wx = zeros(nsteps,1);
 %x = zeros(nsteps,1);
  
-x=linspace(-50,50,101);
+x=linspace(-50,50,101); %JLL 17 Mar 2014: x must be in km, since in weight flight direction it is used in "x - k*t"; k is ground speed in km/s
 
 
 wx = weight_flight_dir(distance, x);
@@ -26,4 +26,4 @@ wx = wx / max(wx);
 aa = (abs(wx - 0.5));
 bb = find(aa==min(aa));
 
-fwhm = abs(2 * x(bb(1)));
+fwhm = abs(2 * x(bb(1))); %This is the fwhm in km

@@ -9,7 +9,7 @@
 % CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
 % Allows for quick control over the amount of output to the console.
 % Choose a higher level to keep track of what the script is doing.
-DEBUG_LEVEL = 3;
+DEBUG_LEVEL = 1;
 %****************************%
 
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
@@ -58,7 +58,7 @@ globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 date_start='2007/02/01';
-date_end='2007/02/28';
+date_end='2007/02/02';
 %****************************%
 
 tic %Start the timer
@@ -66,6 +66,8 @@ tic %Start the timer
 %Initialize matrices to hold the OMI data
 Latitude=zeros(60,2000);
 Longitude=zeros(60,300);
+FoV75CornerLatitude=zeros(300,60,4);
+FoV75CornerLongitude=zeros(300,60,4);
 SpacecraftAltitude=zeros(300,1);
 SpacecraftLatitude=zeros(300,1);
 SpacecraftLongitude=zeros(300,1);
@@ -238,8 +240,8 @@ for j=1:total_days;
                 memspaceID = H5S.create_simple(length(slabsize),slabsize,slabsize);
                 offset = [(min(i_i)-1),0,0];
                 
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'FoV75CornerLatitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75CornerLatitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75CornerLatitude = double(FoV75CornerLatitude); FoV75CornerLatitude = permute(FoV75CornerLatitude, [2 3 1]);
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'FoV75CornerLongitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75CornerLongitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75CornerLongitude = double(FoV75CornerLongitude); FoV75CornerLongitude = permute(FoV75CornerLongitude, [2 3 1]);
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'FoV75CornerLatitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75CornerLatitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75CornerLatitude = double(FoV75CornerLatitude); FoV75CornerLatitude = permute(FoV75CornerLatitude, [1 3 2]);
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'FoV75CornerLongitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75CornerLongitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75CornerLongitude = double(FoV75CornerLongitude); FoV75CornerLongitude = permute(FoV75CornerLongitude, [1 3 2]);
                 
                 %Import all remaining pieces of information from the standard
                 %product.
@@ -279,24 +281,17 @@ for j=1:total_days;
                 
                 H5F.close(fileID); %close omi file to free up space
                 
-                s=size(SolarAzimuthAngle);
-                latcorn=reshape(latcorn,4,s(1),s(2));
-                loncorn=reshape(loncorn,4,s(1),s(2));
-                Time=reshape(Time,s(1),s(2));
-                
                 RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle);
                 RelativeAzimuthAngle(RelativeAzimuthAngle > 180)=360-RelativeAzimuthAngle(RelativeAzimuthAngle > 180);
-                
-                loncorn=loncorn(1:4,:);
-                latcorn=latcorn(1:4,:);
-                
-                
+                                                
                 x=find(lon<lonmin | lon>lonmax);
                 y=find(lat<latmin | lat>latmax);
                 lon(x)=NaN;                         lon(y)=NaN;                         lon(isnan(lon))=[];
                 lat(x)=NaN;                         lat(y)=NaN;                         lat(isnan(lat))=[];
-                loncorn(:,x)=NaN;                   loncorn(:,y)=NaN;                   loncorn=loncorn';                   loncorn(any(isnan(loncorn)'),:) = [];               loncorn=loncorn';
-                latcorn(:,x)=NaN;                   latcorn(:,y)=NaN;                   latcorn=latcorn';                   latcorn(any(isnan(latcorn)'),:) = [];               latcorn=latcorn';
+                loncorn(:,x)=NaN;                   loncorn(:,y)=NaN;                   loncorn(:,any(isnan(loncorn))) = [];                   
+                latcorn(:,x)=NaN;                   latcorn(:,y)=NaN;                   latcorn(:,any(isnan(latcorn))) = [];               
+                FoV75CornerLatitude(:,x)=NaN;       FoV75CornerLatitude(:,y)=NaN;       FoV75CornerLatitude(:,any(isnan(FoV75CornerLatitude))) = [];
+                FoV75CornerLongitude(:,x)=NaN;      FoV75CornerLongitude(:,y)=NaN;      FoV75CornerLongitude(:,any(isnan(FoV75CornerLongitude))) = [];
                 SolarAzimuthAngle(x)=NaN;           SolarAzimuthAngle(y)=NaN;           SolarAzimuthAngle(isnan(SolarAzimuthAngle))=[];
                 SolarZenithAngle(x)=NaN;            SolarZenithAngle(y)=NaN;            SolarZenithAngle(isnan(SolarZenithAngle))=[];
                 ViewingAzimuthAngle(x)=NaN;         ViewingAzimuthAngle(y)=NaN;         ViewingAzimuthAngle(isnan(ViewingAzimuthAngle))=[];
@@ -323,8 +318,8 @@ for j=1:total_days;
                 %these structures will be vectors.
                 Data(E).Latitude = lat(:);
                 Data(E).Longitude = lon(:);
-                Data(E).Loncorn = loncorn(1:4,:);
-                Data(E).Latcorn = latcorn(1:4,:);
+                Data(E).Loncorn = loncorn(1:4,:);                           Data(E).FoV75CornerLongitude = FoV75CornerLongitude(1:4,:);
+                Data(E).Latcorn = latcorn(1:4,:);                           Data(E).FoV75CornerLatitude = FoV75CornerLatitude(1:4,:);
                 Data(E).SolarAzimuthAngle = SolarAzimuthAngle(:);           Data(E).AMFTrop = AMFTrop(:);
                 Data(E).SolarZenithAngle = SolarZenithAngle(:);             Data(E).AMFStrat = AMFStrat(:);
                 Data(E).ViewingAzimuthAngle = ViewingAzimuthAngle(:);       Data(E).TerrainHeight = TerrainHeight(:);
@@ -520,7 +515,7 @@ for j=1:total_days;
                 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
                 %corner and terpres(end, end) is in the NE corner.
                 
-                if DEBUG_LEVEL > 0; disp('\nCreating lon/lat matrices for GLOBE data'); end
+                if DEBUG_LEVEL > 0; disp('\n Creating lon/lat matrices for GLOBE data'); end
                 globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
                 globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
                 globe_lat_matrix = globe_lat_matrix';
@@ -567,8 +562,7 @@ for j=1:total_days;
         toc
         t=toc;
         if t>1200
-            disp('Time exceeded 20 min. Stopping')
-            quit
+            error('Time exceeded 20 min. Stopping')
         end
     end %End the section checking if there are OMI files for the given time period
 end %End the loop over all days

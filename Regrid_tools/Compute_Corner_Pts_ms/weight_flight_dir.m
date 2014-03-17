@@ -47,12 +47,12 @@ dt = mcp ./ nsteps;
 
 wx = 0;
 for i = 1:nsteps;
-    t = (i - 0.5) .* dt - 0.5 .* mcp;
-    expo = (c1 .* (x - k .* t).^4);
-    if (expo < -700);
+    t = (i - 0.5) .* dt - 0.5 .* mcp; %JLL 17 Mar 2014: Set t to be at the middle of each time step
+    expo = (c1 .* (x - k .* t).^4); %JLL 17 Mar 2014: Calculate the exponent;
+    if (expo < -700); %JLL 17 Mar 2014: If all the elements of the exponent are < -700, go ahead and just set the result to 0
         wxt = 0;
     else
-       wxt = exp(expo);
+       wxt = exp(expo); %JLL 17 Mar 2014: Otherwise, go ahead and calculate the expression
     end
     wx = wx + wxt;
 end

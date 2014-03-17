@@ -1,6 +1,9 @@
 %%corner_coordinates
 %%arr 12/10/2007
 
+%JLL 17 Mar 2014: This script is now deprecated; use
+%"fxn_corner_coordinates" instead
+
 %{
 Latitude=zeros(60,y); Longitude=zeros(60,y); SpacecraftLatitude=zeros(60,y);
 SpacecraftLongitude=zeros(60,y); SpacecraftAltitude=zeros(60,y)
