@@ -4,7 +4,7 @@
 Dimensions=size(Data(d).ColumnAmountNO2);
 swath=d;
 
-x=1:1:Dimensions(1)*Dimensions(2);
+x=1:1:Dimensions(1)*Dimensions(2); 
 y=1;
 
 Lon1=Data(d).Loncorn(1,x)';   Lat1=Data(d).Latcorn(1,x)';
@@ -13,10 +13,10 @@ Lon3=Data(d).Loncorn(3,x)';   Lat3=Data(d).Latcorn(3,x)';
 Lon4=Data(d).Loncorn(4,x)';   Lat4=Data(d).Latcorn(4,x)';
 Lon5=Data(d).Longitude(x)';   Lat5=Data(d).Latitude(x)';
 
-CoordLon=cat(3,Lon1,Lon2,Lon3,Lon4,Lon5);
+CoordLon=cat(3,Lon1,Lon2,Lon3,Lon4,Lon5); %JLL 18 Mar 2014: cat concatenates along the dimension specified as the first argument
 CoordLat=cat(3,Lat1,Lat2,Lat3,Lat4,Lat5);
 
-reslat=resolution;   resy=resolution2;
+reslat=resolution;   resy=resolution2; %JLL 18 Mar 2014: resolution, resolution2, lonmin, lonmax, latmin, latmax are all specified in BEHR_main
 reslon=resolution2;   resx=resolution;
 lon1=lonmin; lon2=lonmax;  maxy=(abs(lonmin-lonmax))/resy; miny=1; maxy=single(maxy);
 lat1=latmin; lat2=latmax;  maxx=(abs(latmax-latmin))/resx; minx=1; maxx=single(maxx);
