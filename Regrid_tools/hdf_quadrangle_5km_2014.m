@@ -81,7 +81,7 @@ Pixel_i=repmat(1:length(Data(d).Longitude),60,1)';
 for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 column in Data(d)
     y=1;
     
-    pixelarea=(m_lldist([Lon1(x,y)-180 Lon2(x,y)-180],[Lat1(x,y) Lat2(x,y)])/1000)*13; %JLL 18 Mar 2014: This calculates the pixel distance across the swath in km and multiplies by an assumed pixel along track width of 13 km
+    pixelarea=(m_lldist([Lon1(x,y)-180 Lon2(x,y)-180],[Lat1(x,y) Lat2(x,y)]))*13; %JLL 20 Mar 2014: This calculates the area of the 50% pixel response area in km. (Removed /1000 b/c this function should return in km already)
     
     %JLL 18 Mar 2014: lCoordLat/Lon are defined in add2grid_5km_new, they
     %are the lat/lon values (here only the corners are used) as multiples
@@ -209,6 +209,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     Longitude(x_quad,y_quad)=mean([Longitude(x_quad,y_quad),Longitude_val]);
                     Pixel(x_quad,y_quad)=mean([Pixel(x_quad,y_quad),Pixel_val]);
                     Area(x_quad,y_quad)=mean([Area(x_quad,y_quad);pixelarea]);
+                    Areaweight(x,y)=2/Area(x,y);
                     ColumnAmountNO2Trop(x_quad,y_quad)=mean([ColumnAmountNO2Trop(x_quad,y_quad),ColumnAmountNO2Trop_val]);
                     GLOBETerpres(x_quad,y_quad)=mean([GLOBETerpres(x_quad,y_quad),GLOBETerpres_val]);
                     MODISAlbedo(x_quad,y_quad)=mean([MODISAlbedo(x_quad,y_quad),MODISAlbedo_val]);
@@ -255,7 +256,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                     AMFTrop(x_quad,y_quad)=AMFTrop_val;
                     AMFStrat(x_quad,y_quad)=AMFStrat_val;
-                    XTrackQualityFlags(x_quad,y_quad)=xTrackQualityFlags_val;
+                    XTrackQualityFlags(x_quad,y_quad)=XTrackQualityFlags_val;
                 end
             end
         end

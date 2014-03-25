@@ -18,8 +18,8 @@ addpath(genpath('/Users/Josh/Documents/MATLAB/BEHR/Utils'))
 
 %Specify the longitude and latitude ranges of interest for this retrieval.
 %****************************%
-lonmin = -125;    lonmax = -95;
-latmin = 37.5;    latmax = 50;
+lonmin = -125;    lonmax = -65;
+latmin = 25;    latmax = 50;
 %****************************%
 if lonmin > lonmax %Just in case I enter something backwards...
     error('read_omno2:maxmin','Lonmin is greater than lonmax')
@@ -58,7 +58,7 @@ globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 date_start='2007/02/01';
-date_end='2007/02/02';
+date_end='2007/02/05';
 %****************************%
 
 tic %Start the timer
@@ -121,7 +121,7 @@ for j=1:total_days;
     day=date(9:10);
     
     %Prepare a data structure to receive the final data.
-    Data=struct('Date',date,'Longitude',0,'Latitude',0,'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0,'MODISAlbedo',0,'GLOBETerpres',0);
+    Data=struct('Date',0,'Longitude',0,'Latitude',0,'LatBdy',[],'LonBdy',[],'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0,'MODIS_Cloud_File','','MODISAlbedo',0,'MODIS_Albedo_File','','GLOBETerpres',0,'XTrackQualityFlags',0);
     
     %Set the file path and name, assuming that the file structure is
     %<he5_directory>/<year>/<month>/...files...  Then figure out how many
@@ -231,7 +231,7 @@ for j=1:total_days;
                 a = loncorn(:,:,1); a = a(:); b = loncorn(:,:,2); b = b(:); c = loncorn(:,:,3); c = c(:); d = loncorn(:,:,4); d = d(:);
                 loncorn = [a,b,c,d]; loncorn = loncorn';
                 
-                if DEBUG_LEVEL > 0; disp('Importing OMI data fields'); end
+                if DEBUG_LEVEL > 0; fprintf('\n Importing OMI data fields \n'); end
                 
                 %Import the FoV75 corner lat and lons.  These will be
                 %ordered the same as the BEHR-calculated corners, i.e. corner x
@@ -268,7 +268,7 @@ for j=1:total_days;
                 %ColumnAmountNO2Trop
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'ColumnAmountNO2Trop')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); ColumnAmountNO2Trop = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); ColumnAmountNO2Trop=double(ColumnAmountNO2Trop); ColumnAmountNO2Trop=ColumnAmountNO2Trop';
                 %SlantColumnAmountNO2
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'SlantColumnAmountH2O')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); SlantColumnAmountNO2 = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); SlantColumnAmountNO2=double(SlantColumnAmountNO2); SlantColumnAmountNO2=SlantColumnAmountNO2';
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'SlantColumnAmountNO2')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); SlantColumnAmountNO2 = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); SlantColumnAmountNO2=double(SlantColumnAmountNO2); SlantColumnAmountNO2=SlantColumnAmountNO2';
                 %TerrainHeight
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainHeight')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainHeight = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainHeight=double(TerrainHeight); TerrainHeight=TerrainHeight';
                 %TerrainPressure
@@ -277,7 +277,8 @@ for j=1:total_days;
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainReflectivity')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainReflectivity = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainReflectivity=double(TerrainReflectivity); TerrainReflectivity=TerrainReflectivity';
                 %vcdQualityFlags
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'VcdQualityFlags')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); vcdQualityFlags = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); vcdQualityFlags=double(vcdQualityFlags); vcdQualityFlags=vcdQualityFlags';
-                
+                %XTrackQualityFlags
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'XTrackQualityFlags')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); XTrackQualityFlags = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); XTrackQualityFlags=double(XTrackQualityFlags); XTrackQualityFlags=XTrackQualityFlags';
                 
                 H5F.close(fileID); %close omi file to free up space
                 
@@ -308,16 +309,17 @@ for j=1:total_days;
                 TerrainPressure(x)=NaN;             TerrainPressure(y)=NaN;             TerrainPressure(isnan(TerrainPressure))=[];
                 TerrainReflectivity(x)=NaN;         TerrainReflectivity(y)=NaN;         TerrainReflectivity(isnan(TerrainReflectivity))=[];
                 vcdQualityFlags(x)=NaN;             vcdQualityFlags(y)=NaN;             vcdQualityFlags(isnan(vcdQualityFlags))=[];
+                XTrackQualityFlags(x)=NaN;          XTrackQualityFlags(y)=NaN;          XTrackQualityFlags(isnan(XTrackQualityFlags))=[];
                 RelativeAzimuthAngle(x)=NaN;        RelativeAzimuthAngle(y)=NaN;        RelativeAzimuthAngle(isnan(RelativeAzimuthAngle))=[];
                 ColumnAmountNO2Trop(x)=NaN;         ColumnAmountNO2Trop(y)=NaN;         ColumnAmountNO2Trop(isnan(ColumnAmountNO2Trop))=[];
                 Row(x)=NaN;                         Row(y)=NaN;                         Row(isnan(Row))=[];
                 Swath(x)=NaN;                       Swath(y)=NaN;                       Swath(isnan(Swath))=[];
                 
-                if DEBUG_LEVEL > 0; disp('Saving importing OMI fields to "Data"'); end
+                if DEBUG_LEVEL > 0; disp(' Saving imported OMI fields to "Data"'); end
                 %Save the imported items to the structure 'Data'.  As is,
                 %these structures will be vectors.
-                Data(E).Latitude = lat(:);
-                Data(E).Longitude = lon(:);
+                Data(E).Latitude = lat(:);                                  Data(E).LatBdy = [latmin latmax];
+                Data(E).Longitude = lon(:);                                 Data(E).LonBdy = [lonmin lonmax];
                 Data(E).Loncorn = loncorn(1:4,:);                           Data(E).FoV75CornerLongitude = FoV75CornerLongitude(1:4,:);
                 Data(E).Latcorn = latcorn(1:4,:);                           Data(E).FoV75CornerLatitude = FoV75CornerLatitude(1:4,:);
                 Data(E).SolarAzimuthAngle = SolarAzimuthAngle(:);           Data(E).AMFTrop = AMFTrop(:);
@@ -329,8 +331,8 @@ for j=1:total_days;
                 Data(E).ColumnAmountNO2Trop = ColumnAmountNO2Trop(:);       Data(E).SlantColumnAmountNO2 = SlantColumnAmountNO2(:);
                 Data(E).CloudRadianceFraction = CloudRadianceFraction(:);   Data(E).CloudPressure = CloudPressure(:);
                 Data(E).RelativeAzimuthAngle = RelativeAzimuthAngle(:);     Data(E).CloudFraction = CloudFraction(:);
-                Data(E).Row = Row(:);
-                Data(E).Swath = Swath(:);
+                Data(E).Row = Row(:);                                       Data(E).XTrackQualityFlags = XTrackQualityFlags(:);
+                Data(E).Swath = Swath(:);                                   Data(E).Date=date;
                 
                 %Add MODIS cloud info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
@@ -407,6 +409,7 @@ for j=1:total_days;
                         cld_vals=mod_Data.CloudFraction(xx);
                         cld_vals(isnan(cld_vals))=[];
                         Data(E).MODISCloud(jj,1)=mean(cld_vals);
+                        Data(E).MODIS_Cloud_File=mod_filename;
                         
                         clear lat1 lat2 lat3 lat4 xx
                     end
@@ -429,7 +432,7 @@ for j=1:total_days;
                     if DEBUG_LEVEL > 1; fprintf('Looking for %s \n', alb_filename); end
                     %if exist('alb_filename','file') == 2
                     if ~isempty(alb_files)
-                        if DEBUG_LEVEL > 0; fprintf('Found mcd43 file %s \n', alb_filename); end
+                        if DEBUG_LEVEL > 0; fprintf(' Found mcd43 file %s \n', alb_filename); end
                         break
                     elseif ii==length(in)
                         error('read_omno2:mcd43c3_find','Could not find an MCD43C3 (Albedo) file within 21 days');
@@ -463,7 +466,7 @@ for j=1:total_days;
                 MODISAlbedo=zeros(s);
                 
                 %Now actually average the MODIS albedo for each OMI pixel
-                if DEBUG_LEVEL > 0; disp('Averaging MODIS albedo to OMI pixels'); end
+                if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
                 for k=1:c;
                     if DEBUG_LEVEL > 2; tic; end
                     x = [];
@@ -491,10 +494,11 @@ for j=1:total_days;
                     end
                     
                     MODISAlbedo(k) = band3_avg;
-                    if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+                    if DEBUG_LEVEL > 2; telap = toc; fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
                 end
                 
                 Data(E).MODISAlbedo = MODISAlbedo;
+                Data(E).MODIS_Albedo_File = fullfile(alb_dir,alb_files(1).name);
                 
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -515,7 +519,7 @@ for j=1:total_days;
                 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
                 %corner and terpres(end, end) is in the NE corner.
                 
-                if DEBUG_LEVEL > 0; disp('\n Creating lon/lat matrices for GLOBE data'); end
+                if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
                 globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
                 globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
                 globe_lat_matrix = globe_lat_matrix';
@@ -562,7 +566,7 @@ for j=1:total_days;
         toc
         t=toc;
         if t>1200
-            error('Time exceeded 20 min. Stopping')
+            %error('Time exceeded 20 min. Stopping')
         end
     end %End the section checking if there are OMI files for the given time period
 end %End the loop over all days
