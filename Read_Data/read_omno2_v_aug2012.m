@@ -58,7 +58,7 @@ globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 date_start='2007/02/01';
-date_end='2007/02/05';
+date_end='2007/02/28';
 %****************************%
 
 tic %Start the timer
