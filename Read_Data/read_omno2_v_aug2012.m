@@ -26,7 +26,7 @@ if lonmin > lonmax %Just in case I enter something backwards...
 elseif latmin > latmax
     error('read_omno2:maxmin', 'Latmin is greater than latmax')
 end
-    
+
 %These will be included in the file name
 %****************************%
 satellite='OMI';
@@ -284,13 +284,13 @@ for j=1:total_days;
                 
                 RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle);
                 RelativeAzimuthAngle(RelativeAzimuthAngle > 180)=360-RelativeAzimuthAngle(RelativeAzimuthAngle > 180);
-                                                
+                
                 x=find(lon<lonmin | lon>lonmax);
                 y=find(lat<latmin | lat>latmax);
                 lon(x)=NaN;                         lon(y)=NaN;                         lon(isnan(lon))=[];
                 lat(x)=NaN;                         lat(y)=NaN;                         lat(isnan(lat))=[];
-                loncorn(:,x)=NaN;                   loncorn(:,y)=NaN;                   loncorn(:,any(isnan(loncorn))) = [];                   
-                latcorn(:,x)=NaN;                   latcorn(:,y)=NaN;                   latcorn(:,any(isnan(latcorn))) = [];               
+                loncorn(:,x)=NaN;                   loncorn(:,y)=NaN;                   loncorn(:,any(isnan(loncorn))) = [];
+                latcorn(:,x)=NaN;                   latcorn(:,y)=NaN;                   latcorn(:,any(isnan(latcorn))) = [];
                 FoV75CornerLatitude(:,x)=NaN;       FoV75CornerLatitude(:,y)=NaN;       FoV75CornerLatitude(:,any(isnan(FoV75CornerLatitude))) = [];
                 FoV75CornerLongitude(:,x)=NaN;      FoV75CornerLongitude(:,y)=NaN;      FoV75CornerLongitude(:,any(isnan(FoV75CornerLongitude))) = [];
                 SolarAzimuthAngle(x)=NaN;           SolarAzimuthAngle(y)=NaN;           SolarAzimuthAngle(isnan(SolarAzimuthAngle))=[];
@@ -530,25 +530,34 @@ for j=1:total_days;
                 globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
                 globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
                 
-                for k=1:c
+                minrow = min(Data(E).Row);
+                maxrow = max(Data(E).Row);
+                for r=minrow:maxrow
+                    [yy, rr] = find_globe_row(r,globe_lat_matrix,globe_lon_matrix,Data(E));
+                    globe_lat_submatrix = globe_lat_matrix(yy);
+                    globe_lon_submatrix = globe_lon_matrix(yy);
+                    terpres_submatrix = terpres(yy);
                     
-                    if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of %u \n',k,c); end
-                    if DEBUG_LEVEL > 2; tic; end
-                    x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
-                    x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
-                    x3 = Data(E).Loncorn(3,k);   y3 = Data(E).Latcorn(3,k);
-                    x4 = Data(E).Loncorn(4,k);   y4 = Data(E).Latcorn(4,k);
-                    
-                    
-                    xall=[x1;x2;x3;x4;x1];
-                    yall=[y1;y2;y3;y4;y1];
-                    
-                    xx = inpolygon(globe_lat_matrix,globe_lon_matrix,yall,xall);
-                    
-                    avg_terheight = mean(terpres(xx));
-                    avg_terpres = 1013 .* exp(-avg_terheight / 7640 ); %Convert average terrain altitude to pressure using the average scale height in meters
-                    GLOBETerpres(k) = avg_terpres;
-                    if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',k,c,telap); end
+                    for k=rr'
+                        
+                        if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of \n',k); end
+                        if DEBUG_LEVEL > 2; tic; end
+                        x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
+                        x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
+                        x3 = Data(E).Loncorn(3,k);   y3 = Data(E).Latcorn(3,k);
+                        x4 = Data(E).Loncorn(4,k);   y4 = Data(E).Latcorn(4,k);
+                        
+                        
+                        xall=[x1;x2;x3;x4;x1];
+                        yall=[y1;y2;y3;y4;y1];
+                        
+                        xx = inpolygon(globe_lat_submatrix,globe_lon_submatrix,yall,xall);
+                        
+                        avg_terheight = mean(terpres(xx));
+                        avg_terpres = 1013 .* exp(-avg_terheight / 7640 ); %Convert average terrain altitude to pressure using the average scale height in meters
+                        GLOBETerpres(k) = avg_terpres;
+                        if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',k,c,telap); end
+                    end
                 end
                 
                 
@@ -562,7 +571,7 @@ for j=1:total_days;
         end %End the loop over all swaths in a day
         savename=[satellite,'_',retrieval,'_',year,month,day];
         save(fullfile(mat_dir,savename), 'Data')
-        clear Data 
+        clear Data
         toc
         t=toc;
         if t>1200
