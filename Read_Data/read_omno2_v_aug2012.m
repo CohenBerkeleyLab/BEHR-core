@@ -89,6 +89,26 @@ vcdQualityFlags=zeros(60,300);
 CloudPressure=zeros(60,300);
 ColumnAmountNO2Trop=zeros(60,300);
 
+[terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
+%refvec will contain (1) number of cells per degree, (2)
+%northwest corner latitude, (3) NW corner longitude.
+%(2) & (3) might differ from the input latmin & lonmin
+%because of where the globe cell edges fall
+cell_size = refvec(1);
+
+%GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
+%corner and terpres(end, end) is in the NE corner.
+
+if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
+globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
+globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
+globe_lat_matrix = globe_lat_matrix';
+globe_lat_matrix = flipud(globe_lat_matrix);
+globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
+
+globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
+globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
+globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
 
 %File names will be prefixed with "<satellite>_<retrieval>_", e.g. for OMI
 %satellite SP retrieval, the prefix will be "OMI_SP_" and then the date in
@@ -508,27 +528,6 @@ for j=1:total_days;
                 if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
                 
                 GLOBETerpres = zeros(size(Data(E).Latitude));
-                
-                [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
-                %refvec will contain (1) number of cells per degree, (2)
-                %northwest corner latitude, (3) NW corner longitude.
-                %(2) & (3) might differ from the input latmin & lonmin
-                %because of where the globe cell edges fall
-                cell_size = refvec(1);
-                
-                %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
-                %corner and terpres(end, end) is in the NE corner.
-                
-                if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
-                globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
-                globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
-                globe_lat_matrix = globe_lat_matrix';
-                globe_lat_matrix = flipud(globe_lat_matrix);
-                globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
-                
-                globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
-                globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
-                globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
                 
                 for k=1:c
                     
