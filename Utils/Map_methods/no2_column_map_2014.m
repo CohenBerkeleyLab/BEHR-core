@@ -13,7 +13,7 @@
 %         'manual_latlon' --> allows input of manual latitude and longitude boundaries (see next 2 parameters)
 %         'weekend'/'weekday' --> only average over weekend or weekdays respectively
 %   lons = a 1x2 or 1x3 numerical matrix containing lonmin, lonmax, and
-%       (optionally) lon resolution. If no resolution specifies, set to 0.05.
+%       (optionally) lon resolution. If no resolution specified, set to 0.05.
 %   lats = see 'lons'
 %   clouds = Use OMI cloud fraction (default) or MODIS cloud fraction
 %       ('modis').

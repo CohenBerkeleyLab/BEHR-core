@@ -9,7 +9,7 @@
 % CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
 % Allows for quick control over the amount of output to the console.
 % Choose a higher level to keep track of what the script is doing.
-DEBUG_LEVEL = 1;
+DEBUG_LEVEL = 2;
 %****************************%
 
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
@@ -97,8 +97,8 @@ ColumnAmountNO2Trop=zeros(60,300);
 %the last date completed, otherwise it is assumed that the retrieval will
 %need to start from the specified start date. This allows he5 reading to be
 %stopped and restarted with minimal intervention.
-last_file=dir(fullfile(mat_dir,'*.mat'));
 file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
+last_file=dir(fullfile(mat_dir,[file_prefix,'*.mat']));
 
 if isempty(last_file) || ~strcmp(last_file(end).name(1:l),file_prefix);
     last_date=datestr(datenum(date_start)-1,26);
@@ -106,6 +106,14 @@ else
     last_date=last_file(end).name((l+1):(l+8));
     last_date=([last_date(1:4),'/',last_date(5:6),'/',last_date(7:8)]);
 end
+
+%Go ahead and load the terrain pressure data - only need to do this once
+[terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
+    %refvec will contain (1) number of cells per degree, (2)
+    %northwest corner latitude, (3) NW corner longitude.
+    %(2) & (3) might differ from the input latmin & lonmin
+    %because of where the globe cell edges fall
+
 
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the
@@ -508,12 +516,6 @@ for j=1:total_days;
                 if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
                 
                 GLOBETerpres = zeros(size(Data(E).Latitude));
-                
-                [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
-                %refvec will contain (1) number of cells per degree, (2)
-                %northwest corner latitude, (3) NW corner longitude.
-                %(2) & (3) might differ from the input latmin & lonmin
-                %because of where the globe cell edges fall
                 cell_size = refvec(1);
                 
                 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
@@ -523,7 +525,6 @@ for j=1:total_days;
                 globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
                 globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
                 globe_lat_matrix = globe_lat_matrix';
-                globe_lat_matrix = flipud(globe_lat_matrix);
                 globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
                 
                 globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
@@ -540,7 +541,7 @@ for j=1:total_days;
                     
                     for k=rr'
                         
-                        if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of \n',k); end
+                        if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u \n',k); end
                         if DEBUG_LEVEL > 2; tic; end
                         x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
                         x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
@@ -552,12 +553,19 @@ for j=1:total_days;
                         yall=[y1;y2;y3;y4;y1];
                         
                         xx = inpolygon(globe_lat_submatrix,globe_lon_submatrix,yall,xall);
-                        
-                        avg_terheight = mean(terpres(xx));
-                        avg_terpres = 1013 .* exp(-avg_terheight / 7640 ); %Convert average terrain altitude to pressure using the average scale height in meters
+                                                
+                        avg_terheight = nanmean(terpres_submatrix(xx));
+                        avg_terpres = 1013 .* exp(-avg_terheight / 7640 ); %Convert average terrain altitude to pressure (hPa) using the average scale height in meters
+%                         if isnan(avg_terpres); 
+%                             percent_nans = sum(isnan(terpres(xx)))/numel(terpres(xx))*100;
+%                             fprintf('Avg. terr. height = %u, Percent of GLOBE values that are NaNs, %u \n',avg_terheight,percent_nans);
+%                             answer = input('NaN terpres detected. Abort? (y/n) [n] ','s');
+%                             if strcmpi(answer(1),'y'); error('nan:ihatenans','NaN terrain pressure detected'); end
+%                         end
                         GLOBETerpres(k) = avg_terpres;
                         if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',k,c,telap); end
                     end
+                    
                 end
                 
                 
@@ -567,7 +575,7 @@ for j=1:total_days;
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 
             end %End the section carried out only if there are OMI pixels in the area of interest
-            
+        
         end %End the loop over all swaths in a day
         savename=[satellite,'_',retrieval,'_',year,month,day];
         save(fullfile(mat_dir,savename), 'Data')
