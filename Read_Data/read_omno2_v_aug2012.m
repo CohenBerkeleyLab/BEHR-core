@@ -103,7 +103,6 @@ if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); e
 globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
 globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
 globe_lat_matrix = globe_lat_matrix';
-globe_lat_matrix = flipud(globe_lat_matrix);
 globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
 
 globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
