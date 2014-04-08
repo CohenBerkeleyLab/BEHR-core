@@ -9,7 +9,7 @@
 % CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
 % Allows for quick control over the amount of output to the console.
 % Choose a higher level to keep track of what the script is doing.
-DEBUG_LEVEL = 2;
+DEBUG_LEVEL = 3;
 %****************************%
 
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
@@ -113,7 +113,16 @@ end
     %northwest corner latitude, (3) NW corner longitude.
     %(2) & (3) might differ from the input latmin & lonmin
     %because of where the globe cell edges fall
+if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
+cell_count = refvec(1);
+globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_count);
+globe_lat_matrix = (globe_latmin + 1/(2*cell_count)):(1/cell_count):globe_latmax;
+globe_lat_matrix = globe_lat_matrix';
+globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
 
+globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_count);
+globe_lon_matrix = globe_lonmin + 1/(2*cell_count):(1/cell_count):globe_lonmax;
+globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1); 
 
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the
@@ -516,58 +525,42 @@ for j=1:total_days;
                 if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
                 
                 GLOBETerpres = zeros(size(Data(E).Latitude));
-                cell_size = refvec(1);
                 
                 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
                 %corner and terpres(end, end) is in the NE corner.
-                
-                if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
-                globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
-                globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
-                globe_lat_matrix = globe_lat_matrix';
-                globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
-                
-                globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
-                globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
-                globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
-                
-                minrow = min(Data(E).Row);
-                maxrow = max(Data(E).Row);
-                for r=minrow:maxrow
-                    [yy, rr] = find_globe_row(r,globe_lat_matrix,globe_lon_matrix,Data(E));
-                    globe_lat_submatrix = globe_lat_matrix(yy);
-                    globe_lon_submatrix = globe_lon_matrix(yy);
-                    terpres_submatrix = terpres(yy);
+
+                pressure=terpres;
+                pressure_lats=globe_lat_matrix;
+                pressure_lons=globe_lon_matrix;
+                for k=1:c
                     
-                    for k=rr'
-                        
-                        if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u \n',k); end
-                        if DEBUG_LEVEL > 2; tic; end
-                        x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
-                        x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
-                        x3 = Data(E).Loncorn(3,k);   y3 = Data(E).Latcorn(3,k);
-                        x4 = Data(E).Loncorn(4,k);   y4 = Data(E).Latcorn(4,k);
-                        
-                        
-                        xall=[x1;x2;x3;x4;x1];
-                        yall=[y1;y2;y3;y4;y1];
-                        
-                        xx = inpolygon(globe_lat_submatrix,globe_lon_submatrix,yall,xall);
-                                                
-                        avg_terheight = nanmean(terpres_submatrix(xx));
-                        avg_terpres = 1013 .* exp(-avg_terheight / 7640 ); %Convert average terrain altitude to pressure (hPa) using the average scale height in meters
-%                         if isnan(avg_terpres); 
-%                             percent_nans = sum(isnan(terpres(xx)))/numel(terpres(xx))*100;
-%                             fprintf('Avg. terr. height = %u, Percent of GLOBE values that are NaNs, %u \n',avg_terheight,percent_nans);
-%                             answer = input('NaN terpres detected. Abort? (y/n) [n] ','s');
-%                             if strcmpi(answer(1),'y'); error('nan:ihatenans','NaN terrain pressure detected'); end
-%                         end
-                        GLOBETerpres(k) = avg_terpres;
-                        if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',k,c,telap); end
-                    end
+                    if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of %u \n',k,c); end
+                    if DEBUG_LEVEL > 2; tic; end
+                    x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
+                    x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
+                    x3 = Data(E).Loncorn(3,k);   y3 = Data(E).Latcorn(3,k);
+                    x4 = Data(E).Loncorn(4,k);   y4 = Data(E).Latcorn(4,k);
                     
+                    
+                    xall=[x1;x2;x3;x4;x1];
+                    yall=[y1;y2;y3;y4;y1];
+                    
+                    %%%%SPEED IT UP%%%%
+                    ai=find(pressure_lats(:,1)>=min(yall) & pressure_lats(:,1)<=max(yall));
+                    bi=find(pressure_lons(1,:)>=min(xall) & pressure_lons(1,:)<=max(xall));
+                    pressurex=pressure(ai,bi);
+                    pressure_latx=pressure_lats(ai,bi);
+                    pressure_lonx=pressure_lons(ai,bi);
+                    %%%%%%%%%%%%%%%%%%%
+                    
+                    xx = inpolygon(pressure_latx,pressure_lonx,yall,xall);
+                    
+                    pres_vals=pressurex(xx);  pres_zeros=find(pres_vals==0);
+                    pres_vals(pres_zeros)=NaN; pres_vals(isnan(pres_vals))=[];
+                    GLOBETerpres(k)=1013 .* exp(-mean(pres_vals) / 7640 );
+                    
+                    if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',k,c,telap); end
                 end
-                
                 
                 Data(E).GLOBETerpres = GLOBETerpres;
                 
