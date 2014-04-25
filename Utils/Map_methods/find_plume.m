@@ -18,11 +18,11 @@ function [ in_plume, edge_pixels ] = find_plume( matrix_in, matrix_lon, matrix_l
 % Take the difference between all of the lat/lon values and the center
 % lat/lon, then find the smallest total difference
 lat_dif = abs(matrix_lat - center_lat);
-lon_dif = abs(matrix_lot - center_lon);
+lon_dif = abs(matrix_lon - center_lon);
 combined_dif = lat_dif + lon_dif;
 
 %The linear index of the center pixel
-center_pix = find(combined_dif == min(combined_dif));
+center_pix = find(combined_dif == min(combined_dif(:)));
 if matrix_in(center_pix) < threshold;
     error('center_error:below_threshold','The center pixel value is below the stated threshold. Aborting.');
 end
