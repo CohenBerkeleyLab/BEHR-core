@@ -63,8 +63,8 @@ CloudPressure_i=Data(d).CloudPressure;
 RelativeAzimuthAngle_i=Data(d).RelativeAzimuthAngle;
 Latitude_i=Data(d).Latitude;
 Longitude_i=Data(d).Longitude;
-FoV75CornerLatitude_i=Data(d).FoV75CornerLatitude;
-FoV75CornerLongitude_i=Data(d).FoV75CornerLongitude;
+%FoV75CornerLatitude_i=Data(d).FoV75CornerLatitude;
+%FoV75CornerLongitude_i=Data(d).FoV75CornerLongitude;
 GLOBETerpres_i=Data(d).GLOBETerpres;
 MODISAlbedo_i=Data(d).MODISAlbedo;
 BEHRAMFTrop_i=Data(d).BEHRAMFTrop;
@@ -74,7 +74,7 @@ Row_i=Data(d).Row;
 Swath_i=Data(d).Swath;
 AMFTrop_i=Data(d).AMFTrop;
 AMFStrat_i=Data(d).AMFStrat;
-XTrackQualityFlags_i=Data(d).XTrackQualityFlags;
+%XTrackQualityFlags_i=Data(d).XTrackQualityFlags;
 
 Pixel_i=repmat(1:length(Data(d).Longitude),60,1)';
 
@@ -129,8 +129,8 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     RelativeAzimuthAngle_val=RelativeAzimuthAngle_i(x);
     Latitude_val=Latitude_i(x);
     Longitude_val=Longitude_i(x);
-    FoV75CornerLatitude_val=FoV75CornerLatitude_i(:,x);
-    FoV75CornerLongitude_val=FoV75CornerLongitude_i(:,x);
+    %FoV75CornerLatitude_val=FoV75CornerLatitude_i(:,x);
+    %FoV75CornerLongitude_val=FoV75CornerLongitude_i(:,x);
     GLOBETerpres_val=GLOBETerpres_i(x);
     MODISAlbedo_val=MODISAlbedo_i(x);
     BEHRAMFTrop_val=BEHRAMFTrop_i(x);
@@ -140,7 +140,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     Swath_val=Swath_i(x);
     AMFTrop_val=AMFTrop_i(x);
     AMFStrat_val=AMFStrat_i(x);
-    XTrackQualityFlags_val=XTrackQualityFlags_i(x);
+    %XTrackQualityFlags_val=XTrackQualityFlags_i(x);
     
     Pixel_val=Pixel_i(x);
     
@@ -188,7 +188,8 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
         elseif (maxx>=right) && (right>=1) && (1<=left) && (left<maxx); %JLL 19 Mar 2014: Make sure the left and right bounds are inside the permissible limits
             clip(left,1,maxx); %JLL 19 Mar 2014: Kind of redundant...
             clip(right,1,maxx);
-            for x_quad=left+1:right+1; %JLL 19 Mar 2014: More avoiding double counting; loop through each x coordinate in the row.
+            for x_quad=left+1:right;
+            %for x_quad=left+1:right+1; %JLL 19 Mar 2014: More avoiding double counting; loop through each x coordinate in the row.
                 if Time(x_quad,y_quad)~=0 && ~isnan(ColumnAmountNO2Trop(x_quad,y_quad)); %JLL 19 Mar 2014: If there already was a value in this spot and there is a valid NO2 column, average it with the next.  This should not happen often.
                     Time(x_quad,y_quad)=mean([Time(x_quad,y_quad);Time_val]);
                     ViewingZenithAngle(x_quad,y_quad)=mean([ViewingZenithAngle(x_quad,y_quad),ViewingZenithAngle_val]);
@@ -209,7 +210,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     Longitude(x_quad,y_quad)=mean([Longitude(x_quad,y_quad),Longitude_val]);
                     Pixel(x_quad,y_quad)=mean([Pixel(x_quad,y_quad),Pixel_val]);
                     Area(x_quad,y_quad)=mean([Area(x_quad,y_quad);pixelarea]);
-                    Areaweight(x,y)=2/Area(x,y);
+                    Areaweight(x_quad,y_quad)=2/Area(x_quad,y_quad);
                     ColumnAmountNO2Trop(x_quad,y_quad)=mean([ColumnAmountNO2Trop(x_quad,y_quad),ColumnAmountNO2Trop_val]);
                     GLOBETerpres(x_quad,y_quad)=mean([GLOBETerpres(x_quad,y_quad),GLOBETerpres_val]);
                     MODISAlbedo(x_quad,y_quad)=mean([MODISAlbedo(x_quad,y_quad),MODISAlbedo_val]);
@@ -221,7 +222,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                     AMFTrop(x_quad,y_quad)=mean([AMFTrop(x_quad,y_quad),AMFTrop_val]);
                     AMFStrat(x_quad,y_quad)=mean([AMFStrat(x_quad,y_quad),AMFStrat_val]);
-                    XTrackQualityFlags(x_quad,y_quad)=mean([XTrackQualityFlags(x_quad,y_quad),XTrackQualityFlags_val]);
+                    %XTrackQualityFlags(x_quad,y_quad)=[XTrackQualityFlags(x_quad,y_quad),XTrackQualityFlags_val]; %JLL 24 Apr 2014: Don't average the quality flags together
                 elseif ~isnan(ColumnAmountNO2Trop(x_quad,y_quad)) %JLL 19 Mar 2014: I added the logical test here, before this was just an 'else' statement, but it would make sense not to add a value if there was no valid NO2 column.
                     Time(x_quad,y_quad)=Time_val;
                     ViewingZenithAngle(x_quad,y_quad)=ViewingZenithAngle_val;
@@ -240,8 +241,8 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     RelativeAzimuthAngle(x_quad,y_quad)=RelativeAzimuthAngle_val;
                     Latitude(x_quad,y_quad)=Latitude_val;
                     Longitude(x_quad,y_quad)=Longitude_val;
-                    FoV75CornerLatitude(:,x_quad,y_quad)=FoV75CornerLatitude_val;
-                    FoV75CornerLongitude(:,x_quad,y_quad)=FoV75CornerLongitude_val;
+                    %FoV75CornerLatitude(:,x_quad,y_quad)=FoV75CornerLatitude_val;
+                    %FoV75CornerLongitude(:,x_quad,y_quad)=FoV75CornerLongitude_val;
                     Pixel(x_quad,y_quad)=Pixel_val;
                     Area(x_quad,y_quad)=pixelarea;
                     Areaweight(x_quad,y_quad)=1/Area(x_quad,y_quad);
@@ -256,7 +257,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                     AMFTrop(x_quad,y_quad)=AMFTrop_val;
                     AMFStrat(x_quad,y_quad)=AMFStrat_val;
-                    XTrackQualityFlags(x_quad,y_quad)=XTrackQualityFlags_val;
+                    %XTrackQualityFlags(x_quad,y_quad)=XTrackQualityFlags_val;
                 end
             end
         end

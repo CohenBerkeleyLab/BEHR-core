@@ -48,13 +48,13 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 date_start='2007/02/01';
-date_end='2007/02/01';
+date_end='2007/02/27';
 %****************************%
 
 %These will be included in the file name
 %****************************%
 satellite='OMI';
-retrieval='BEHR';
+retrieval='BEHR_newSPFiles';
 %****************************%
 
 
@@ -88,7 +88,7 @@ for j=1:total_days
     day=date(9:10);
     if DEBUG_LEVEL > 0; disp(['Processing data for ', date]); end
     
-    filename = ['OMI_SP_',year,month,day,'.mat'];
+    filename = ['OMI_SP_MYD06_v51_modDataClr_',year,month,day,'.mat'];
     if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(omi_sp_dir,filename),'...']); end
     if isequal(exist(fullfile(omi_sp_dir,filename),'file'),0)
         if DEBUG_LEVEL > 0; disp('No SP file exists for given day'); end
@@ -213,12 +213,12 @@ for j=1:total_days
                 hh=hh+1;
                 Latitude=(latmin+0.025):resolution:(latmax-0.025); Latitude=Latitude'; Latitude=repmat(Latitude,1,1200);
                 Longitude=(lonmin+0.025):resolution2:(lonmax-0.025); Longitude=repmat(Longitude,500,1);
-                OMI(hh).Date=Data(d).Date;
+                %OMI(hh).Date=Data(d).Date;
                 OMI(hh).Time=Time;
                 OMI(hh).Latitude=Latitude;
                 OMI(hh).Longitude=Longitude;
-                OMI(hh).FoV75CornerLatitude=FoV75CornerLatitude;
-                OMI(hh).FoV75CornerLongitude=FoV75CornerLongitude;
+                %OMI(hh).FoV75CornerLatitude=FoV75CornerLatitude;
+                %OMI(hh).FoV75CornerLongitude=FoV75CornerLongitude;
                 OMI(hh).MapData.LatBdy = [latmin latmax];
                 OMI(hh).MapData.LatRes = resolution;
                 OMI(hh).MapData.LonBdy = [lonmin lonmax];
@@ -249,7 +249,7 @@ for j=1:total_days
                 OMI(hh).Swath=Swath;
                 OMI(hh).AMFTrop=AMFTrop;
                 OMI(hh).AMFStrat=AMFStrat;
-                OMI(hh).XTrackQualityFlags=XTrackQualityFlags;
+                %OMI(hh).XTrackQualityFlags=XTrackQualityFlags;
             end
         end
         savename=[file_prefix,year,month,day];  
@@ -261,8 +261,8 @@ for j=1:total_days
         save(fullfile(mat_dir,year,month,savename),'Data','OMI')
         toc
         t=toc;
-        if t>1200
-            error('Time exceeded 20 min. Stopping')
-        end
+        %if t>1200
+            %error('Time exceeded 20 min. Stopping')
+        %end
     end
 end

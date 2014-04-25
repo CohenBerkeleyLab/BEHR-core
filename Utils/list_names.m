@@ -4,7 +4,7 @@ function list_names( structure )
 %   will list the name of each element of that structure
 
 for a=1:length(structure)
-   fprintf('%u : %s \n', a, structure.Name); 
+   fprintf('%u : %s \n', a, structure(a).Name); 
 end
 
 end

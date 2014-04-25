@@ -1,4 +1,4 @@
-function [ in_plume, edge_pixels ] = find_plume( matrix_in, matrix_lon, matrix_lat, threshold, center_lon, center_lat, varargin )
+function [ in_plume, edge_pixels ] = find_plume( matrix_in, matrix_lon, matrix_lat, threshold, center_lon, center_lat )
 %Finds all pixels in the matrix_in around the center point (given by center_lon and
 %center_lat) that have a value greater than the threshold value.  Returns
 %the linear indices of the pixels in the plume as well as those that define
@@ -11,16 +11,6 @@ function [ in_plume, edge_pixels ] = find_plume( matrix_in, matrix_lon, matrix_l
 %   threshold value that are continguos with the center pixel have been
 %   located.
 %   Josh Laughner 4 Apr 2014 <joshlaugh5@gmail.com>
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% Set this flag to 1 to force the algorithm to continue %%%%%
-%%%%% even if the input matrix has NaN values (0 otherwise) %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-p = inputParser;
-p.addParamValue('force',0,@isscalar);
-p.parse(varargin{:}); input=p.Results;
-force = input.force;
-fprintf('Force flag set to %u\n',force);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Find the pixel corresponding to the center lat/lon %%%%%
@@ -37,6 +27,8 @@ if matrix_in(center_pix) < threshold;
     error('center_error:below_threshold','The center pixel value is below the stated threshold. Aborting.');
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Initialize our starting condition and loop until the plume is located %%%%% 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -44,7 +36,6 @@ end
 plume_mat = zeros(size(matrix_in));
 plume_mat(center_pix) = 1;
 
-nstep = 0;
 while true
     [row, col] = find(plume_mat == 1);
     if isempty(row); break; end %If no pixels with a value of 1 are left, assume that the full plume has been found and exit.
@@ -55,17 +46,11 @@ while true
         n_col = [col(a) - 1, col(a), col(a) + 1, col(a) - 1, col(a) + 1, col(a) - 1, col(a), col(a) + 1];
         for b = 1:8;
             if plume_mat(n_row(b), n_col(b)) > 0 %A 0 indicates this cell has not yet been visited.  If the value is >0, skip this cell because it has already been considered
-            elseif isnan(matrix_in(n_row(b), n_col(b))) && force == 0;
-                fprintf('\n NaN found in input matrix. Did you pass an averaged matrix? \n To disable NaN checking, set the "force" flag to 1 \n');
-                error('find_plume:matrix_in_nan','NaN found in input matrix');
             elseif matrix_in(n_row(b), n_col(b)) >= threshold
                 plume_mat(n_row(b), n_col(b)) = 1; %A value of 1 indicates that this pixel is part of the plume but its neighbors have not yet been checked.
             end                              %By setting this to 1, the loop will catch it next time and check its neighbors.
-            %fprintf('Cell (%u, %u): value = %g, state = %u \n', n_row(b), n_col(b), matrix_in(n_row(b), n_col(b)), plume_mat(n_row(b), n_col(b)));
         end
         plume_mat(row(a),col(a)) = 2; %A value of 2 indicates that the neighbors of this pixel have been evaluated.
-    nstep = nstep + 1;
-        %fprintf('End step %u \n', nstep);
     end
 end
 
