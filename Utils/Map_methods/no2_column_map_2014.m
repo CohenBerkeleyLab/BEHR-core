@@ -1,54 +1,65 @@
-%no2_column_map_2014(startdate,enddate,varargs)
-%NO2 Map Function - Uses the m_map package to draw maps of NO2 column density
-%over the US (primarily). Arguments:
-%   startdate = a string in yyyy/mm/dd format that represents the starting
+function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( start_date_in, end_date_in, lon_bdy, lat_bdy, varargin )
+%NO2 Map Function - Uses the m_map package to draw maps of NO2 column density over the US (primarily). Returns the colorbar handle. Arguments:
+% REQUIRED:
+%   start_date = a string in yyyy/mm/dd format that represents the starting
 %      date of the period to average over. If you want to average multiple,
 %      noncontinguous periods, enter a cell array with the start dates for
 %      each period.
-%   enddate = has the same format and structure as startdate, but is the
+%   end_date = has the same format and structure as startdate, but is the
 %      ending dates of the time period(s)
+%   lon_bdy = a 1x2 matrix with the longitude boundaries
+%   lat_bdy = a 1x2 matrix with the latitude boundaries
+%
+% PARAMETER VALUES:
+%   resolution = the size of the lat/lon boxes in degrees. Defaults to 0.05
+%   projection = 'conic' or 'mercator'. Conic uses Albers Equal-Area Conic,
+%       mercator uses (surprise) a mercator projection. Conic is default.
+%   coast = which coastline to use. Options are: 'full', 'high',
+%       'medium'/'intermediate', 'low', 'crude', 'default'.  Defaults to
+%       default (duh) which uses the regular m_coast; the others use m_gshhs
+%   color = the color to plot the coast and state boundaries, Defaults to
+%       white.
+%   cbrange = a 1x2 matrix with range of values for the colorbar.  By
+%       default, this will be set by MATLAB.
+%   states = Set to 0 to avoid plotting US state boundaries. 
 %   fileprefix = 'OMI_BEHR_' by default. The part of the .mat filenames
-%       before the date.  
+%       before the date.
 %   flags = a cell array of flags that change the behavior of the function:
-%         'manual_latlon' --> allows input of manual latitude and longitude boundaries (see next 2 parameters)
 %         'weekend'/'weekday' --> only average over weekend or weekdays respectively
-%   lons = a 1x2 or 1x3 numerical matrix containing lonmin, lonmax, and
-%       (optionally) lon resolution. If no resolution specified, set to 0.05.
-%   lats = see 'lons'
+%         'r_weekend'/'r_weekday' --> average over Su only or Tu-F only
+%         'US_holidays' --> Use normal US holidays (defined by isbusdays
+%                function). Otherwise, defaults to no holidays.
 %   clouds = Use OMI cloud fraction (default) or MODIS cloud fraction
 %       ('modis').
 %   cloudfraccrit = The maximum allowable cloud fraction. Defaults to 200
-%       (0.2 unscaled value) for OMI and 0 for MODIS
+%       (0.2 real value) for OMI and 0 for MODIS
 %   rowanomaly = Parse mode for row anomaly (see function
 %       "omi_rowanomaly"). Default value is 'XTrackFlags', other options
 %       are 'AlwaysByRow', 'RowsByTime', and 'XTrackFlagsLight'.
 %
-%Josh Laughner 20 Mar 2014 <joshlaugh5@gmail.com> 24 Mar 2014
+%Josh Laughner <joshlaugh5@gmail.com> 25 Apr 2014
 
-function [] = no2_column_map_2014(varargin)
-
-p =inputParser;
-p.addRequired('startdate',@isstr || @iscell);
-p.addOptional('enddate',@isstr || @iscell);
+p = inputParser;
+p.addParamValue('resolution',0.05,@isscalar);
+p.addParamValue('projection','conic',@(x) any(strcmpi(x,{'conic','mercator'}))); %Ensure that the projection type will be recognized
+p.addParamValue('coast','default',@(x) any(strcmpi(x,{'default','high','intermediate','medium','low','crude','default'})));
+p.addParamValue('color','w');
+p.addParamValue('cbrange',[],@(x) length(x) == 2);
+p.addParamValue('states',1,@isscalar);
 p.addParamValue('fileprefix','OMI_BEHR_',@isstr);
 p.addParamValue('flags',{},@iscell);
-p.addParamValue('lons',[-125 -65], @(x) (length(x)==2 || length(x)==3) & (x(1) < x(2)));
-p.addParamValue('lats',[25 50], @(x) (length(x) == 2 || length(x)==3) & (x(1) < x(2)));
 p.addParamValue('clouds','omi',@isstr);
 p.addParamValue('cloudfraccrit',-1,@isscalar)
-p.addParamValue('rowanomaly','XTrackFlags',@(x) strcmpi(x,{'AlwaysByRow','RowsByTime','XTrackFlags','XTrackFlagsLight'})) %Ensure that the rowanomaly value is one of the allowed 4
+p.addParamValue('rowanomaly','XTrackFlags',@(x) any(strcmpi(x,{'AlwaysByRow','RowsByTime','XTrackFlags','XTrackFlagsLight'}))) %Ensure that the rowanomaly value is one of the allowed 4
 
-p.parse; input = p.Results;
-startdates_in = input.startdate;
-enddates_in = input.enddate;
-file_prefix = input.fileprefix;
-
+p.parse(varargin{:});
+parsed_vars = p.Results;
 
 %****************************%
 % CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
 % Allows for quick control over the amount of output to the console.
 % Choose a higher level to keep track of what the script is doing.
-DEBUG_LEVEL = 0;
+DEBUG_LEVEL = 2;
 %****************************%
 
 %****************************%
@@ -62,44 +73,67 @@ behr_dir = '/Volumes/share/GROUP/SAT/BEHR/Test_BEHR_files';
 %****************************%
 %       FLAG PARSING         %
 %****************************%
-% Sets 'man_latlon' to 1 if the flag 'manual_latlon' is present. This
-% should be used if the latitude and longitude boundaries are different for
-% any reason.
-man_latlon = any(strcmpi('manual_latlon',input.flags));
+
+if any(strcmpi('US_holidays',parsed_vars.flags))
+    holidays = [];
+else
+    holidays = 0;
+end
 
 % Sets to 1 if flags for 'weekend' or 'weekday' are present
-weekend_bool = any(strcmpi('weekend',input.flags));
-weekday_bool = any(strcmpi('weekday',input.flags));
+week_bool = zeros(1,5); week_bool(5) = 1; %Default to all days
+week_bool(1) = any(strcmpi('weekend',parsed_vars.flags));
+week_bool(2) = any(strcmpi('weekday',parsed_vars.flags));
+week_bool(3) = any(strcmpi('r_weekend',parsed_vars.flags));
+week_bool(4) = any(strcmpi('r_weekday',parsed_vars.flags));
 
-% Sets to 1 if 'one2one' flag is present
-one2one_bool = any(strcmpi('one2one',input.flags));
+if sum(week_bool(1:4))>1; error('NO2ColMap:DayOfWeek','More than one day-of-week flag set'); end
 
-%Sets lat and lon boundaries to manual input values if the 'man_latlon'
-%flag is true.  If only a min and max are supplied, default resolution to
-%0.05 degrees. If lat/lon boundaries are to be set automatically, that will
-%be done in the main loop when the first file is loaded
-if man_latlon
-    latmin = input.lats(1) ; latmax = input.lats(2); 
-    if length(input.lats) > 2 
-        latres = input.lats(3);
-    else
-        latres = 0.05;
-    end
-    lonmin = input.lons(1); lonmax = input.lons(2); 
-    if length(input.lons) > 2
-        lonres = input.lons(3);
-    else
-        lonres = 0.05;
-    end
-    lats = latmin:latres:latmax;
-    lons = lonmin:lonres:lonmax;
+wksetting_cell = {'Weekend (Sa-Su)','Weekdays (M-F)','Restricted Weekend (Sun only)','Restricted Weekdays (Tu-F)','All Days'};
+if DEBUG_LEVEL > 1; fprintf('week_bool = %s\n',mat2str(week_bool)); end
+
+week_setting = find(week_bool,1,'first');
+if DEBUG_LEVEL > 1; fprintf('week_setting = %s: %s\n', mat2str(week_setting),wksetting_cell{week_setting}); end
+switch week_setting
+    case 1 %Find normal weekend days, so set "weekend" to "weekdays" so that isbusday returns true for Sat and Sun
+        weekend = [0 1 1 1 1 1 0];
+    case 2 %Set up to find normal weekdays
+        weekend = [1 0 0 0 0 0 1];
+    case 3 %Set up to find Sundays only (restricted weekend, avoids "overflow" emisions from Fri --> Sat)
+        weekend = [1 0 0 0 0 0 0];
+    case 4 %Set up to find Tu-F, avoiding lower rollover emissions from Su --> M
+        weekend = [1 1 0 0 0 0 1];
+    otherwise %If no weekend argument passed, use all days of week
+        weekend = [0 0 0 0 0 0 0];
 end
+
+%****************************%
+%  PARSE START AND END DATES %
+%****************************%
+
+if ~iscell(start_date_in) && ~iscell(end_date_in); start_date{1} = start_date_in; end_date{1} = end_date_in;
+elseif iscell(start_date_in) && iscell(end_date_in); start_date = start_date_in; end_date = end_date_in;
+else error('NO2ColMap:date_ranges','Start and end dates must both be cell arrays or both not be cell arrays');
+end
+
+
+%****************************%
+%    LATITUDE & LONGITUDE    %
+%****************************%
+if lat_bdy(1) > lat_bdy(2); error('NO2ColMap:lat_bdy','Latitude minimum is greater than latitude maximum.'); end
+if lon_bdy(1) > lon_bdy(2); error('NO2ColMap:lon_bdy','Longitude minimum is greater than longitude maximum.'); end
+
+res = parsed_vars.resolution;
+lats = lat_bdy(1):res:lat_bdy(2);
+lons = lon_bdy(1):res:lon_bdy(2);
+
+[longrid, latgrid] = meshgrid(lons,lats);
 
 %****************************%
 %      CLOUD FRACTION        %
 %****************************%
-cloud_type = input.clouds;
-cloud_frac = input.cloudfraccrit;
+cloud_type = parsed_vars.clouds;
+cloud_frac = parsed_vars.cloudfraccrit;
 if strcmpi(cloud_type,'omi') && cloud_frac < 0
     cloud_frac = 200; %Set the cloud fraction criteria to 200 (20% unscaled) if OMI clouds used and no other value given
 elseif strcmpi(cloud_type,'modis') && cloud_frac < 0
@@ -114,59 +148,60 @@ end
 %m_map package.
 addpath(genpath('/Users/Josh/Documents/MATLAB/BEHR/Utils'))
 
+
 %****************************%
 %       MAIN LOOP            %
 %****************************%
 
-per = length(startdates_in);
-if per ~= length(enddates_in); error('NO2ColMap:TimePeriods','no2_column_map - startdate and enddate are unequal lengths'); end
+per = length(start_date);
+
+if per ~= length(end_date); error('NO2ColMap:TimePeriods','no2_column_map - startdate and enddate are unequal lengths'); end
+
 for period = 1:per %Loop over each temporal period you wish to average
-    startdate = startdates_in{period}; enddate = enddates_in{period};
-    for a = datenum(startdate,'yyyy/mm/dd'):datenum(enddate,'yyyy/mm/dd')
+    startdate = start_date{period}; enddate = end_date{period};
+    for a = datenum(startdate):datenum(enddate)
         date = datestr(a,29); %Convert the current date number to a string in the format yyyy-mm-dd
         year = date(1:4);
         month = date(6:7);
         day = date(9:10);
         
-        filepath = fullfile(behr_dir,year,month);
-        filename = [file_prefix,year,month,day,'.mat'];
+        if DEBUG_LEVEL > 0; fprintf(' Now on %s\n',date); end
+        
+        filepath = behr_dir;
+        filename = [parsed_vars.fileprefix,year,month,day,'.mat'];
         file = fullfile(filepath,filename);
         
-        if exist(file,'file') ~= 2; fprintf(' %s not found\n',filename); 
+        if exist(file,'file') ~= 2; fprintf(' %s not found\n',filename);
+        elseif ~isbusday(date,holidays,weekend) % Tests if the day is a weekend based on the weekend flags set and whether or not to use US holidays.
         else
             load(file,'OMI')
-            if period == 1 && a == datenum(startdate,'yyyy/mm/dd') %The first time through, get some information from the BEHR file
+            
+            if period == 1 && a == datenum(startdate) %The first time through, generate the Sum matrices that will hold the total areaweight and weighted column density
+                if DEBUG_LEVEL > 0; fprintf('Initializing SumWeightedColumn and SumWeight matrices\n'); end
                 SumWeightedColumn = zeros(size(OMI(1).BEHRColumnAmountNO2Trop));
                 SumWeight = zeros(size(OMI(1).BEHRColumnAmountNO2Trop));
-                if ~man_latlon %If we want to automatically assign lats and lons, do so now
-                    latmin = OMI(1).MapData.LatBdy(1); latmax = OMI(1).MapData.LatBdy(2); latres = OMI(1).MapData.LatRes; 
-                    lonmin = OMI(1).MapData.LonBdy(1); lonmax = OMI(1).MapData.LonBdy(2); lonres = OMI(1).MapData.LonRes;
-                    lats = latmin:latres:latmax;
-                    lons = lonmin:lonres:lonmax;
-                end
-            elseif ~man_latlon %Test is there is any difference between the OMI lat/lon grid and the existing one if automatic assignment was done.
-                if length(OMI(1).Latitude)~=length(lats) || length(OMI(1).Longitude) ~= length(lons)
-                    error('no2_col_map:geogrid_mismatch','%s lat/lons do not match existing grid', file);
-                end
-                lat_test = sum(OMI(1).Latitude - lats); lon_test = sum(OMI(1).Longitude - lons);
-                if lat_test ~= 0 && lon_test ~= 0 
-                    error('no2_col_map:geogrid_mismatch','%s lat/lons do not match existing grid', file);
-                end
-                clear lat_test lon_test
+                omilats = OMI(1).Latitude;
+                omilons = OMI(1).Longitude;
             end
+            
             for s=1:length(OMI)
+                
+                if any(OMI(s).Latitude ~= omilats | OMI(s).Longitude ~= omilons)
+                    error('NO2ColMap:OMILatLons','OMI Lat and Lons for %s, swath %u do not agree with previous lat/lon matrices',date,s);
+                end
+                
                 omi = OMI(s); %We will set the area weight to 0 for any elements that should not contribute to the average
                 omi.Areaweight(omi.BEHRColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
                 omi.Areaweight(mod(omi.vcdQualityFlags,2)~=0) = 0; %If the vcdQualityFlags value is not even (least significant bit ~= 0), do not include this element
                 
-                if strcmpi(cloud_type,'omi'); omi.Areaweight(omi.CloudFraction > cloud_frac) = 0; 
+                if strcmpi(cloud_type,'omi'); omi.Areaweight(omi.CloudFraction > cloud_frac) = 0;
                 elseif strcmpi(cloud_type,'modis'); omi.Areaweight(omi.MODISCloud > cloud_frac) = 0;
                 end %Do not include the element if the cloud fraction is greater than the allowable criteria
                 
-                omi.Areaweight(omi.BEHRColumnAmountNO2Trop > 1E17) = 0; %Do not include the element if the NO2 column is too great.
+                omi.Areaweight(omi.BEHRColumnAmountNO2Trop > 1E17) = 0; %Do not include the element if the NO2 column is too great.  These are known to be affected by the row anomaly (Bucsela 2013, Atmos. Meas. Tech. 2607)
                 hh=find(isnan(omi.BEHRColumnAmountNO2Trop)); omi.BEHRColumnAmountNO2Trop(hh)=0; omi.Areaweight(hh)=0; %Set any column NaNs to 0 and do not include them in the average
                 
-                xx = omi_rowanomaly(omi,input.rowanomaly); %Remove elements affected by the row anomaly.
+                xx = omi_rowanomaly(omi,parsed_vars.rowanomaly); %Remove elements affected by the row anomaly.
                 omi.Areaweight(xx) = 0;
                 
                 SumWeightedColumn = SumWeightedColumn + omi.BEHRColumnAmountNO2Trop .* omi.Areaweight;
@@ -176,12 +211,48 @@ for period = 1:per %Loop over each temporal period you wish to average
     end %End the loop over all days in this time period
 end %End the loop over all time periods
 
-%Normalize the areaweight for each pixel to 1.
+% Normalize the areaweight for each pixel to 1.
 ColumnData = SumWeightedColumn ./ SumWeight;
 
-%Grid the data. If automatic lat/lon gridding was used, all files were
-%tested to have the same lat/lon grid. If not, we will need to match up the
-%disperate grids.
+% Grid the data. 
+nans = find(isnan(ColumnData));
+ColumnData(nans) = []; omilats(nans) = []; omilons(nans) = [];
+GriddedColumn = griddata(omilons,omilats,ColumnData,longrid,latgrid);
 
-
+% Prepare the map
+if strcmpi('conic',parsed_vars.projection)
+    m_proj('Albers Equal-Area Conic', 'lon', lon_bdy, 'lat', lat_bdy);
+elseif strcmpi('mercator', parsed_vars.projection)
+    m_proj('Mercator', 'long', lon_bdy, 'lat', lat_bdy);
 end
+
+% Map the NO2 concentrations
+m_pcolor(longrid, latgrid, GriddedColumn); shading('flat');
+
+% Draw the coast
+switch parsed_vars.coast
+    case 'full'
+        m_gshhs_f('color',parsed_vars.color);
+    case 'high'
+        m_gshhs_h('color',parsed_vars.color);
+    case {'intermediate', 'medium'}
+        m_gshhs_i('color',parsed_vars.color);
+    case 'low'
+        m_gshhs_l('color',parsed_vars.color);
+    case 'crude'
+        m_gshhs_c('color',parsed_vars.color);
+    otherwise
+        m_coast('color',parsed_vars.color);     
+end
+
+% Draw the states, as long as their drawing is not overridden
+if parsed_vars.states; m_states('w'); end
+
+% Add the lat lon grid with no lines to fix the appearance of the map
+m_grid('linestyle','none');
+
+cbhandle = colorbar;
+if ~isempty(parsed_vars.cbrange); caxis(parsed_vars.cbrange); end
+
+end %end function
+

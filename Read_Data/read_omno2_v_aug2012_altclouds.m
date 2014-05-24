@@ -35,7 +35,7 @@ end
 %These will be included in the file name
 %****************************%
 satellite='OMI';
-retrieval='SP_dayavg_v50';
+retrieval='SP_us4kmmat';
 %****************************%
 
 %This is the directory where the final .mat file will be saved. This will
@@ -64,7 +64,7 @@ globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 date_start='2007/02/01';
-date_end='2007/02/03';
+date_end='2007/02/01';
 %****************************%
 
 tic %Start the timer
@@ -114,25 +114,25 @@ else
 end
 
 %Go ahead and load the terrain pressure data - only need to do this once
-[terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
+% [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
 %refvec will contain (1) number of cells per degree, (2)
 %northwest corner latitude, (3) NW corner longitude.
 %(2) & (3) might differ from the input latmin & lonmin
 %because of where the globe cell edges fall
-if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
-cell_count = refvec(1);
-globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_count);
-globe_lat_matrix = (globe_latmin + 1/(2*cell_count)):(1/cell_count):globe_latmax;
-globe_lat_matrix = globe_lat_matrix';
-globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
-
-globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_count);
-globe_lon_matrix = globe_lonmin + 1/(2*cell_count):(1/cell_count):globe_lonmax;
-globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
-
-%Fill GLOBE terrain height values of NaN with -500 m (should be mostly
-%ocean)
-terpres(isnan(terpres)) = -500;
+% if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
+% cell_count = refvec(1);
+% globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_count);
+% globe_lat_matrix = (globe_latmin + 1/(2*cell_count)):(1/cell_count):globe_latmax;
+% globe_lat_matrix = globe_lat_matrix';
+% globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
+% 
+% globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_count);
+% globe_lon_matrix = globe_lonmin + 1/(2*cell_count):(1/cell_count):globe_lonmax;
+% globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
+% 
+% %Fill GLOBE terrain height values of NaN with -500 m (should be mostly
+% %ocean)
+% terpres(isnan(terpres)) = -500;
 
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the
@@ -608,6 +608,8 @@ for j=1:total_days;
                 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
                 %corner and terpres(end, end) is in the NE corner.
                 
+                terpres=pres; globe_lat_matrix=pres_lat; globe_lon_matrix=pres_lon;
+                
                 for k=1:c
                     
                     if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of %u \n',k,c); end
@@ -633,7 +635,8 @@ for j=1:total_days;
                     
                     pres_vals=pressurex(xx);  pres_zeros=find(pres_vals==0);
                     pres_vals(pres_zeros)=NaN; pres_vals(isnan(pres_vals))=[];
-                    GLOBETerpres(k)=1013 .* exp(-mean(pres_vals) / 7640 );
+                    GLOBETerpres(k) = mean(pres_vals);
+                    %GLOBETerpres(k)=1013 .* exp(-mean(pres_vals) / 7640 );
                     
                     if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',k,c,telap); end
                 end

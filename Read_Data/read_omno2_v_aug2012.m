@@ -34,14 +34,14 @@ end
 
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2007/02/01';
-date_end='2007/02/28';
+date_start='2006/01/01';
+date_end='2006/04/01';
 %****************************%
 
 %These will be included in the file name
 %****************************%
 satellite='OMI';
-retrieval='SP_MYD06_v51_modDataClr';
+retrieval='SP';
 %****************************%
 
 %This is the directory where the final .mat file will be saved. This will
@@ -56,16 +56,19 @@ he5_dir = '/Volumes/share/GROUP/SAT/OMI/OMNO2_32';
 
 %This is the directory where the MODIS myd06_L2*.hdf files are saved. It should include subfolders organized by year.
 %Do not include a trailing separator.
-modis_myd06_dir = '/Volumes/share/GROUP/SAT/MODIS/MYD06_L2_Collection51';
-%modis_myd06_dir = '/Volumes/share/GROUP/SAT/MODIS/MYD06_L2';
+modis_myd06_dir = '/Volumes/share/GROUP/SAT/MODIS/MYD06_L2';
 
 %This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
 %Do not include a trailing separator.
-modis_mcd43_dir = '/Volumes/share/GROUP/SAT/MODIS/MCD43C3';
+%modis_mcd43_dir = '/Volumes/share/GROUP/SAT/MODIS/MCD43C3';
+modis_mcd43_dir = '/Volumes/share/Backup/J/MODIS_8day';
 
 %This is the directory where the GLOBE data files and their headers (.hdr files) are saved.
 %Do not include a trailing separator.
 globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
+
+
+%This number will be used
 
 tic %Start the timer
 
@@ -95,25 +98,25 @@ vcdQualityFlags=zeros(60,300);
 CloudPressure=zeros(60,300);
 ColumnAmountNO2Trop=zeros(60,300);
 
-[terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
-%refvec will contain (1) number of cells per degree, (2)
-%northwest corner latitude, (3) NW corner longitude.
-%(2) & (3) might differ from the input latmin & lonmin
-%because of where the globe cell edges fall
-cell_size = refvec(1);
-
-%GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
-%corner and terpres(end, end) is in the NE corner.
-
-if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
-globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
-globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
-globe_lat_matrix = globe_lat_matrix';
-globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
-
-globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
-globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
-globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
+% [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
+% %refvec will contain (1) number of cells per degree, (2)
+% %northwest corner latitude, (3) NW corner longitude.
+% %(2) & (3) might differ from the input latmin & lonmin
+% %because of where the globe cell edges fall
+% cell_size = refvec(1);
+% 
+% %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
+% %corner and terpres(end, end) is in the NE corner.
+% 
+% if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
+% globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
+% globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
+% globe_lat_matrix = globe_lat_matrix';
+% globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
+% 
+% globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
+% globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
+% globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
 
 %File names will be prefixed with "<satellite>_<retrieval>_", e.g. for OMI
 %satellite SP retrieval, the prefix will be "OMI_SP_" and then the date in
@@ -125,12 +128,24 @@ globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
 file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
 last_file=dir(fullfile(mat_dir,[file_prefix,'*.mat']));
 
-if isempty(last_file) || ~strcmp(last_file(end).name(1:l),file_prefix);
-    last_date=datestr(datenum(date_start)-1,26);
+if ~isempty(last_file)
+    last_datenum = datenum(last_file(end).name(l+1:l+8),'yyyymmdd')+1;
 else
-    last_date=last_file(end).name((l+1):(l+8));
-    last_date=([last_date(1:4),'/',last_date(5:6),'/',last_date(7:8)]);
+    last_datenum = 0;
 end
+
+if last_datenum >= datenum(date_start) && last_datenum <= datenum(date_end)
+    datenums = last_datenum:datenum(date_end);
+else
+    datenums = datenum(date_start):datenum(date_end);
+end
+
+% if isempty(last_file) || ~strcmp(last_file(end).name(1:l),file_prefix);
+%     last_date=datestr(datenum(date_start)-1,26);
+% else
+%     last_date=last_file(end).name((l+1):(l+8));
+%     last_date=([last_date(1:4),'/',last_date(5:6),'/',last_date(7:8)]);
+% end
 
 %Go ahead and load the terrain pressure data - only need to do this once
 [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
@@ -155,10 +170,11 @@ terpres(isnan(terpres)) = -500;
 %date. We will give the absolute paths to files rather than changing the
 %active directory, as MATLAB seems to run slightly slower if the current
 %working directory is on the server.
-total_days=datenum(date_end)-datenum(last_date)+1;
-for j=1:total_days;
+% total_days=datenum(date_end)-datenum(last_date)+1;
+% for j=1:total_days;
+for j=1:length(datenums)
     %Read the desired year, month, and day
-    R=addtodate(datenum(last_date), j, 'day');
+    R=datenums(j);
     date=datestr(R,26);
     year=date(1:4);
     month=date(6:7);
@@ -284,9 +300,22 @@ for j=1:total_days;
                 memspaceID = H5S.create_simple(length(slabsize),slabsize,slabsize);
                 offset = [(min(i_i)-1),0,0];
                 
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'FoV75CornerLatitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75CornerLatitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75CornerLatitude = double(FoV75CornerLatitude); FoV75CornerLatitude = permute(FoV75CornerLatitude, [1 3 2]);
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'FoV75CornerLongitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75CornerLongitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75CornerLongitude = double(FoV75CornerLongitude); FoV75CornerLongitude = permute(FoV75CornerLongitude, [1 3 2]);
-                
+                %Occasionally there are problems where the corner lat/lon
+                %fields in the OMI files don't have 4 points.  If that is
+                %the case, fill those fields with NaNs.  If some other
+                %error occurs, rethrow it.
+                try
+                    datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'FoV75CornerLatitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75CornerLatitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75CornerLatitude = double(FoV75CornerLatitude); FoV75CornerLatitude = permute(FoV75CornerLatitude, [1 3 2]);
+                    datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'FoV75CornerLongitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75CornerLongitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75CornerLongitude = double(FoV75CornerLongitude); FoV75CornerLongitude = permute(FoV75CornerLongitude, [1 3 2]);
+                catch err
+                    if strcmp(err.identifier,'MATLAB:imagesci:hdf5lib:libraryError') 
+                        FoV75CornerLatitude = nan(4,length(cut_y),60);
+                        FoV75CornerLongitude = nan(4,length(cut_y),60);
+                    else
+                        rethrow(err);
+                    end
+                end
+                    
                 %Import all remaining pieces of information from the standard
                 %product.
                 offset = [(min(i_i)-1),0];
@@ -298,7 +327,7 @@ for j=1:total_days;
                 %AMFTroposphere
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'AmfTrop')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); AMFTrop = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); AMFTrop=double(AMFTrop); AMFTrop=AMFTrop';
                 %CloudFraction
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudFraction=double(CloudFraction); CloudFraction=CloudFraction';
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudFraction=double(CloudFraction); CloudFraction=CloudFraction'; CloudFraction = CloudFraction/1000;
                 %CloudFractionError
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudFractionStd')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudFractionError = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudFractionError=double(CloudFractionError); CloudFractionError=CloudFractionError';
                 %CloudPressure
@@ -306,7 +335,7 @@ for j=1:total_days;
                 %CloudPressureError
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudPressureStd')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudPressureError = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudPressureError=double(CloudPressureError); CloudPressureError=CloudPressureError';
                 %CloudRadianceFraction
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1, 'CloudRadianceFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudRadianceFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudRadianceFraction=double(CloudRadianceFraction); CloudRadianceFraction=CloudRadianceFraction';
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1, 'CloudRadianceFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudRadianceFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudRadianceFraction=double(CloudRadianceFraction); CloudRadianceFraction=CloudRadianceFraction'; CloudRadianceFraction = CloudRadianceFraction/1000;
                 %ColumnAmountNO2
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'ColumnAmountNO2')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); ColumnAmountNO2 = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); ColumnAmountNO2=double(ColumnAmountNO2); ColumnAmountNO2=ColumnAmountNO2';
                 %ColumnAmountNO2Trop
@@ -329,35 +358,40 @@ for j=1:total_days;
                 RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle);
                 RelativeAzimuthAngle(RelativeAzimuthAngle > 180)=360-RelativeAzimuthAngle(RelativeAzimuthAngle > 180);
                 
-                x=find(lon<lonmin | lon>lonmax);
-                y=find(lat<latmin | lat>latmax);
-                lon(x)=NaN;                         lon(y)=NaN;                         lon(isnan(lon))=[];
-                lat(x)=NaN;                         lat(y)=NaN;                         lat(isnan(lat))=[];
-                loncorn(:,x)=NaN;                   loncorn(:,y)=NaN;                   loncorn(:,any(isnan(loncorn))) = [];
-                latcorn(:,x)=NaN;                   latcorn(:,y)=NaN;                   latcorn(:,any(isnan(latcorn))) = [];
-                FoV75CornerLatitude(:,x)=NaN;       FoV75CornerLatitude(:,y)=NaN;       FoV75CornerLatitude(:,any(isnan(FoV75CornerLatitude))) = [];
-                FoV75CornerLongitude(:,x)=NaN;      FoV75CornerLongitude(:,y)=NaN;      FoV75CornerLongitude(:,any(isnan(FoV75CornerLongitude))) = [];
-                SolarAzimuthAngle(x)=NaN;           SolarAzimuthAngle(y)=NaN;           SolarAzimuthAngle(isnan(SolarAzimuthAngle))=[];
-                SolarZenithAngle(x)=NaN;            SolarZenithAngle(y)=NaN;            SolarZenithAngle(isnan(SolarZenithAngle))=[];
-                ViewingAzimuthAngle(x)=NaN;         ViewingAzimuthAngle(y)=NaN;         ViewingAzimuthAngle(isnan(ViewingAzimuthAngle))=[];
-                ViewingZenithAngle(x)=NaN;          ViewingZenithAngle(y)=NaN;          ViewingZenithAngle(isnan(ViewingZenithAngle))=[];
-                Time(x)=NaN;                        Time(y)=NaN;                        Time(isnan(Time))=[];
-                AMFStrat(x)=NaN;                    AMFStrat(y)=NaN;                    AMFStrat(isnan(AMFStrat))=[];
-                AMFTrop(x)=NaN;                     AMFTrop(y)=NaN;                     AMFTrop(isnan(AMFTrop))=[];
-                CloudFraction(x)=NaN;               CloudFraction(y)=NaN;               CloudFraction(isnan(CloudFraction))=[];
-                CloudPressure(x)=NaN;               CloudPressure(y)=NaN;               CloudPressure(isnan(CloudPressure))=[];
-                CloudRadianceFraction(x)=NaN;       CloudRadianceFraction(y)=NaN;       CloudRadianceFraction(isnan(CloudRadianceFraction))=[];
-                ColumnAmountNO2(x)=NaN;             ColumnAmountNO2(y)=NaN;             ColumnAmountNO2(isnan(ColumnAmountNO2))=[];
-                SlantColumnAmountNO2(x)=NaN;        SlantColumnAmountNO2(y)=NaN;        SlantColumnAmountNO2(isnan(SlantColumnAmountNO2))=[];
-                TerrainHeight(x)=NaN;               TerrainHeight(y)=NaN;               TerrainHeight(isnan(TerrainHeight))=[];
-                TerrainPressure(x)=NaN;             TerrainPressure(y)=NaN;             TerrainPressure(isnan(TerrainPressure))=[];
-                TerrainReflectivity(x)=NaN;         TerrainReflectivity(y)=NaN;         TerrainReflectivity(isnan(TerrainReflectivity))=[];
-                vcdQualityFlags(x)=NaN;             vcdQualityFlags(y)=NaN;             vcdQualityFlags(isnan(vcdQualityFlags))=[];
-                XTrackQualityFlags(x)=NaN;          XTrackQualityFlags(y)=NaN;          XTrackQualityFlags(isnan(XTrackQualityFlags))=[];
-                RelativeAzimuthAngle(x)=NaN;        RelativeAzimuthAngle(y)=NaN;        RelativeAzimuthAngle(isnan(RelativeAzimuthAngle))=[];
-                ColumnAmountNO2Trop(x)=NaN;         ColumnAmountNO2Trop(y)=NaN;         ColumnAmountNO2Trop(isnan(ColumnAmountNO2Trop))=[];
-                Row(x)=NaN;                         Row(y)=NaN;                         Row(isnan(Row))=[];
-                Swath(x)=NaN;                       Swath(y)=NaN;                       Swath(isnan(Swath))=[];
+                % Use Inf instead of NaN here because some days seems to
+                % have NaN values populated in NO2/NO2 Trop column density,
+                % with the result that this section causes unequal removal
+                % of matrix elements if NaNs used as markers.
+                %x=find(lon<lonmin | lon>lonmax);
+                %y=find(lat<latmin | lat>latmax);
+                x = find((lon < lonmin | lon > lonmax) | (lat < latmin | lat > latmax));
+                lon(x)=[];                         %lon(y)=Inf;                         lon(isinf(lon))=[];
+                lat(x)=[];                         %lat(y)=Inf;                         lat(isinf(lat))=[];
+                loncorn(:,x)=[];                   %loncorn(:,y)=Inf;                   loncorn(:,any(isinf(loncorn))) = [];
+                latcorn(:,x)=[];                   %latcorn(:,y)=Inf;                   latcorn(:,any(isinf(latcorn))) = [];
+                FoV75CornerLatitude(:,x)=[];       %FoV75CornerLatitude(:,y)=Inf;       FoV75CornerLatitude(:,any(isinf(FoV75CornerLatitude))) = [];
+                FoV75CornerLongitude(:,x)=[];      %FoV75CornerLongitude(:,y)=Inf;      FoV75CornerLongitude(:,any(isinf(FoV75CornerLongitude))) = [];
+                SolarAzimuthAngle(x)=[];           %SolarAzimuthAngle(y)=Inf;           SolarAzimuthAngle(isinf(SolarAzimuthAngle))=[];
+                SolarZenithAngle(x)=[];            %SolarZenithAngle(y)=Inf;            SolarZenithAngle(isinf(SolarZenithAngle))=[];
+                ViewingAzimuthAngle(x)=[];         %ViewingAzimuthAngle(y)=Inf;         ViewingAzimuthAngle(isinf(ViewingAzimuthAngle))=[];
+                ViewingZenithAngle(x)=[];          %ViewingZenithAngle(y)=Inf;          ViewingZenithAngle(isinf(ViewingZenithAngle))=[];
+                Time(x)=[];                        %Time(y)=Inf;                        Time(isinf(Time))=[];
+                AMFStrat(x)=[];                    %AMFStrat(y)=Inf;                    AMFStrat(isinf(AMFStrat))=[];
+                AMFTrop(x)=[];                     %AMFTrop(y)=Inf;                     AMFTrop(isinf(AMFTrop))=[];
+                CloudFraction(x)=[];               %CloudFraction(y)=Inf;               CloudFraction(isinf(CloudFraction))=[];
+                CloudPressure(x)=[];               %CloudPressure(y)=Inf;               CloudPressure(isinf(CloudPressure))=[];
+                CloudRadianceFraction(x)=[];       %CloudRadianceFraction(y)=Inf;       CloudRadianceFraction(isinf(CloudRadianceFraction))=[];
+                ColumnAmountNO2(x)=[];             %ColumnAmountNO2(y)=Inf;             ColumnAmountNO2(isinf(ColumnAmountNO2))=[];
+                SlantColumnAmountNO2(x)=[];        %SlantColumnAmountNO2(y)=Inf;        SlantColumnAmountNO2(isinf(SlantColumnAmountNO2))=[];
+                TerrainHeight(x)=[];               %TerrainHeight(y)=Inf;               TerrainHeight(isinf(TerrainHeight))=[];
+                TerrainPressure(x)=[];             %TerrainPressure(y)=Inf;             TerrainPressure(isinf(TerrainPressure))=[];
+                TerrainReflectivity(x)=[];         %TerrainReflectivity(y)=Inf;         TerrainReflectivity(isinf(TerrainReflectivity))=[];
+                vcdQualityFlags(x)=[];             %vcdQualityFlags(y)=Inf;             vcdQualityFlags(isinf(vcdQualityFlags))=[];
+                XTrackQualityFlags(x)=[];          %XTrackQualityFlags(y)=Inf;          XTrackQualityFlags(isinf(XTrackQualityFlags))=[];
+                RelativeAzimuthAngle(x)=[];        %RelativeAzimuthAngle(y)=Inf;        RelativeAzimuthAngle(isinf(RelativeAzimuthAngle))=[];
+                ColumnAmountNO2Trop(x)=[];         %ColumnAmountNO2Trop(y)=Inf;         ColumnAmountNO2Trop(isinf(ColumnAmountNO2Trop))=[];
+                Row(x)=[];                         %Row(y)=Inf;                         Row(isinf(Row))=[];
+                Swath(x)=[];                       %Swath(y)=Inf;                       Swath(isinf(Swath))=[];
                 
                 if DEBUG_LEVEL > 0; disp(' Saving imported OMI fields to "Data"'); end
                 %Save the imported items to the structure 'Data'.  As is,
@@ -396,11 +430,30 @@ for j=1:total_days;
                 %but before the next OMI file.
                 modis_file=(['MYD06_L2.A',year,julian_day,'*.hdf']);
                 modis_files=dir(fullfile(modis_myd06_dir,year,modis_file));
+                
+                    % Calculate the start time for the next OMI swath.
+                    % Usually there is at least one swath starting after
+                    % the one overflying the US west coast for that day,
+                    % but occasionally that swath is not present in the
+                    % OMNO2 data.  In those cases, we need to calculate the
+                    % time it should have started, knowing that the Aura
+                    % orbit period is ~99 min.  If for some reason the
+                    % calculated start time should end up being in the next
+                    % day, error out so the user is aware of that.
+                if e < n
+                    next_omi_swath_time = str2double(sp_files(e+1).name(29:32));
+                else
+                    omi_hr = str2double(sp_files(e).name(29:30));
+                    omi_min = str2double(sp_files(e).name(31:32));
+                    next_omi_swath_time = 100*(floor((omi_min + 99)/60)+omi_hr) + mod(omi_min + 99,60);
+                    if next_omi_swath_time > 2359; error('read_omno2:modis_cloud','Next OMI swath time for MODIS cloud binning calculated to be in the next day. \nManual attention recommended'); end
+                end
+                
                 for ii=1:length(modis_files);
                     mod_filename=modis_files(ii).name;
                     if str2double(mod_filename(19:22))<str2double(sp_files(e).name(29:32));
                         continue
-                    elseif str2double(mod_filename(19:22))>str2double(sp_files(e+1).name(29:32));
+                    elseif e < n && str2double(mod_filename(19:22))>next_omi_swath_time;
                         continue
                     else
                         %For each file that fits the criteria mentioned
@@ -561,7 +614,7 @@ for j=1:total_days;
                 if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
                 
                 GLOBETerpres = zeros(size(Data(E).Latitude));
-                GLOBETerHeight = zeros(size(Data(E).Latitude));
+                %GLOBETerHeight = zeros(size(Data(E).Latitude));
                 
                 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
                 %corner and terpres(end, end) is in the NE corner.
@@ -591,7 +644,7 @@ for j=1:total_days;
                     
                     pres_vals=pressurex(xx);  pres_zeros=find(pres_vals==0);
                     pres_vals(pres_zeros)=NaN; pres_vals(isnan(pres_vals))=[];
-                    GLOBETerHeight(k) = mean(pres_vals);
+                    %GLOBETerHeight(k) = mean(pres_vals);
                     GLOBETerpres(k)=1013.25 .* exp(-mean(pres_vals) / 7400 ); %Originally divided by 7640 m
                     
                     
@@ -599,7 +652,7 @@ for j=1:total_days;
                 end
                 
                 Data(E).GLOBETerpres = GLOBETerpres;
-                Data(E).GLOBEHeight = GLOBETerHeight;
+                %Data(E).GLOBEHeight = GLOBETerHeight;
                 
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

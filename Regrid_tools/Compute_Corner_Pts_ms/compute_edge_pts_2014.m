@@ -16,7 +16,7 @@ lonedge = zeros(n+1,1);
 [x2,y2,z2] = sph2cart(lon(2)*pi/180,lat(2)*pi/180,1);
     
 dx = x1 - x2; dy = y1 - y2; dz = z1 - z2;
-xi = x1 + dx; yi = y1 + dy; zi = z1 + dz;
+xi = x1 + 0.5*dx; yi = y1 + 0.5*dy; zi = z1 + 0.5*dz; %JLL 13 May 2014: Changed because the edges of the edge pixels should be half the distance between pixel centers
 [poslon,poslat,Z1] = cart2sph(xi,yi,zi);
 lonedge(1) = poslon / pi * 180;
 latedge(1) = poslat / pi * 180;

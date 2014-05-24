@@ -3,12 +3,15 @@
 %Based on BEHR_nwus by Ashley Russell (02/09/2012)
 %Takes "OMI_SP_yyyymmdd.m" files produced by read_omno2_v_aug2012.m as it's
 %main input.
+% THIS IS A TESTING VERSION INTENDED TO TEST THE EFFECT OF NEW GLOBE
+% AVERAGING AND MODIS ALBEDO AVERAGING ON NO2 COLUMN DENSITY BY USING
+% OLD NO2 COLUMNS.
 
 %****************************%
 % CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
 % Allows for quick control over the amount of output to the console.
 % Choose a higher level to keep track of what the script is doing.
-DEBUG_LEVEL = 2;
+DEBUG_LEVEL = 1;
 %****************************%
 
 %****************************%
@@ -47,14 +50,14 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2006/01/01';
-date_end='2006/04/01';
+date_start='2011/07/23';
+date_end='2011/09/30';
 %****************************%
 
 %These will be included in the file name
 %****************************%
 satellite='OMI';
-retrieval='BEHR_noMODISCloud';
+retrieval='BEHR_oldOMNO2';
 %****************************%
 
 
@@ -70,29 +73,25 @@ addpath('/Users/Josh/Documents/MATLAB/BEHR/AMF_tools')
 last_file=dir(fullfile(mat_dir,'*.mat'));
 file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
 
-if ~isempty(last_file)
-    last_datenum = datenum(last_file(end).name(l+1:l+8),'yyyymmdd')+1;
-else
-    last_datenum = 0;
-end
-
-if last_datenum >= datenum(date_start) && last_datenum <= datenum(date_end)
-    datenums = last_datenum:datenum(date_end);
-else
-    datenums = datenum(date_start):datenum(date_end);
-end
+%if isempty(last_file) || ~strcmp(last_file(end).name(1:l),file_prefix);
+    last_date=datestr(datenum(date_start)-1,26);
+%else
+%    last_date=last_file(end).name((l+1):(l+8));
+%    last_date=([last_date(1:4),'/',last_date(5:6),'/',last_date(7:8)]);
+%end
 
 tic
-for j=1:length(datenums)
+total_days=datenum(date_end)-datenum(last_date)+1;
+for j=1:total_days
     %Read the desired year, month, and day
-  	R=datenums(j);
+    R=addtodate(datenum(last_date), j, 'day');
     date=datestr(R,26);
     year=date(1:4);
     month=date(6:7);
     day=date(9:10);
     if DEBUG_LEVEL > 0; disp(['Processing data for ', date]); end
     
-    filename = ['OMI_SP_',year,month,day,'.mat'];
+    filename = ['OMI_SP_appendedGLOBE_',year,month,day,'.mat'];
     if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(omi_sp_dir,filename),'...']); end
     if isequal(exist(fullfile(omi_sp_dir,filename),'file'),0)
         if DEBUG_LEVEL > 0; disp('No SP file exists for given day'); end
@@ -100,6 +99,7 @@ for j=1:length(datenums)
     else
         if DEBUG_LEVEL > 1; fprintf('\t ...Found.\n'); end
         load(fullfile(omi_sp_dir,filename)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
+            Data = appendedData;
         if exist('profile_file','file')==1 && strcmp(profile_file(2:3),month)==1; %JLL 20 Mar 2014: 
         else
             profile_file=['m',month,'_NO2_profile'];
@@ -154,7 +154,7 @@ for j=1:length(datenums)
                 no2Profile2 = no2Profile1;
                 pTerr = surfPres;
                 pCld = cldPres;
-                cldFrac = Data(d).CloudFraction; %JLL 18 Mar 2014: Cloud fraction and radiance fraction are scaled by 1e-3 in the OMNO2 he5 file
+                cldFrac = Data(d).CloudFraction; 
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
@@ -171,7 +171,8 @@ for j=1:length(datenums)
             if isfield(Data,'BEHRAMFTrop')==0 || isempty(Data(z).BEHRAMFTrop)==1;
                 continue
             else
-                Data(z).BEHRColumnAmountNO2Trop=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTrop;
+                %Data(z).BEHRColumnAmountNO2Trop=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTrop;
+                Data(z).BEHRColumnAmountNO2Trop=(Data(z).OldNO2ColumnTrop').*(Data(z).OldAMFTrop')./Data(z).BEHRAMFTrop;
                 if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
             end
         end
