@@ -14,7 +14,7 @@
 % Choose a higher level to keep track of what the script is doing.
 % 3 or less recommended for final products, as 4 will store debugging
 % variables in the output file, increasing its size.
-DEBUG_LEVEL = 1;
+DEBUG_LEVEL = 2;
 %****************************%
 
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
@@ -60,8 +60,8 @@ modis_myd06_dir = '/Volumes/share/GROUP/SAT/MODIS/MYD06_L2';
 
 %This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
 %Do not include a trailing separator.
-%modis_mcd43_dir = '/Volumes/share/GROUP/SAT/MODIS/MCD43C3';
-modis_mcd43_dir = '/Volumes/share/Backup/J/MODIS_8day';
+modis_mcd43_dir = '/Volumes/share/GROUP/SAT/MODIS/MCD43C3';
+
 
 %This is the directory where the GLOBE data files and their headers (.hdr files) are saved.
 %Do not include a trailing separator.
