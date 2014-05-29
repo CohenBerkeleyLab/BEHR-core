@@ -11,6 +11,11 @@ function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( star
 %   lat_bdy = a 1x2 matrix with the latitude boundaries
 %
 % PARAMETER VALUES:
+%   mapfield = the field in the OMI data structure that will be mapped.
+%       Defaults to BEHRColumnAmountNO2Trop, must be a string.  Changing
+%       this value will not change any of the accept/reject pixel
+%       parameters, any that use the BEHR NO2 column will still use that
+%       value.
 %   resolution = the size of the lat/lon boxes in degrees. Defaults to 0.05
 %   projection = 'conic' or 'mercator'. Conic uses Albers Equal-Area Conic,
 %       mercator uses (surprise) a mercator projection. Conic is default.
@@ -21,7 +26,8 @@ function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( star
 %       white.
 %   cbrange = a 1x2 matrix with range of values for the colorbar.  By
 %       default, this will be set by MATLAB.
-%   states = Set to 0 to avoid plotting US state boundaries. 
+%   states = Set to 0 to avoid plotting US state boundaries.
+%   behrdir = The directory where BEHR files can be found.
 %   fileprefix = 'OMI_BEHR_' by default. The part of the .mat filenames
 %       before the date.
 %   flags = a cell array of flags that change the behavior of the function:
@@ -40,6 +46,8 @@ function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( star
 %Josh Laughner <joshlaugh5@gmail.com> 25 Apr 2014
 
 p = inputParser;
+p.addParamValue('mapfield','BEHRColumnAmountNO2Trop',@isstr)
+p.addParamValue('behrdir','/Volumes/share/GROUP/SAT/BEHR/Test_BEHR_files',@(x) exist(x,'dir'))
 p.addParamValue('resolution',0.05,@isscalar);
 p.addParamValue('projection','conic',@(x) any(strcmpi(x,{'conic','mercator'}))); %Ensure that the projection type will be recognized
 p.addParamValue('coast','default',@(x) any(strcmpi(x,{'default','high','intermediate','medium','low','crude','default'})));
@@ -54,6 +62,8 @@ p.addParamValue('rowanomaly','XTrackFlags',@(x) any(strcmpi(x,{'AlwaysByRow','Ro
 
 p.parse(varargin{:});
 parsed_vars = p.Results;
+mapfield = parsed_vars.mapfield;
+behr_dir = parsed_vars.behrdir;
 
 %****************************%
 % CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
@@ -61,13 +71,6 @@ parsed_vars = p.Results;
 % Choose a higher level to keep track of what the script is doing.
 DEBUG_LEVEL = 2;
 %****************************%
-
-%****************************%
-%       FILE PATHS
-%****************************%
-%The directory where the BEHR output files are stored. Do not include a
-%trailing separator.
-behr_dir = '/Volumes/share/GROUP/SAT/BEHR/Test_BEHR_files';
 
 
 %****************************%
@@ -100,7 +103,7 @@ switch week_setting
     case 2 %Set up to find normal weekdays
         weekend = [1 0 0 0 0 0 1];
     case 3 %Set up to find Sundays only (restricted weekend, avoids "overflow" emisions from Fri --> Sat)
-        weekend = [1 0 0 0 0 0 0];
+        weekend = [0 1 1 1 1 1 1];
     case 4 %Set up to find Tu-F, avoiding lower rollover emissions from Su --> M
         weekend = [1 1 0 0 0 0 1];
     otherwise %If no weekend argument passed, use all days of week
@@ -154,7 +157,7 @@ addpath(genpath('/Users/Josh/Documents/MATLAB/BEHR/Utils'))
 %****************************%
 
 per = length(start_date);
-
+first_time_through = 1; % A flag to run any scripts required on the first time through the loop.
 if per ~= length(end_date); error('NO2ColMap:TimePeriods','no2_column_map - startdate and enddate are unequal lengths'); end
 
 for period = 1:per %Loop over each temporal period you wish to average
@@ -173,15 +176,17 @@ for period = 1:per %Loop over each temporal period you wish to average
         
         if exist(file,'file') ~= 2; fprintf(' %s not found\n',filename);
         elseif ~isbusday(date,holidays,weekend) % Tests if the day is a weekend based on the weekend flags set and whether or not to use US holidays.
+            if DEBUG_LEVEL > 1; fprintf('\t %s will not be considered for averaging\n',date); end
         else
             load(file,'OMI')
             
-            if period == 1 && a == datenum(startdate) %The first time through, generate the Sum matrices that will hold the total areaweight and weighted column density
+            if first_time_through %The first time through, generate the Sum matrices that will hold the total areaweight and weighted column density
                 if DEBUG_LEVEL > 0; fprintf('Initializing SumWeightedColumn and SumWeight matrices\n'); end
-                SumWeightedColumn = zeros(size(OMI(1).BEHRColumnAmountNO2Trop));
-                SumWeight = zeros(size(OMI(1).BEHRColumnAmountNO2Trop));
+                SumWeightedColumn = zeros(size(eval(sprintf('OMI(1).%s',mapfield))));
+                SumWeight = zeros(size(eval(sprintf('OMI(1).%s',mapfield))));
                 omilats = OMI(1).Latitude;
                 omilons = OMI(1).Longitude;
+                first_time_through = 0; % Don't run this section again.
             end
             
             for s=1:length(OMI)
@@ -204,7 +209,7 @@ for period = 1:per %Loop over each temporal period you wish to average
                 xx = omi_rowanomaly(omi,parsed_vars.rowanomaly); %Remove elements affected by the row anomaly.
                 omi.Areaweight(xx) = 0;
                 
-                SumWeightedColumn = SumWeightedColumn + omi.BEHRColumnAmountNO2Trop .* omi.Areaweight;
+                SumWeightedColumn = SumWeightedColumn + eval(sprintf('omi.%s',mapfield)) .* omi.Areaweight;
                 SumWeight = SumWeight + omi.Areaweight;
             end %End loop over swaths in OMI
         end %End if statement checking if the BEHR file for the current day exists
