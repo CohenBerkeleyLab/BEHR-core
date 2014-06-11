@@ -1,5 +1,6 @@
 function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( start_date_in, end_date_in, lon_bdy, lat_bdy, varargin )
 %NO2 Map Function - Uses the m_map package to draw maps of NO2 column density over the US (primarily). Returns the colorbar handle. Arguments:
+% Returns: colorbar handle, no2 grid, lon grid, lat grid.
 % REQUIRED:
 %   start_date = a string in yyyy/mm/dd format that represents the starting
 %      date of the period to average over. If you want to average multiple,
@@ -195,20 +196,8 @@ for period = 1:per %Loop over each temporal period you wish to average
                     error('NO2ColMap:OMILatLons','OMI Lat and Lons for %s, swath %u do not agree with previous lat/lon matrices',date,s);
                 end
                 
-                omi = OMI(s); %We will set the area weight to 0 for any elements that should not contribute to the average
-                omi.Areaweight(omi.BEHRColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
-                omi.Areaweight(mod(omi.vcdQualityFlags,2)~=0) = 0; %If the vcdQualityFlags value is not even (least significant bit ~= 0), do not include this element
-                
-                if strcmpi(cloud_type,'omi'); omi.Areaweight(omi.CloudFraction > cloud_frac) = 0;
-                elseif strcmpi(cloud_type,'modis'); omi.Areaweight(omi.MODISCloud > cloud_frac) = 0;
-                end %Do not include the element if the cloud fraction is greater than the allowable criteria
-                
-                omi.Areaweight(omi.BEHRColumnAmountNO2Trop > 1E17) = 0; %Do not include the element if the NO2 column is too great.  These are known to be affected by the row anomaly (Bucsela 2013, Atmos. Meas. Tech. 2607)
-                hh=find(isnan(omi.BEHRColumnAmountNO2Trop)); omi.BEHRColumnAmountNO2Trop(hh)=0; omi.Areaweight(hh)=0; %Set any column NaNs to 0 and do not include them in the average
-                
-                xx = omi_rowanomaly(omi,parsed_vars.rowanomaly); %Remove elements affected by the row anomaly.
-                omi.Areaweight(xx) = 0;
-                
+                omi = omi_pixel_reject(OMI(s), cloud_type, cloud_frac, parsed_vars.rowanomaly); %We will set the area weight to 0 for any elements that should not contribute to the average
+                                
                 SumWeightedColumn = SumWeightedColumn + eval(sprintf('omi.%s',mapfield)) .* omi.Areaweight;
                 SumWeight = SumWeight + omi.Areaweight;
             end %End loop over swaths in OMI
@@ -223,6 +212,12 @@ ColumnData = SumWeightedColumn ./ SumWeight;
 nans = find(isnan(ColumnData));
 ColumnData(nans) = []; omilats(nans) = []; omilons(nans) = [];
 GriddedColumn = griddata(omilons,omilats,ColumnData,longrid,latgrid);
+
+% Select a figure number that is not currently open
+allfigs = findall(0,'Type','Figure');
+if ~isempty(allfigs); figure(max(allfigs)+1);
+else figure(1);
+end
 
 % Prepare the map
 if strcmpi('conic',parsed_vars.projection)

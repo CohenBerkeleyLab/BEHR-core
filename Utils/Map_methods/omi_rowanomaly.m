@@ -42,11 +42,19 @@ switch mode
         xx = find(log);
         
     case 'XTrackFlags'
-        xx = find(omi.XTrackQualityFlags ~= 0); %JLL 20 Mar 2014: If the XTrackQualityFlag value is not 0, then the pixel has been affected by the row anomaly.
+        xx = true(size(omi.XTrackQualityFlags));
+        for a=1:numel(omi.XTrackQualityFlags)
+            if any(omi.XTrackQualityFlags{a}) ~= 0; %JLL 20 Mar 2014: If the XTrackQualityFlag value is not 0, then the pixel has been affected by the row anomaly.
+                xx(a) = 0;
+            end
+        end
     case 'XTrackFlagsLight'
-        binary_flags = de2bi(omi.XTrackQualityFlags); %JLL 20 Mar 2014: Convert all values to binary arrays.  Each value will be a row in the resulting matrix.
-        key_flags = bi2de(binary_flags(:,1:3)); %JLL 20 Mar 2014: Convert the first three (least significant) bits back to decimal
-        xx = find(key_flags == 1 | key_flags == 7);
+        xx = true(size(omi.XTrackQualityFlags));
+        for a=1:numel(omi.XTrackQualityFlags)
+            binary_flags = de2bi(omi.XTrackQualityFlags{a}); %JLL 20 Mar 2014: Convert all values to binary arrays.  Each value will be a row in the resulting matrix.
+            key_flags = bi2de(binary_flags(:,1:3)); %JLL 20 Mar 2014: Convert the first three (least significant) bits back to decimal
+            xx(a) = key_flags == 1 | key_flags == 7;
+        end
 end
 
 end

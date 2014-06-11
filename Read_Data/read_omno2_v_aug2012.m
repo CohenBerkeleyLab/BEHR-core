@@ -34,8 +34,8 @@ end
 
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2006/01/01';
-date_end='2006/04/01';
+date_start='2008/06/24';
+date_end='2008/06/24';
 %****************************%
 
 %These will be included in the file name
@@ -44,11 +44,15 @@ satellite='OMI';
 retrieval='SP';
 %****************************%
 
+%This will help reject descending node swaths, which occasionally creep in.
+%Set to 'US' to implement that feature, set to anything else to disable.
+region = 'US';
+
 %This is the directory where the final .mat file will be saved. This will
 %need to be changed to match your machine and the files' location. Do not
 %include a trailing separator, i.e. '/my/favorite/directory' not
 %'my/favorite/directory/'
-mat_dir = '/Volumes/share/GROUP/SAT/BEHR/Test_SP_files';
+mat_dir = '~/Desktop';%'/Volumes/share/GROUP/SAT/BEHR/Test_SP_files';
 
 %This is the directory where the he5 files are saved. Do not include a
 %trailing separator.
@@ -201,6 +205,18 @@ for j=1:length(datenums)
             end
             %Read in each file, saving the hierarchy as 'hinfo'
             filename= sp_files(e).name;
+            
+            %If start time is < 1500 and we want to look at the US, reject
+            %the file, as it is probably descending nodes only.
+            time_ind = regexp(filename,'t\d\d\d\d-o');
+            omi_starttime = str2double(filename(time_ind+1:time_ind+4));
+            if omi_starttime < 1500
+                if DEBUG_LEVEL > 0; fprintf(' Swath %d: Nighttime granule skipped\n',e);
+                continue
+                end
+            end
+            
+            
             hinfo = h5info(fullfile(file_dir,filename));
             
             %Read in the full latitude data set; this will be used to determine
@@ -348,6 +364,8 @@ for j=1:length(datenums)
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainPressure')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainPressure = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainPressure=double(TerrainPressure); TerrainPressure=TerrainPressure';
                 %TerrainReflectivity
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainReflectivity')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainReflectivity = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainReflectivity=double(TerrainReflectivity); TerrainReflectivity=TerrainReflectivity';
+                %TropopausePressure
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TropopausePressure')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TropopausePressure = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TropopausePressure=double(TropopausePressure); TropopausePressure=TropopausePressure';
                 %vcdQualityFlags
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'VcdQualityFlags')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); vcdQualityFlags = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); vcdQualityFlags=double(vcdQualityFlags); vcdQualityFlags=vcdQualityFlags';
                 %XTrackQualityFlags
@@ -386,6 +404,7 @@ for j=1:length(datenums)
                 TerrainHeight(x)=[];               %TerrainHeight(y)=Inf;               TerrainHeight(isinf(TerrainHeight))=[];
                 TerrainPressure(x)=[];             %TerrainPressure(y)=Inf;             TerrainPressure(isinf(TerrainPressure))=[];
                 TerrainReflectivity(x)=[];         %TerrainReflectivity(y)=Inf;         TerrainReflectivity(isinf(TerrainReflectivity))=[];
+                TropopausePressure(x) = [];
                 vcdQualityFlags(x)=[];             %vcdQualityFlags(y)=Inf;             vcdQualityFlags(isinf(vcdQualityFlags))=[];
                 XTrackQualityFlags(x)=[];          %XTrackQualityFlags(y)=Inf;          XTrackQualityFlags(isinf(XTrackQualityFlags))=[];
                 RelativeAzimuthAngle(x)=[];        %RelativeAzimuthAngle(y)=Inf;        RelativeAzimuthAngle(isinf(RelativeAzimuthAngle))=[];
@@ -411,6 +430,7 @@ for j=1:length(datenums)
                 Data(E).RelativeAzimuthAngle = RelativeAzimuthAngle(:);     Data(E).CloudFraction = CloudFraction(:);
                 Data(E).Row = Row(:);                                       Data(E).XTrackQualityFlags = XTrackQualityFlags(:);
                 Data(E).Swath = Swath(:);                                   Data(E).Date=date;
+                Data(E).TropopausePressure = TropopausePressure(:);
                 
                 %Add MODIS cloud info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
