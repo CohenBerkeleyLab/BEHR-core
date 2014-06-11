@@ -14,7 +14,7 @@
 % Choose a higher level to keep track of what the script is doing.
 % 3 or less recommended for final products, as 4 will store debugging
 % variables in the output file, increasing its size.
-DEBUG_LEVEL = 2;
+DEBUG_LEVEL = 3;
 %****************************%
 
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
@@ -34,8 +34,8 @@ end
 
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2008/06/24';
-date_end='2008/06/24';
+date_start='2005/01/01';
+date_end='2005/12/31';
 %****************************%
 
 %These will be included in the file name
@@ -52,7 +52,7 @@ region = 'US';
 %need to be changed to match your machine and the files' location. Do not
 %include a trailing separator, i.e. '/my/favorite/directory' not
 %'my/favorite/directory/'
-mat_dir = '~/Desktop';%'/Volumes/share/GROUP/SAT/BEHR/Test_SP_files';
+mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';%'/Volumes/share/GROUP/SAT/BEHR/Test_SP_files';
 
 %This is the directory where the he5 files are saved. Do not include a
 %trailing separator.
@@ -204,19 +204,7 @@ for j=1:length(datenums)
                 if e==1 || mod(e,10)==0; fprintf('Swath %u of %s/%s/%s \n',e,month,day,year); end
             end
             %Read in each file, saving the hierarchy as 'hinfo'
-            filename= sp_files(e).name;
-            
-            %If start time is < 1500 and we want to look at the US, reject
-            %the file, as it is probably descending nodes only.
-            time_ind = regexp(filename,'t\d\d\d\d-o');
-            omi_starttime = str2double(filename(time_ind+1:time_ind+4));
-            if omi_starttime < 1500
-                if DEBUG_LEVEL > 0; fprintf(' Swath %d: Nighttime granule skipped\n',e);
-                continue
-                end
-            end
-            
-            
+            filename= sp_files(e).name;         
             hinfo = h5info(fullfile(file_dir,filename));
             
             %Read in the full latitude data set; this will be used to determine
@@ -291,8 +279,17 @@ for j=1:length(datenums)
             Lon(x)=NaN;     Lon(y)=NaN;     Lon(isnan(Lon))=[];
             Lat(x)=NaN;     Lat(y)=NaN;     Lat(isnan(Lat))=[];
             
+            
+            time_ind = regexp(filename,'t\d\d\d\d-o');
+            omi_starttime = str2double(filename(time_ind+1:time_ind+4));
+            
             if isempty(Lon)==1 || isempty(Lat)==1 || length(Lat)==1;
                 if DEBUG_LEVEL > 1; disp('No points within lat/lon boundaries'); end
+                continue
+            elseif omi_starttime < 1500 && strcmp(region,'US')
+                %If start time is < 1500 and we want to look at the US, reject
+                %the file, as it is probably descending nodes only.
+                if DEBUG_LEVEL > 0; fprintf(' Swath %d: Nighttime granule skipped\n',e); end
                 continue
             else
                 if DEBUG_LEVEL > 1; disp('Founds points within lat/lon boundaries'); end
@@ -619,12 +616,12 @@ for j=1:length(datenums)
                     end
                     
                     MODISAlbedo(k) = band3_avg;
-                    if DEBUG_LEVEL > 3; telap = toc; fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+                    if DEBUG_LEVEL > 2; telap = toc; fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
                 end
                 
                 Data(E).MODISAlbedo = MODISAlbedo;
                 Data(E).MODIS_Albedo_File = fullfile(alb_dir,alb_files(1).name);
-                if DEBUG_LEVEL > 2; Data(E).MODISAlb_Ocean = MODISAlb_Ocn; end
+                if DEBUG_LEVEL > 3; Data(E).MODISAlb_Ocean = MODISAlb_Ocn; end
                 
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -18,13 +18,13 @@ DEBUG_LEVEL = 2;
 %need to be changed to match your machine and the files' location. Do not
 %include a trailing separator, i.e. '/my/favorite/directory' not
 %'my/favorite/directory/
-mat_dir = '/Volumes/share/GROUP/SAT/BEHR/Test_BEHR_files';
+mat_dir = '~/Desktop';%'/Volumes/share/GROUP/SAT/BEHR/Test_BEHR_files';
 
 %This is the directory where the "OMI_SP_*.mat" files are saved. This will
 %need to be changed to match your machine and the files' location. Do not
 %include a trailing separator, i.e. '/my/favorite/directory' not
 %'my/favorite/directory/
-omi_sp_dir = '/Volumes/share/GROUP/SAT/BEHR/Test_SP_files';
+omi_sp_dir = '~/Desktop';%'/Volumes/share/GROUP/SAT/BEHR/Test_SP_files';
 
 %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
 %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
@@ -47,8 +47,8 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2013/01/01';
-date_end='2013/03/31';
+date_start='2008/06/24';
+date_end='2008/06/24';
 %****************************%
 
 %These will be included in the file name
@@ -204,7 +204,7 @@ for j=1:length(datenums)
         %*********************************%
         
         if DEBUG_LEVEL > 0; disp('  Preparing OMI structure'); end
-        OMI=struct('Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'CloudFraction',0,'CloudRadianceFraction',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'Areaweight',0,'CloudPressure',0,'RelativeAzimuthAngle',0,'Latitude',0,'Longitude',0,'FoV75CornerLatitude',0,'FoV75CornerLongitude',0,'Pixel',0,'ColumnAmountNO2Trop',0,'GLOBETerpres',0,'MODISAlbedo',0,'BEHRAMFTrop',0,'BEHRColumnAmountNO2Trop',0,'MODISCloud',0,'Row',0,'Swath',0,'AMFTrop',0,'AMFStrat',0,'Date','','FoV75CornerLatitude',0,'FoV75CornerLongitude',0,'XTrackQualityFlags',0,'TropopausePressure',0);
+        OMI=struct('Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'CloudFraction',0,'CloudRadianceFraction',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'Areaweight',0,'CloudPressure',0,'RelativeAzimuthAngle',0,'Latitude',0,'Longitude',0,'Pixel',0,'ColumnAmountNO2Trop',0,'GLOBETerpres',0,'MODISAlbedo',0,'BEHRAMFTrop',0,'BEHRColumnAmountNO2Trop',0,'MODISCloud',0,'Row',0,'Swath',0,'AMFTrop',0,'AMFStrat',0,'Date','','XTrackQualityFlags',0,'TropopausePressure',0);
         s=size(Data);
         hh=0;
         for d=1:s(2);
@@ -253,8 +253,6 @@ for j=1:length(datenums)
                 OMI(hh).AMFStrat=AMFStrat;
                 % New fields not in the original version of BEHR            
                 OMI(hh).Date=Data(d).Date;
-                OMI(hh).FoV75CornerLatitude=FoV75CornerLatitude;
-                OMI(hh).FoV75CornerLongitude=FoV75CornerLongitude;
                 OMI(hh).XTrackQualityFlags=XTrackQualityFlags;
                 OMI(hh).TropopausePressure=TropopausePressure;
             end
