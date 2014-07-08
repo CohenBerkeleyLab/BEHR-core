@@ -14,7 +14,7 @@
 % Choose a higher level to keep track of what the script is doing.
 % 3 or less recommended for final products, as 4 will store debugging
 % variables in the output file, increasing its size.
-DEBUG_LEVEL = 3;
+DEBUG_LEVEL = 1;
 %****************************%
 
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
@@ -34,8 +34,8 @@ end
 
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2005/01/01';
-date_end='2005/12/31';
+date_start='2011/07/01';
+date_end='2011/07/31';
 %****************************%
 
 %These will be included in the file name
@@ -52,7 +52,7 @@ region = 'US';
 %need to be changed to match your machine and the files' location. Do not
 %include a trailing separator, i.e. '/my/favorite/directory' not
 %'my/favorite/directory/'
-mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';%'/Volumes/share/GROUP/SAT/BEHR/Test_SP_files';
+mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
 
 %This is the directory where the he5 files are saved. Do not include a
 %trailing separator.
@@ -60,7 +60,7 @@ he5_dir = '/Volumes/share/GROUP/SAT/OMI/OMNO2_32';
 
 %This is the directory where the MODIS myd06_L2*.hdf files are saved. It should include subfolders organized by year.
 %Do not include a trailing separator.
-modis_myd06_dir = '/Volumes/share/GROUP/SAT/MODIS/MYD06_L2';
+modis_myd06_dir = '/Volumes/share-sat/SAT/MODIS/MYD06_L2';
 
 %This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
 %Do not include a trailing separator.

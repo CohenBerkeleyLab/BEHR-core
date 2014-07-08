@@ -10,6 +10,10 @@ distance = zeros(n,1);
 
 for i = 1:n;
     distance(i) = compute_distance(lat(i), lon(i), satlat, satlon, satalt); %This is the distance from the satellite to the lat/lon specified
-    fwhm(i) = weight_distance(distance(i));
+    if isnan(distance(i));
+        fwhm(i) = NaN;
+    else
+        fwhm(i) = weight_distance(distance(i));
+    end
 end
 

@@ -12,8 +12,10 @@ lonedge = zeros(n+1,1);
 %JLL 5-12-2014: Assume that the pixel lat and lon is a linear function of
 %"pixel number" and so calculate the edge of the first pixel by assuming
 %the distance to the center of the pixel on either side is the same.
-[x1,y1,z1] = sph2cart(lon(1)*pi/180,lat(1)*pi/180,1); 
-[x2,y2,z2] = sph2cart(lon(2)*pi/180,lat(2)*pi/180,1);
+xx = find(~isnan(lat) & ~isnan(lon),2,'first');
+
+[x1,y1,z1] = sph2cart(lon(xx(1))*pi/180,lat(xx(1))*pi/180,1); 
+[x2,y2,z2] = sph2cart(lon(xx(2))*pi/180,lat(xx(2))*pi/180,1);
     
 dx = x1 - x2; dy = y1 - y2; dz = z1 - z2;
 xi = x1 + dx; yi = y1 + dy; zi = z1 + dz;

@@ -48,7 +48,7 @@ function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( star
 
 p = inputParser;
 p.addParamValue('mapfield','BEHRColumnAmountNO2Trop',@isstr)
-p.addParamValue('behrdir','/Volumes/share/GROUP/SAT/BEHR/Test_BEHR_files',@(x) exist(x,'dir'))
+p.addParamValue('behrdir','/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014',@(x) exist(x,'dir'))
 p.addParamValue('resolution',0.05,@isscalar);
 p.addParamValue('projection','conic',@(x) any(strcmpi(x,{'conic','mercator'}))); %Ensure that the projection type will be recognized
 p.addParamValue('coast','default',@(x) any(strcmpi(x,{'default','high','intermediate','medium','low','crude','default'})));

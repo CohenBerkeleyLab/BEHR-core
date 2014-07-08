@@ -18,13 +18,13 @@ DEBUG_LEVEL = 2;
 %need to be changed to match your machine and the files' location. Do not
 %include a trailing separator, i.e. '/my/favorite/directory' not
 %'my/favorite/directory/
-mat_dir = '~/Desktop';%'/Volumes/share/GROUP/SAT/BEHR/Test_BEHR_files';
+mat_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR';
 
 %This is the directory where the "OMI_SP_*.mat" files are saved. This will
 %need to be changed to match your machine and the files' location. Do not
 %include a trailing separator, i.e. '/my/favorite/directory' not
 %'my/favorite/directory/
-omi_sp_dir = '~/Desktop';%'/Volumes/share/GROUP/SAT/BEHR/Test_SP_files';
+omi_sp_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
 
 %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
 %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
@@ -47,17 +47,22 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2008/06/24';
-date_end='2008/06/24';
+date_start='2011/07/01';
+date_end='2011/07/31';
 %****************************%
 
 %These will be included in the file name
 %****************************%
 satellite='OMI';
-retrieval='BEHR_noMODISCloud';
+retrieval='BEHR_omiCloudAMF';
 %****************************%
 
-
+%****************************%
+% Which cloud product to use to calculate the AMF: OMI or MODIS
+%****************************%
+cloud_amf = 'omi';
+cloud_rad_amf = 'omi';
+%****************************%
 
 %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
 %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
@@ -154,8 +159,16 @@ for j=1:length(datenums)
                 no2Profile2 = no2Profile1;
                 pTerr = surfPres;
                 pCld = cldPres;
-                cldFrac = Data(d).CloudFraction; %JLL 18 Mar 2014: Cloud fraction and radiance fraction are scaled by 1e-3 in the OMNO2 he5 file
-                cldRadFrac = Data(d).CloudRadianceFraction;
+                if strcmpi(cloud_amf,'omi')
+                    cldFrac = Data(d).CloudFraction; %JLL 18 Mar 2014: Cloud fraction and radiance fraction are scaled by 1e-3 in the OMNO2 he5 file
+                else
+                    cldFrac = Data(d).MODISCloud;
+                end
+                if strcmpi(cloud_rad_amf,'omi')
+                    cldRadFrac = Data(d).CloudRadianceFraction;
+                else
+                    cldRadFrac = Data(d).MODISCloud;
+                end
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
                 noGhost=1; ak=1;
@@ -185,7 +198,7 @@ for j=1:length(datenums)
         %will take on the value for the same (closest) OMI pixel.  By
         %keeping the quads' centers the same over all retrievals you wish
         %to average, this will allow easier averaging over multiple OMI
-        %swaths.
+        %swaths. This is a form of oversampling.
         %*********************************%
         lonmin = -125;  lonmax = -65;  
         latmin = 25;   latmax = 50;
