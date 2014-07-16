@@ -34,8 +34,8 @@ end
 
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2011/07/01';
-date_end='2011/07/31';
+date_start='2013/09/01';
+date_end='2013/09/30';
 %****************************%
 
 %These will be included in the file name

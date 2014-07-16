@@ -214,10 +214,11 @@ ColumnData(nans) = []; omilats(nans) = []; omilons(nans) = [];
 GriddedColumn = griddata(omilons,omilats,ColumnData,longrid,latgrid);
 
 % Select a figure number that is not currently open
-allfigs = findall(0,'Type','Figure');
-if ~isempty(allfigs); figure(max(allfigs)+1);
-else figure(1);
-end
+figure;
+% allfigs = findall(0,'Type','Figure');
+% if ~isempty(allfigs); figure(max(allfigs)+1);
+% else figure(1);
+% end
 
 % Prepare the map
 if strcmpi('conic',parsed_vars.projection)

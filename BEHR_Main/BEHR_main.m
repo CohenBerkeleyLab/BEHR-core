@@ -47,8 +47,8 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2011/07/01';
-date_end='2011/07/31';
+date_start='2013/09/01';
+date_end='2013/09/30';
 %****************************%
 
 %These will be included in the file name
@@ -271,11 +271,7 @@ for j=1:length(datenums)
             end
         end
         savename=[file_prefix,year,month,day];  
-        if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(mat_dir,year,month,savename)]); end
-        if exist(fullfile(mat_dir,year,month),'dir')~=7
-            if DEBUG_LEVEL > 0; fprintf('Creating folder %s\n', fullfile(mat_dir,year,month)); end
-            mkdir(fullfile(mat_dir,year,month));
-        end
+        if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(mat_dir,savename)]); end
         save(fullfile(mat_dir,savename),'Data','OMI')
         toc
         t=toc;
