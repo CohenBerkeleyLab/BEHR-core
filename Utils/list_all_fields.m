@@ -7,7 +7,9 @@ fields = fieldnames(structure);
 for a=1:length(structure)
     fprintf('%u: \n',a);
     for b=1:length(fields)
-        if isstruct(eval(sprintf('structure(a).%s',fields{b})));
+        if isempty(eval(sprintf('structure(a).%s',fields{b})));
+            fprintf('\t%s: {} \n',fields{b});
+        elseif isstruct(eval(sprintf('structure(a).%s',fields{b})));
             fprintf('\t%s: %s \n', fields{b}, '[struct]'); 
         else
             fprintf('\t%s: %s \n', fields{b}, eval(sprintf('structure(a).%s',fields{b}))); 

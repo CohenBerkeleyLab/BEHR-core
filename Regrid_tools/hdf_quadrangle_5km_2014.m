@@ -4,8 +4,11 @@
 %JLL 2-14-2014: round01 does not seem to be used; the built-in matlab
 %function round seems to take its place
 
-%JLL 19 Mar 2014: Prepare empty matrices to receive the relevant values
-%from Data
+% Prepare empty matrices to receive the relevant values from Data.  If
+% specific fields are specified as the optional argument "fields," only
+% those fields will be handled.  Otherwise, all fields in Data will be
+% processed.
+
 Time=zeros(maxx,maxy);
 ViewingZenithAngle=zeros(maxx,maxy);
 SolarZenithAngle=zeros(maxx,maxy);

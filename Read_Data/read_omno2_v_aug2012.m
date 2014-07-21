@@ -210,7 +210,13 @@ for j=1:length(datenums)
             %Read in the full latitude data set; this will be used to determine
             %which pixels to read in later.
             Latitude = h5read(fullfile(file_dir,filename), h5dsetname(hinfo,1,2,1,2,'Latitude')); %h5dsetname takes 1) the object returned by h5info, 2) The indicies of the group tree 3) The last argument may be the index or name of the dataset of interest
+            % Row will keep track of the pixel's location in the
+            % across-track direction; Pixel will track it's position in the
+            % along-track direction.  These will allow the spatial
+            % arrangement of the pixels to be reconstructed if desired (as
+            % a sparse matrix); Row is also used for row anomaly rejection.
             Row=0:59; Row=Row'; Row=repmat(Row,1,size(Latitude,2));
+            Pixel=0:length(Latitude)-1; Pixel=repmat(Pixel,60,1);
             Swath=filename(35:39); Swath=str2double(Swath).*ones(size(Latitude));
             
             %Restrict latitude to those that fall within the bounds specified
@@ -224,6 +230,7 @@ for j=1:length(datenums)
             lat=double(lat(cut_y,cut_x));
             Latitude=Latitude(cut_x,cut_y)'; Latitude=double(Latitude);
             Row=Row(cut_x,cut_y)';
+            Pixel=Pixel(cut_x,cut_y)';
             Swath=Swath(cut_x,cut_y)';
             
             %Set up to use low-level HDF5 functions to read in only the parts
@@ -407,6 +414,7 @@ for j=1:length(datenums)
                 RelativeAzimuthAngle(x)=[];        %RelativeAzimuthAngle(y)=Inf;        RelativeAzimuthAngle(isinf(RelativeAzimuthAngle))=[];
                 ColumnAmountNO2Trop(x)=[];         %ColumnAmountNO2Trop(y)=Inf;         ColumnAmountNO2Trop(isinf(ColumnAmountNO2Trop))=[];
                 Row(x)=[];                         %Row(y)=Inf;                         Row(isinf(Row))=[];
+                Pixel(x)=[];
                 Swath(x)=[];                       %Swath(y)=Inf;                       Swath(isinf(Swath))=[];
                 
                 if DEBUG_LEVEL > 0; disp(' Saving imported OMI fields to "Data"'); end
@@ -427,7 +435,7 @@ for j=1:length(datenums)
                 Data(E).RelativeAzimuthAngle = RelativeAzimuthAngle(:);     Data(E).CloudFraction = CloudFraction(:);
                 Data(E).Row = Row(:);                                       Data(E).XTrackQualityFlags = XTrackQualityFlags(:);
                 Data(E).Swath = Swath(:);                                   Data(E).Date=date;
-                Data(E).TropopausePressure = TropopausePressure(:);
+                Data(E).TropopausePressure = TropopausePressure(:);         Data(E).Pixel=Pixel(:);
                 
                 %Add MODIS cloud info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
