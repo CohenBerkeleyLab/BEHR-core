@@ -18,7 +18,7 @@ DEBUG_LEVEL = 2;
 %need to be changed to match your machine and the files' location. Do not
 %include a trailing separator, i.e. '/my/favorite/directory' not
 %'my/favorite/directory/
-mat_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR';
+mat_dir = '/Volumes/share-sat/SAT/BEHR/Test_BEHR_Files';
 
 %This is the directory where the "OMI_SP_*.mat" files are saved. This will
 %need to be changed to match your machine and the files' location. Do not
@@ -47,8 +47,8 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2013/09/01';
-date_end='2013/09/30';
+date_start='2011/07/01';
+date_end='2011/07/03';
 %****************************%
 
 %These will be included in the file name
@@ -217,7 +217,6 @@ for j=1:length(datenums)
         %*********************************%
         
         if DEBUG_LEVEL > 0; disp('  Preparing OMI structure'); end
-        OMI=struct('Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'CloudFraction',0,'CloudRadianceFraction',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'Areaweight',0,'CloudPressure',0,'RelativeAzimuthAngle',0,'Latitude',0,'Longitude',0,'Pixel',0,'ColumnAmountNO2Trop',0,'GLOBETerpres',0,'MODISAlbedo',0,'BEHRAMFTrop',0,'BEHRColumnAmountNO2Trop',0,'MODISCloud',0,'Row',0,'Swath',0,'AMFTrop',0,'AMFStrat',0,'Date','','XTrackQualityFlags',0,'TropopausePressure',0);
         s=size(Data);
         hh=0;
         for d=1:s(2);
@@ -226,49 +225,18 @@ for j=1:length(datenums)
                 continue
             else
                 if DEBUG_LEVEL > 1; fprintf('   Gridding data for swath %u\n',d); end
-                add2grid_5km_2014 %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
                 hh=hh+1;
-                Latitude=(latmin+0.025):resolution:(latmax-0.025); Latitude=Latitude'; Latitude=repmat(Latitude,1,1200);
-                Longitude=(lonmin+0.025):resolution2:(lonmax-0.025); Longitude=repmat(Longitude,500,1);
-                
-                OMI(hh).Time=Time;
-                OMI(hh).Latitude=Latitude;
-                OMI(hh).Longitude=Longitude;
-                OMI(hh).MapData.LatBdy = [latmin latmax];
-                OMI(hh).MapData.LatRes = resolution;
-                OMI(hh).MapData.LonBdy = [lonmin lonmax];
-                OMI(hh).MapData.LonRes = resolution2;
-                OMI(hh).ViewingZenithAngle=ViewingZenithAngle;
-                OMI(hh).SolarZenithAngle=SolarZenithAngle;
-                OMI(hh).ViewingAzimuthAngle=ViewingAzimuthAngle;
-                OMI(hh).SolarAzimuthAngle=SolarAzimuthAngle;
-                OMI(hh).CloudFraction=CloudFraction;
-                OMI(hh).CloudRadianceFraction=CloudRadianceFraction;
-                OMI(hh).ColumnAmountNO2=ColumnAmountNO2;
-                OMI(hh).SlantColumnAmountNO2=SlantColumnAmountNO2;
-                OMI(hh).TerrainHeight=TerrainHeight;
-                OMI(hh).TerrainPressure=TerrainPressure;
-                OMI(hh).TerrainReflectivity=TerrainReflectivity;
-                OMI(hh).vcdQualityFlags=vcdQualityFlags;
-                OMI(hh).Areaweight=Areaweight;
-                OMI(hh).CloudPressure=CloudPressure;
-                OMI(hh).RelativeAzimuthAngle=RelativeAzimuthAngle;
-                OMI(hh).Pixel=Pixel;
-                OMI(hh).ColumnAmountNO2Trop=ColumnAmountNO2Trop;
-                OMI(hh).GLOBETerpres=GLOBETerpres;
-                OMI(hh).MODISAlbedo=MODISAlbedo;
-                OMI(hh).BEHRAMFTrop=BEHRAMFTrop;
-                OMI(hh).BEHRColumnAmountNO2Trop=BEHRColumnAmountNO2Trop;
-                OMI(hh).MODISCloud=MODISCloud;
-                OMI(hh).Row=Row;
-                OMI(hh).Swath=Swath;
-                OMI(hh).AMFTrop=AMFTrop;
-                OMI(hh).AMFStrat=AMFStrat;
-                % New fields not in the original version of BEHR            
-                OMI(hh).Date=Data(d).Date;
-                OMI(hh).XTrackQualityFlags=XTrackQualityFlags;
-                OMI(hh).TropopausePressure=TropopausePressure;
+                OMI(hh) = add2grid_BEHR(Data(d),resolution,resolution2,[lonmin, lonmax],[latmin, latmax]); %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
             end
+        end
+
+        % Assign these after the rest of the OMI structure to avoid a
+        % problem with dissimilar structure assignment
+        Latitude=(latmin+0.025):resolution:(latmax-0.025); Latitude=Latitude'; Latitude=repmat(Latitude,1,1200);
+        Longitude=(lonmin+0.025):resolution2:(lonmax-0.025); Longitude=repmat(Longitude,500,1);
+        for aa=1:hh
+            OMI(aa).Latitude = Latitude;
+            OMI(aa).Longitude = Longitude;
         end
         savename=[file_prefix,year,month,day];  
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(mat_dir,savename)]); end

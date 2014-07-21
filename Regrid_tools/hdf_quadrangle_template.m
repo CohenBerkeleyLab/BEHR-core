@@ -201,6 +201,9 @@ end
 
 % Create the OMI structure for output
 %$f OMI.$field = $field;
+OMI.Count = Count;
+OMI.Area = Area;
+OMI.Areaweight = Areaweight;
 %$c OMI.$cellfield = $cellfield;
 
 end
