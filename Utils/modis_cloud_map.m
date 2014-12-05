@@ -1,15 +1,17 @@
 %modis_cloud_map
 %Makes maps of MODIS cloud fraction
 
-date_start = '07/02/2011';
-date_end = '07/02/2011';
+date_start = '06/21/2012';
+date_end = '06/21/2012';
 
-lonbdy = [-80 -75];
-latbdy = [37 40];
+lonbdy = [-98 -86];
+latbdy = [36 43];
 
 DEBUG_LEVEL = 2;
 
-modis_dir = '/Volumes/share-sat/SAT/MODIS/MYD06_L2';
+modis_dir = '/Volumes/share-sat/SAT/MODIS/MOD06_L2';
+modis_prefix = 'MOD06_L2.A';
+modis_field = 'Cloud_Fraction';
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Check input %%%%%
@@ -42,7 +44,7 @@ for d=1:numel(days)
     modis_day = num2str(modis_date_to_day(curr_date));
     
     % Find all MODIS files for the current date
-    modis_filename=(['MYD06_L2.A',year,modis_day,'*.hdf']);
+    modis_filename=sprintf('%s%s%s*.hdf',modis_prefix,year,modis_day);
     modis_files = dir(fullfile(modis_dir,year,modis_filename));
     n=numel(modis_files);
     % Loop through all files
@@ -61,7 +63,7 @@ for d=1:numel(days)
             loncorn = corners(:,:,1,1:4);
             
             % Load cloud fraction
-            cldfrac = hdfread(fullfile(modis_dir,year,modis_files(a).name),hdfdsetname(hdfi,1,2,'Cloud_Fraction'));
+            cldfrac = hdfread(fullfile(modis_dir,year,modis_files(a).name),hdfdsetname(hdfi,1,2,modis_field));
             cldfrac = double(cldfrac);
             
             for b=1:size(mlat,1)

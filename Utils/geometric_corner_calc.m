@@ -57,7 +57,7 @@ for y = 1:dims(1)-1;
         corners(y,x,2,4) = latcorner(x,2);
         corners(y,x,1,5) = lon(x);
         corners(y,x,2,5) = lat(x);        
-    end        
+    end   
 end
 
 end

@@ -77,18 +77,15 @@ p0   = max(presSurface, min(pressure));
 n    = numel(p);
 
 dvcd     = 0;
-deltaVcd = zeros(numel(f));
-df       = zeros(numel(f));
+deltaVcd = zeros(numel(f),1); % Changed to make these vectors on 9/26/2014 JLL
+df       = zeros(numel(f),1);
 %{
 if numel(mixingRatioStd) == n;
     df = max(mixingRatioStd,0);
 end
 %}
-dum = pressure - circshift(pressure,[1,1]);
-if max(dum(2:n)) >= 0;
-elseif min(pressure) <= 0;
-elseif presSurface <= 0;
-  %disp('integPr: pressures must be positive, decreasing')
+if any(diff(pressure)>0);
+    error('integPr2:pressure','Pressure must be monotonically decreasing')
 end
 
 
@@ -119,7 +116,10 @@ for i = 1:n-1;
 
 end
 
-vcd = sum(deltaVcd(i0:n-1)); 
+if any(isnan(deltaVcd(i0:n-1)))
+    warning('NaNs detected in partial columns. They will not be added into the total column density.')
+end
+vcd = nansum2(deltaVcd(i0:n-1)); 
 
 %{
 if numel(mixingRatioStd) == n;   % Do uncertainty calculation..............

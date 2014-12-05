@@ -40,7 +40,21 @@
 %function [amf, amfCld, amfClr, avgKernel, vcd, vcdAvgKernel] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
 function [amf, amfCld, amfClr] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
 
-    
+
+% Each profile is expected to be a column in the no2Profile matrix.  Check
+% for this by ensuring that the first dimension of both profile matrices
+% has the same length as the pressure vector
+E = JLLErrors;
+if size(no2Profile1,1) ~= length(pressure) || size(no2Profile2,1) ~= length(pressure);
+    error(E.callError('profile_input','Profiles must be column vectors in the input matrices.  Ensure size(no2Profile,1) == length(pressure)'));
+end
+if size(dAmfClr,1) ~= length(pressure) || size(dAmfCld,1) ~= length(pressure);
+    error(E.callError('dAmf_input','dAMFs must be column vectors in the input matrices.  Ensure size(dAmfxxx,1) == length(pressure)'));
+end
+if size(temperature,1) ~= length(pressure)
+    error(E.callError('temperature_input','temperature must be a column vector.  Ensure size(temperature,1) == length(pressure)'));
+end
+
 minPressure = 200;  % defined tropopause pressure (hPa)
 
 alpha = 1 - 0.003 * (temperature - 220);   % temperature correction factor vector

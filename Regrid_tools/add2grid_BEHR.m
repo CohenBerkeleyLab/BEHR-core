@@ -1,13 +1,10 @@
-function OMI = add2grid_general(Data,reslat,reslon,lonbdy,latbdy)
+function OMI = add2grid_BEHR(Data,reslat,reslon,lonbdy,latbdy)
 
 % add2grid_general Updated version of add2grid_5km_2014 intended to be a
 % usable for any gridding purpose.
 %
-%   A template version of the add2grid function, edit "hdf_quadrangle_?" to
-%   match the correct hdf_quadrangle function and save a copy of this file.
-%
 %   This is an intermediate function between the calling script and
-%   hdf_quadrangle_* that prepares latitude and longitude corner
+%   hdf_quadrangle_general that prepares latitude and longitude corner
 %   data. It requires 5 inputs:
 %       1) A single, top level element (i.e. a single satellite swath) of a
 %       Data structure.
@@ -20,12 +17,25 @@ function OMI = add2grid_general(Data,reslat,reslon,lonbdy,latbdy)
 %       to include a pixel in the grid (does not include those with a value
 %       of NaN in this field).
 %
-%   hdf_quadrangle_* is whatever hdf_quadrangle code is generated using
-%   hdf_quad_gen.py, python code that creates the gridding code based on
-%   input field names.  The python code saves a version of
-%   hdf_quadrangle_template with the field names filled in.  Be sure to
-%   change the call to hdf_quadrangle_? near the end of this file to match
-%   the appropriate function.
+%   Given the significantly longer time required to run
+%   hdf_quadrangle_general due to all the calls to "eval", it is
+%   recommended that a specialized version (e.g. hdf_quadrangle_5km_2014 and
+%   add2grid_5km_2014) be written for jobs involving significant amounts of
+%   data processing.  For work that may only be done once, the longer time
+%   may be worth avoiding a code rewrite.
+%
+%   This will accept up to two additional arguments, which are cell arrays
+%   specifying the fields from Data which should be gridded and returned as
+%   an OMI structure.  If no argument is passed, this function will grid
+%   all fields in Data.  If one array is passed, only those fields will be
+%   gridded - but hdf_quadrangle will analyze the field names, and those
+%   with "flags" in the field name (case insensitive) will be stored as
+%   cell arrays, each flag a cell (this is in contrast to most data, which
+%   will be averaged).  This way the meaning of the individual bits in the
+%   quality flags can be extracted properly later.  If both optional
+%   arguments are passed as cell arrays, hdf_quadrangle will treat all
+%   fields in the first array normally, and all fields in the second array
+%   as quality flags.
 %
 %   Note that in order for this to work, the Data structure must have
 %   fields "Latitude" and "Longitude" defining the center lat/lon of the
@@ -49,6 +59,7 @@ if ~isfield(Data,'Latcorn') || ~isfield(Data,'Loncorn');
 elseif size(Data.Latcorn,1) > 4 || size(Data.Loncorn,1) > 4
     error('add2grid:DataIn', 'Latcorn and loncorn must have the first dimension of length 4 represent the corners of the pixel')
 end
+    
 
 Dimensions=size(Data.ColumnAmountNO2);
 %swath=d;
@@ -87,8 +98,7 @@ for x=1:1:Dimensions(1)*Dimensions(2);
     end
 end
 
-% Change this function call to match the hdf function generated.
-OMI = hdf_quadrangle_?(Data, maxx, minx, maxy, miny, lCoordLon, lCoordLat, Lon1, Lon2, Lon4, Lat1, Lat2, Lat4);
+OMI = hdf_quadrangle_BEHR(Data, maxx, minx, maxy, miny, lCoordLon, lCoordLat, Lon1, Lon2, Lon4, Lat1, Lat2, Lat4);
 OMI.MapData.LatBdy = latbdy;
 OMI.MapData.LatRes = reslat;
 OMI.MapData.LonBdy = lonbdy;
@@ -100,4 +110,5 @@ Latitude=repmat(Latitude,1,nlon); Longitude=repmat(Longitude,nlat,1);
 
 OMI.Latitude = Latitude;
 OMI.Longitude = Longitude;
+
 end

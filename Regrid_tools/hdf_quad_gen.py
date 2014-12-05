@@ -5,10 +5,10 @@
 import os.path
 import sys
 
-fields_file = 'Fields Files/BEHRFields.txt'
-cellfields_file = 'Fields Files/BEHRCellFields.txt'
+fields_file = '/Users/Josh/Documents/MATLAB/BEHR/OMI_SP/OMI_fields.txt'
+cellfields_file = '/Users/Josh/Documents/MATLAB/BEHR/OMI_SP/OMI_cellfields.txt'
 hdf_quad_template = 'hdf_quadrangle_template.m'
-hdf_quad_save = 'hdf_quadrangle_BEHR.m'
+hdf_quad_save = '/Users/Josh/Documents/MATLAB/BEHR/OMI_SP/hdf_quadrangle_OMI.m'
 
 # Check if the save file exists, if the user declines to overwrite, abort
 if os.path.isfile(hdf_quad_save):

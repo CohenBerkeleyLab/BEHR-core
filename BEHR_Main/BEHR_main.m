@@ -18,7 +18,7 @@ DEBUG_LEVEL = 2;
 %need to be changed to match your machine and the files' location. Do not
 %include a trailing separator, i.e. '/my/favorite/directory' not
 %'my/favorite/directory/
-mat_dir = '/Volumes/share-sat/SAT/BEHR/Test_BEHR_Files';
+mat_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014';
 
 %This is the directory where the "OMI_SP_*.mat" files are saved. This will
 %need to be changed to match your machine and the files' location. Do not
@@ -47,8 +47,8 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2011/07/01';
-date_end='2011/07/03';
+date_start='2014/04/01';
+date_end='2014/08/31';
 %****************************%
 
 %These will be included in the file name
@@ -97,7 +97,8 @@ for j=1:length(datenums)
     day=date(9:10);
     if DEBUG_LEVEL > 0; disp(['Processing data for ', date]); end
     
-    filename = ['OMI_SP_',year,month,day,'.mat'];
+    filename = ['OMI_SP_noMODISCloud_',year,month,day,'.mat'];
+
     if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(omi_sp_dir,filename),'...']); end
     if isequal(exist(fullfile(omi_sp_dir,filename),'file'),0)
         if DEBUG_LEVEL > 0; disp('No SP file exists for given day'); end
@@ -160,7 +161,7 @@ for j=1:length(datenums)
                 pTerr = surfPres;
                 pCld = cldPres;
                 if strcmpi(cloud_amf,'omi')
-                    cldFrac = Data(d).CloudFraction; %JLL 18 Mar 2014: Cloud fraction and radiance fraction are scaled by 1e-3 in the OMNO2 he5 file
+                    cldFrac = Data(d).CloudFraction; 
                 else
                     cldFrac = Data(d).MODISCloud;
                 end
@@ -230,14 +231,6 @@ for j=1:length(datenums)
             end
         end
 
-        % Assign these after the rest of the OMI structure to avoid a
-        % problem with dissimilar structure assignment
-        Latitude=(latmin+0.025):resolution:(latmax-0.025); Latitude=Latitude'; Latitude=repmat(Latitude,1,1200);
-        Longitude=(lonmin+0.025):resolution2:(lonmax-0.025); Longitude=repmat(Longitude,500,1);
-        for aa=1:hh
-            OMI(aa).Latitude = Latitude;
-            OMI(aa).Longitude = Longitude;
-        end
         savename=[file_prefix,year,month,day];  
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(mat_dir,savename)]); end
         save(fullfile(mat_dir,savename),'Data','OMI')

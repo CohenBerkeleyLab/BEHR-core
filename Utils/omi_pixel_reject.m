@@ -51,15 +51,19 @@ else
     omi.Areaweight(mod(omi.vcdQualityFlags,2)~=0) = 0;
 end
 
-if strcmpi(cloud_type,'omi'); 
-    omi.Areaweight(omi.CloudFraction > cloud_frac) = 0;
-    omi.Areaweight(isnan(omi.CloudFraction)) = 0; % Reject pixels with NaN for cloud fraction
-    omi.Areaweight(omi.CloudFraction < 0) = 0; % Reject pixels with fill values for cloud fraction
+if strcmpi(cloud_type,'rad'); %Do not include the element if the cloud fraction is greater than the allowable criteria
+    omi.Areaweight(omi.CloudRadianceFraction > cloud_frac) = 0;
+    omi.Areaweight(isnan(omi.CloudRadianceFraction)) = 0; % Reject pixels with NaN for cloud fraction
+    omi.Areaweight(omi.CloudRadianceFraction < 0) = 0; % Reject pixels with fill values for cloud fraction
 elseif strcmpi(cloud_type,'modis'); 
     omi.Areaweight(omi.MODISCloud > cloud_frac) = 0;
     omi.Areaweight(isnan(omi.MODISCloud)) = 0; % Reject pixels with NaN for cloud fraction
     omi.Areaweight(omi.MODISCloud < 0) = 0;  % Reject pixels with fill values for cloud fraction
-end %Do not include the element if the cloud fraction is greater than the allowable criteria
+else
+    omi.Areaweight(omi.CloudFraction > cloud_frac) = 0;
+    omi.Areaweight(isnan(omi.CloudFraction)) = 0; % Reject pixels with NaN for cloud fraction
+    omi.Areaweight(omi.CloudFraction < 0) = 0; % Reject pixels with fill values for cloud fraction
+end 
 
 omi.Areaweight(omi.BEHRColumnAmountNO2Trop > 1E17) = 0; %Do not include the element if the NO2 column is too great.  These are known to be affected by the row anomaly (Bucsela 2013, Atmos. Meas. Tech. 2607)
 hh=find(isnan(omi.BEHRColumnAmountNO2Trop)); omi.BEHRColumnAmountNO2Trop(hh)=0; omi.Areaweight(hh)=0; %Set any column NaNs to 0 and do not include them in the average

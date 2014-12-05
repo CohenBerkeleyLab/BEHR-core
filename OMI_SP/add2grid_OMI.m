@@ -1,4 +1,4 @@
-function OMI = add2grid_general(Data,reslat,reslon,lonbdy,latbdy)
+function OMI = add2grid_OMI(Data,reslat,reslon,lonbdy,latbdy)
 
 % add2grid_general Updated version of add2grid_5km_2014 intended to be a
 % usable for any gridding purpose.
@@ -88,7 +88,7 @@ for x=1:1:Dimensions(1)*Dimensions(2);
 end
 
 % Change this function call to match the hdf function generated.
-OMI = hdf_quadrangle_?(Data, maxx, minx, maxy, miny, lCoordLon, lCoordLat, Lon1, Lon2, Lon4, Lat1, Lat2, Lat4);
+OMI = hdf_quadrangle_OMI(Data, maxx, minx, maxy, miny, lCoordLon, lCoordLat, Lon1, Lon2, Lon4, Lat1, Lat2, Lat4);
 OMI.MapData.LatBdy = latbdy;
 OMI.MapData.LatRes = reslat;
 OMI.MapData.LonBdy = lonbdy;

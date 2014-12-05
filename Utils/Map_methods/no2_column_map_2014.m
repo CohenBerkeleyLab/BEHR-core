@@ -187,6 +187,10 @@ for period = 1:per %Loop over each temporal period you wish to average
                 SumWeight = zeros(size(eval(sprintf('OMI(1).%s',mapfield))));
                 omilats = OMI(1).Latitude;
                 omilons = OMI(1).Longitude;
+                
+                if isfield(OMI,'BEHRColumnAmountNO2Trop'); useBEHR = 1;
+                else useBEHR = 0; fprintf('File is not a BEHR file, using OMI SP settings\n');
+                end
                 first_time_through = 0; % Don't run this section again.
             end
             
@@ -196,7 +200,11 @@ for period = 1:per %Loop over each temporal period you wish to average
                     error('NO2ColMap:OMILatLons','OMI Lat and Lons for %s, swath %u do not agree with previous lat/lon matrices',date,s);
                 end
                 
-                omi = omi_pixel_reject(OMI(s), cloud_type, cloud_frac, parsed_vars.rowanomaly); %We will set the area weight to 0 for any elements that should not contribute to the average
+                if useBEHR
+                    omi = omi_pixel_reject(OMI(s), cloud_type, cloud_frac, parsed_vars.rowanomaly); %We will set the area weight to 0 for any elements that should not contribute to the average
+                else
+                    omi = omi_sp_pixel_reject(OMI(s), cloud_type, cloud_frac, parsed_vars.rowanomaly);
+                end
                                 
                 SumWeightedColumn = SumWeightedColumn + eval(sprintf('omi.%s',mapfield)) .* omi.Areaweight;
                 SumWeight = SumWeight + omi.Areaweight;
