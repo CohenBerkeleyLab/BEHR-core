@@ -17,8 +17,8 @@ function BEHR_InSitu_Reprocessing
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 18 Aug 2013
 
-start_date = '07/01/2011';
-end_date = '07/31/2011';
+start_date = '09/01/2013';
+end_date = '09/30/2013';
 
 starttime = '12:00';
 endtime = '15:00';
@@ -30,7 +30,7 @@ cld_field = 'CloudFraction';
 %Which NO2 field from the aircraft file to use; for MD options are
 %'NO2_NCAR' and 'NO2_LIF'; for CA and TX, 'NO2_MixingRatio' or
 %'NO2_MixingRatio_LIF'
-no2field = 'NO2_LIF';
+no2field = 'NO2_MixingRatio_LIF';
 
 %The directory where the original BEHR files are located
 behr_prefix = 'OMI_BEHR_omi*';

@@ -465,9 +465,9 @@ for j=1:length(datenums)
                     % orbit period is ~99 min.  If for some reason the
                     % calculated start time should end up being in the next
                     % day, error out so the user is aware of that.
-                if e < n
+                if e < n % If there is at least one more swath, get its start time from the file name
                     next_omi_swath_time = str2double(sp_files(e+1).name(29:32));
-                else
+                else % otherwise add 99 minutes to the start time for this swath
                     omi_hr = str2double(sp_files(e).name(29:30));
                     omi_min = str2double(sp_files(e).name(31:32));
                     next_omi_swath_time = 100*(floor((omi_min + 99)/60)+omi_hr) + mod(omi_min + 99,60);
@@ -476,6 +476,8 @@ for j=1:length(datenums)
                 
                 for ii=1:length(modis_files);
                     mod_filename=modis_files(ii).name;
+                    % Skip any modis files that do not occur during the
+                    % time period of the current swath
                     if str2double(mod_filename(19:22))<str2double(sp_files(e).name(29:32));
                         continue
                     elseif e < n && str2double(mod_filename(19:22))>next_omi_swath_time;

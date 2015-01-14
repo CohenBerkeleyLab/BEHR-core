@@ -11,35 +11,60 @@ function [ AMFs, SZAvec, VZAvec, RAAvec, ALBvec, SURFPRESSvec ] = amfSensitivity
 %   two dimensions will be singletons if only a single lat/lon is
 %   specified.
 
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% STARTUP %%%%%
+%%%%%%%%%%%%%%%%%%%
+
+global onCluster;
+
+% Paths to the dependencies within this file - necessary to run on the
+% cluster. Set the global variable 'onCluster' to true as part of a Matlab
+% run script that calls this function.
+
+if onCluster
+    clusterMatlabDir = '~/MATLAB';
+    addpath(genpath(fullfile(clusterMatlabDir,'BEHR')));
+    addpath(genpath(fullfile(clusterMatlabDir,'Utils')));
+    addpath(genpath(fullfile(clusterMatlabDir,'Classes')));
+end
+
+% Instantiate the custom error class
+E=JLLErrors;
+
+% The number of threads to allow to run. Likewise, set this in a MATLAB
+% run script calling this function, otherwise it will default to 1.
+global numThreads;
+if isempty(numThreads); numThreads = 1; end
+if ~isscalar(numThreads); E.badvartype(numThreads, 'scalar'); end
+
+
 %%%%%%%%%%%%%%%%%%%%%%
 %%%%% USER INPUT %%%%%
 %%%%%%%%%%%%%%%%%%%%%%
 
-% Set to 0 if running this script without display or JVM (i.e. from command
-% line), that will prevent the progress from from trying to be displayed.
-waitbar_bool = 1;
-
 % # SZAs between 0 and 88 degrees to test
-nSZA = 9;
+nSZA = 2;%9;
 
 % # VZAs between 0 and 70 degrees to test
-nVZA = 6;
+nVZA = 1;%6;
 
 % # RAA (rel. azimuth angles) between 0 and 180 degrees to test
-nRAA = 11;
+nRAA = 1;%11;
 
 % Surface albedo can be between 0 and 1; but you can reset the min and max
 % to restrict to i.e. 0 and 0.1 - this allows you to examine effects of
 % albedo in a range appropriate to a ground type or clouds.
 minAlb = 0;
 maxAlb = 0.1;
-nAlb = 6;
+nAlb = 1;%6;
 
 % Surface pressure can vary between 1013 and 0.003 hPa; but like albedo,
 % you may reset the min and max.
 minSurfPres = 880;
 maxSurfPres = 1013;
-nSurfPres = 5;
+nSurfPres = 1;%5;
 
 % set to 'OMI' (eventually perhaps 'GOME' will be an option) to determine
 % what pressure levels to use
@@ -53,8 +78,6 @@ fileDamf = fullfile(amf_tools_path,'damf.txt');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT VALIDATION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-E=JLLErrors;
 
 if ~isscalar(month)
     error(E.notScalar('month'));
@@ -125,30 +148,39 @@ switch satellite
         error(E.callError('satellite','Satellite not recognized; could not determine pressure levels to use'))
 end
 
-if waitbar_bool
-    wb = waitbar(0,'AMF Sensitivity Progress');
-    wbcnt = 0; n=numel(AMFs);
+% If no parallel pool is active, start one. If there wasn't one, go ahead
+% and close it at the end.
+if isempty(gcp('nocreate'))
+    parpool(numThreads);
+    closeparpool = true;
+else
+    closeparpool = false;
 end
 
+% To be safe with the parallel loop, get the number of elements in each
+% vector outside the loop, rather than as function calls inside the loop.
+n1 = numel(SZAvec);
+n2 = numel(VZAvec);
+n3 = numel(RAAvec);
+n4 = numel(ALBvec);
+n5 = numel(SURFPRESSvec);
+n6 = numel(lon);
+n7 = numel(lat);
+
 % Many many loops to iterate over each variable
-for x6 = 1:numel(lon);
-    for x7 = 1:numel(lat);
+for x6 = 1:n6;
+    for x7 = 1:n7;
         % Read the temperature profile for this lat/lon
         temperature = rNmcTmp2(fileTmp, presLevels, lon(x6), lat(x7), month);
         
-        for x1=1:numel(SZAvec)
-            if x1 == 1; fprintf('Now on SZA 1\n');
-            else fprintf('\b\b2\n'); end
-            for x2=1:numel(VZAvec)
-                for x3=1:numel(RAAvec)
-                    for x4=1:numel(ALBvec)
-                        for x5=1:numel(SURFPRESSvec)
-                            if waitbar_bool
-                                wbcnt = wbcnt + 1;
-                                waitbar(wbcnt/n,wb,'AMF Sensitivity Progress');
-                            end
+        parfor x1=1:n1;
+            fprintf('Now on SZA %d\n',x1);
+            for x2=1:n2
+                for x3=1:n3
+                    for x4=1:n4
+                        for x5=1:n5
                             sza_i = SZAvec(x1);
-                            vza_i = VZAvec(x2);
+                            vza_i = VZAvec(x2); %#ok<*PFBNS>
                             phi_i = RAAvec(x3);
                             albedo_i = ALBvec(x4);
                             surfPres_i = SURFPRESSvec(x5);
@@ -173,5 +205,8 @@ for x6 = 1:numel(lon);
     end
 end
 
-if waitbar_bool; close(wb); end
+if closeparpool
+    p = gcp('nocreate');
+    delete(p);
+end
 end
