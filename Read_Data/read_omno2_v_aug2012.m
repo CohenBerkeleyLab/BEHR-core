@@ -1,3 +1,4 @@
+function read_omno2_v_aug2012(date_start, date_end)
 % readhe5_omno2_v_aug2012
 %Reads omno2 he5 files as of the Aug 2012 version; saves the resulting .mat
 %file as <satellite>_<retrieval>_<year><month><day>. Based on
@@ -17,9 +18,53 @@
 DEBUG_LEVEL = 1;
 %****************************%
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% PARALLELIZATION OPTIONS %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Specifies whether the script is executing on a cluster; this must be set
+% (globally) in the calling script.  This allows for the execution of code
+% needed on the cluster (i.e. adding necessary folders to the Matlab path,
+% opening a parallel pool) without running them on the local machine.  If
+% onCluster hasn't been defined yet, set it to false.
+global onCluster;
+if isempty(onCluster); 
+    if DEBUG_LEVEL > 0; fprintf('Assuming onCluster is false\n'); end
+    onCluster = false; 
+end
+
+% Defined the number of threads to run, this will be used to open a
+% parallel pool. numThreads should be set in the calling run script,
+% otherwise it will default to 1.
+global numThreads;
+if isempty(numThreads)
+    numThreads = 1;
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% DEPENDENCIES %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
-addpath(genpath('/Users/Josh/Documents/MATLAB/BEHR/Utils'))
+addpath(genpath('~/Documents/MATLAB/BEHR/Utils'))
+
+
+% Add the paths needed to run on the cluster
+if onCluster;
+    addpath(genpath('~/MATLAB/Classes'));
+    addpath(genpath('~/MATLAB/Utils'));
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% INITIALIZATION %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+E = JLLErrors;
+
+%%%%%%%%%%%%%%%%%%%%%%
+%%%%% USER INPUT %%%%%
+%%%%%%%%%%%%%%%%%%%%%%
 
 %Specify the longitude and latitude ranges of interest for this retrieval.
 %****************************%
@@ -32,95 +77,122 @@ elseif latmin > latmax
     error('read_omno2:maxmin', 'Latmin is greater than latmax')
 end
 
-%Process all files between these dates, in yyyy/mm/dd format
+%Process all files between these dates, in yyyy/mm/dd format unless
+%overriding dates are passed into the function.
 %****************************%
-date_start='2014/04/01';
-date_end='2014/08/31';
+if nargin < 2
+    date_start='2014/04/01';
+    date_end='2014/08/31';
+end
 %****************************%
 
 %These will be included in the file name
 %****************************%
 satellite='OMI';
-retrieval='SP_noMODISCloud';
+retrieval='SP';
 %****************************%
 
 %This will help reject descending node swaths, which occasionally creep in.
 %Set to 'US' to implement that feature, set to anything else to disable.
 region = 'US';
 
-%This is the directory where the final .mat file will be saved. This will
-%need to be changed to match your machine and the files' location. Do not
-%include a trailing separator, i.e. '/my/favorite/directory' not
-%'my/favorite/directory/'
-mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% DATA DIRECTORIES %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%This is the directory where the he5 files are saved. Do not include a
-%trailing separator.
-he5_dir = '/Volumes/share/GROUP/SAT/OMI/OMNO2_32';
+% The location of the directories to read or save data to.  If onCluster is
+% true, these will need to be set in the runscript - I figured this would
+% be easier than setting them as shell environmental variables and using
+% getenv - JLL 15 Jan 2015
 
-%This is the directory where the MODIS myd06_L2*.hdf files are saved. It should include subfolders organized by year.
-%Do not include a trailing separator.
-modis_myd06_dir = '/Volumes/share-sat/SAT/MODIS/MYD06_L2';
+if onCluster
+    global sp_mat_dir;
+    global omi_he5_dir;
+    global modis_myd06_dir;
+    global modis_mcd43_dir;
+    global globe_dir;
+    
+    % Verify the paths integrity.
+    nonexistant = {};
+    
+    if ~exist(sp_mat_dir,'dir')
+        nonexistant{end+1} = 'sp_mat_dir';
+    end
+    if ~exist(omi_he5_dir,'dir')
+        nonexistant{end+1} = 'he5_dir';
+    end
+    if ~exist(modis_myd06_dir,'dir')
+        nonexistant{end+1} = 'modis_myd06_dir';
+    end
+    if ~exist(modis_mcd43_dir,'dir')
+        nonexistant{end+1} = 'modis_mcd43_dir';
+    end
+    if ~exist(globe_dir,'dir')
+        nonexistant{end+1} = 'globe_dir';
+    end
+    
+    if numel(nonexistant)>0
+        string_spec = [repmat('\n\t%s',1,numel(nonexistant)),'\n\n'];
+        msg = sprintf('The following paths are not valid: %s Please double check them in the run file',string_spec);
+        error(E.callError('bad_cluster_path',sprintf(msg,nonexistant{:})));
+    end
+    
+    
+else
+    %This is the directory where the final .mat file will be saved. This will
+    %need to be changed to match your machine and the files' location.
+    sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
+    
+    %This is the directory where the he5 files are saved.
+    omi_he5_dir = '/Volumes/share/GROUP/SAT/OMI/OMNO2_32';
+    
+    %This is the directory where the MODIS myd06_L2*.hdf files are saved. It should include subfolders organized by year.
+    modis_myd06_dir = '/Volumes/share-sat/SAT/MODIS/MYD06_L2';
+    
+    %This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
+    modis_mcd43_dir = '/Volumes/share-sat/SAT/MODIS/MCD43C3';
+    
+    %This is the directory where the GLOBE data files and their headers (.hdr files) are saved.
+    %Do not include a trailing separator.
+    %globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
+    globe_dir = globepath; % a function that returns the GLOBE directory path
+end
 
-%This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
-%Do not include a trailing separator.
-modis_mcd43_dir = '/Volumes/share-sat/SAT/MODIS/MCD43C3';
 
 
-%This is the directory where the GLOBE data files and their headers (.hdr files) are saved.
-%Do not include a trailing separator.
-globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
-
+%%%%%%%%%%%%%%%%%%%%%
+%%%%% MAIN BODY %%%%%
+%%%%%%%%%%%%%%%%%%%%%
 
 %This number will be used
 
 tic %Start the timer
 
 %Initialize matrices to hold the OMI data
-Latitude=zeros(60,2000);
-Longitude=zeros(60,300);
-FoV75CornerLatitude=zeros(300,60,4);
-FoV75CornerLongitude=zeros(300,60,4);
-SpacecraftAltitude=zeros(300,1);
-SpacecraftLatitude=zeros(300,1);
-SpacecraftLongitude=zeros(300,1);
-Time=zeros(300,1);
-ViewingZenithAngle=zeros(60,300);
-SolarZenithAngle=zeros(60,300);
-ViewingAzimuthAngle=zeros(60,300);
-SolarAzimuthAngle=zeros(60,300);
-AMFStrat=zeros(60,300);
-AMFTrop=zeros(60,300);
-CloudFraction=zeros(60,300);
-CloudRadianceFraction=zeros(60,300);
-ColumnAmountNO2=zeros(60,300);
-SlantColumnAmountNO2=zeros(60,300);
-TerrainHeight=zeros(60,300);
-TerrainPressure=zeros(60,300);
-TerrainReflectivity=zeros(60,300);
-vcdQualityFlags=zeros(60,300);
-CloudPressure=zeros(60,300);
-ColumnAmountNO2Trop=zeros(60,300);
-
-% [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
-% %refvec will contain (1) number of cells per degree, (2)
-% %northwest corner latitude, (3) NW corner longitude.
-% %(2) & (3) might differ from the input latmin & lonmin
-% %because of where the globe cell edges fall
-% cell_size = refvec(1);
-% 
-% %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
-% %corner and terpres(end, end) is in the NE corner.
-% 
-% if DEBUG_LEVEL > 0; fprintf('\n Creating lon/lat matrices for GLOBE data \n'); end
-% globe_latmax = refvec(2); globe_latmin = globe_latmax - size(terpres,1)*(1/cell_size);
-% globe_lat_matrix = (globe_latmin + 1/(2*cell_size)):(1/cell_size):globe_latmax;
-% globe_lat_matrix = globe_lat_matrix';
-% globe_lat_matrix = repmat(globe_lat_matrix,1,size(terpres,2));
-% 
-% globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_size);
-% globe_lon_matrix = globe_lonmin + 1/(2*cell_size):(1/cell_size):globe_lonmax;
-% globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1);
+% Latitude=zeros(60,2000);
+% Longitude=zeros(60,300);
+% FoV75CornerLatitude=zeros(300,60,4);
+% FoV75CornerLongitude=zeros(300,60,4);
+% SpacecraftAltitude=zeros(300,1);
+% SpacecraftLatitude=zeros(300,1);
+% SpacecraftLongitude=zeros(300,1);
+% Time=zeros(300,1);
+% ViewingZenithAngle=zeros(60,300);
+% SolarZenithAngle=zeros(60,300);
+% ViewingAzimuthAngle=zeros(60,300);
+% SolarAzimuthAngle=zeros(60,300);
+% AMFStrat=zeros(60,300);
+% AMFTrop=zeros(60,300);
+% CloudFraction=zeros(60,300);
+% CloudRadianceFraction=zeros(60,300);
+% ColumnAmountNO2=zeros(60,300);
+% SlantColumnAmountNO2=zeros(60,300);
+% TerrainHeight=zeros(60,300);
+% TerrainPressure=zeros(60,300);
+% TerrainReflectivity=zeros(60,300);
+% vcdQualityFlags=zeros(60,300);
+% CloudPressure=zeros(60,300);
+% ColumnAmountNO2Trop=zeros(60,300);
 
 %File names will be prefixed with "<satellite>_<retrieval>_", e.g. for OMI
 %satellite SP retrieval, the prefix will be "OMI_SP_" and then the date in
@@ -130,7 +202,7 @@ ColumnAmountNO2Trop=zeros(60,300);
 %need to start from the specified start date. This allows he5 reading to be
 %stopped and restarted with minimal intervention.
 file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
-last_file=dir(fullfile(mat_dir,[file_prefix,'*.mat']));
+last_file=dir(fullfile(sp_mat_dir,[file_prefix,'*.mat']));
 
 if ~isempty(last_file)
     last_datenum = datenum(last_file(end).name(l+1:l+8),'yyyymmdd')+1;
@@ -176,7 +248,12 @@ terpres(isnan(terpres)) = -500;
 %working directory is on the server.
 % total_days=datenum(date_end)-datenum(last_date)+1;
 % for j=1:total_days;
-for j=1:length(datenums)
+
+if onCluster
+    parpool(numThreads);
+end
+
+parfor j=1:length(datenums)
     %Read the desired year, month, and day
     R=datenums(j);
     date=datestr(R,26);
@@ -184,14 +261,18 @@ for j=1:length(datenums)
     month=date(6:7);
     day=date(9:10);
     
-    %Prepare a data structure to receive the final data.
+    %Prepare a data structure to receive the final data. 
+    % As I understand this currently (15 Jan 2015) "Data" should be a local
+    % variable on each worker for parallelization, and this line will reset
+    % its value within each loop. Thus we shouldn't need to worry about
+    % cross-communication between workers.
     Data=struct('Date',0,'Longitude',0,'Latitude',0,'LatBdy',[],'LonBdy',[],'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0,'MODIS_Cloud_File','','MODISAlbedo',0,'MODIS_Albedo_File','','GLOBETerpres',0,'XTrackQualityFlags',0);
     
     %Set the file path and name, assuming that the file structure is
     %<he5_directory>/<year>/<month>/...files...  Then figure out how many
     %files there are
     short_filename=['OMI-Aura_L2-OMNO2_',year,'m',month,day,'*.he5'];
-    file_dir = fullfile(he5_dir,year,month); %Used both here to find all he5 files and in the swath for loop to identify each file.
+    file_dir = fullfile(omi_he5_dir,year,month); %Used both here to find all he5 files and in the swath for loop to identify each file.
     file=fullfile(file_dir,short_filename);
     sp_files = dir(file);
     n = length(sp_files);
@@ -442,14 +523,18 @@ for j=1:length(datenums)
                 
                 %Convert the OMI date to a Julian calendar day
                 d2=1+datenum(str2double(year),str2double(month),str2double(day))-datenum(str2double(year),1,1);
-                x=numel(num2str(d2));
-                if x==1;
-                    julian_day=(['00',num2str(d2)]);
-                elseif x==2;
-                    julian_day=(['0',num2str(d2)]);
-                elseif x==3;
-                    julian_day=num2str(d2);
-                end
+                julian_day = sprintf('%03d',d2);
+                % JLL 01-15-2015: line above is a more elegant way of doing
+                % the next several (commented out) lines.  Remove the
+                % following lines if the above method works.
+%                 x=numel(num2str(d2));
+%                 if x==1;
+%                     julian_day=(['00',num2str(d2)]);
+%                 elseif x==2;
+%                     julian_day=(['0',num2str(d2)]);
+%                 elseif x==3;
+%                     julian_day=num2str(d2);
+%                 end
                 
                 %Find all MODIS files that occur after the current OMI file
                 %but before the next OMI file.
@@ -473,6 +558,10 @@ for j=1:length(datenums)
                     next_omi_swath_time = 100*(floor((omi_min + 99)/60)+omi_hr) + mod(omi_min + 99,60);
                     if next_omi_swath_time > 2359; error('read_omno2:modis_cloud','Next OMI swath time for MODIS cloud binning calculated to be in the next day. \nManual attention recommended'); end
                 end
+                
+                % Initialize the mod_data structure (JLL 15 Jan 2015 -
+                % Parallelization)
+                mod_Data = struct('Longitude',[],'Latitude',[],'CloudFraction',[]);
                 
                 for ii=1:length(modis_files);
                     mod_filename=modis_files(ii).name;
@@ -502,26 +591,21 @@ for j=1:length(datenums)
                         
                         if isempty(Longitude)||isempty(Latitude);
                         else
-                            if exist('mod_Data','var')==0;
-                                mod_Data(1).Longitude=Longitude;              mod_Data(1).Latitude=Latitude;
-                                mod_Data(1).CloudFraction=CloudFraction;
-                            elseif exist('mod_Data','var')==1;
-                                mod_Data(1).Longitude=[mod_Data(1).Longitude;Longitude];
-                                mod_Data(1).Latitude=[mod_Data(1).Latitude;Latitude];
-                                mod_Data(1).CloudFraction=[mod_Data(1).CloudFraction;CloudFraction];
-                            end
+                            mod_Data.Longitude=[mod_Data.Longitude;Longitude];
+                            mod_Data.Latitude=[mod_Data.Latitude;Latitude];
+                            mod_Data.CloudFraction=[mod_Data.CloudFraction;CloudFraction];
                         end
                     end
                 end
                 
-                %If there is no "mod_Data" variable, fill the regular Data
-                %field with -127. Otherwise, find all the MODIS cloud
-                %pixels in each OMI pixel and average them together.
-                if exist('mod_Data','var')==0;
+                %If there is no "mod_Data" available for this loop, fill
+                %the regular Data field with -127. Otherwise, find all the
+                %MODIS cloud pixels in each OMI pixel and average them
+                %together.
+                if isempty(mod_Data.Longitude)
                     Data(E).MODISCloud=-127*ones(length(Data(E).Latitude),1);
                 else
                     for jj=1:length(Data(E).Latitude);
-                        x = [];
                         x1 = Data(E).Loncorn(1,jj);   y1 = Data(E).Latcorn(1,jj);
                         x2 = Data(E).Loncorn(2,jj);   y2 = Data(E).Latcorn(2,jj);
                         x3 = Data(E).Loncorn(3,jj);   y3 = Data(E).Latcorn(3,jj);
@@ -529,17 +613,21 @@ for j=1:length(datenums)
                         
                         xall=[x1;x2;x3;x4;x1];
                         yall=[y1;y2;y3;y4;y1];
-                        xx = inpolygon(mod_Data.Latitude,mod_Data.Longitude,yall,xall);
+                        xx_cld = inpolygon(mod_Data.Latitude,mod_Data.Longitude,yall,xall);
                         
-                        cld_vals=mod_Data.CloudFraction(xx);
+                        cld_vals=mod_Data.CloudFraction(xx_cld);
                         cld_vals(isnan(cld_vals))=[];
                         Data(E).MODISCloud(jj,1)=mean(cld_vals);
                         Data(E).MODIS_Cloud_File=mod_filename;
                         
-                        clear xx
                     end
                 end
-                clear mod_Data
+                
+                % "clear" cannot be used in parfor loops, so instead we'll
+                % set all the arrays to empty to reduce the memory load.
+                mod_Data(j).Longitude = [];
+                mod_Data(j).Latitude = [];
+                mod_Data(j).CloudFraction = [];
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 
@@ -600,7 +688,6 @@ for j=1:length(datenums)
                 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
                 for k=1:c;
                     if DEBUG_LEVEL > 2; tic; end
-                    x = [];
                     x1 = Data(E).Loncorn(1,k);   y1 = Data(E).Latcorn(1,k);
                     x2 = Data(E).Loncorn(2,k);   y2 = Data(E).Latcorn(2,k);
                     x3 = Data(E).Loncorn(3,k);   y3 = Data(E).Latcorn(3,k);
@@ -610,9 +697,9 @@ for j=1:length(datenums)
                     xall=[x1;x2;x3;x4;x1];
                     yall=[y1;y2;y3;y4;y1];
                     
-                    xx = inpolygon(band3_lats,band3_lons,yall,xall);
+                    xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
                     
-                    band3_vals=band3(xx);  band3_zeros=find(band3_vals==0);
+                    band3_vals=band3(xx_alb);  band3_zeros=band3_vals==0;
                     band3_vals(band3_zeros)=NaN; band3_vals(isnan(band3_vals))=[];
                     band3_avg=mean(band3_vals);
                     
@@ -667,9 +754,9 @@ for j=1:length(datenums)
                     pressure_lonx=globe_lon_matrix(ai,bi);
                     %%%%%%%%%%%%%%%%%%%
                     
-                    xx = inpolygon(pressure_latx,pressure_lonx,yall,xall);
+                    xx_globe = inpolygon(pressure_latx,pressure_lonx,yall,xall);
                     
-                    pres_vals=pressurex(xx);  pres_zeros=find(pres_vals==0);
+                    pres_vals=pressurex(xx_globe);  pres_zeros=pres_vals==0;
                     pres_vals(pres_zeros)=NaN; pres_vals(isnan(pres_vals))=[];
                     %GLOBETerHeight(k) = mean(pres_vals);
                     GLOBETerpres(k)=1013.25 .* exp(-mean(pres_vals) / 7400 ); %Originally divided by 7640 m
@@ -688,12 +775,16 @@ for j=1:length(datenums)
         
         end %End the loop over all swaths in a day
         savename=[satellite,'_',retrieval,'_',year,month,day];
-        save(fullfile(mat_dir,savename), 'Data')
-        clear Data
-        toc
-        t=toc;
-        if t>1200
-            %error('Time exceeded 20 min. Stopping')
-        end
+        saveData(fullfile(sp_mat_dir,savename), Data); % Saving must be handled as a separate function in a parfor loop because passing a variable name as a string upsets the parallelization monkey (it's not transparent).
+ %       toc
+ %       t=toc;
+ %       if t>1200
+ %           %error('Time exceeded 20 min. Stopping')
+ %       end
     end %End the section checking if there are OMI files for the given time period
 end %End the loop over all days
+end 
+
+function saveData(filename,Data)
+    save(filename,'Data')
+end

@@ -1,4 +1,4 @@
-%BEHR_main
+function BEHR_main(date_start, date_end)
 %Josh Laughner <joshlaugh5@gmail.com>
 %Based on BEHR_nwus by Ashley Russell (02/09/2012)
 %Takes "OMI_SP_yyyymmdd.m" files produced by read_omno2_v_aug2012.m as it's
@@ -11,34 +11,110 @@
 DEBUG_LEVEL = 2;
 %****************************%
 
-%****************************%
-%**** FILE LOCATIONS ********%
-%****************************%
-%This is the directory where the final .mat file will be saved. This will
-%need to be changed to match your machine and the files' location. Do not
-%include a trailing separator, i.e. '/my/favorite/directory' not
-%'my/favorite/directory/
-mat_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014';
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% PARALLELIZATION OPTIONS %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%This is the directory where the "OMI_SP_*.mat" files are saved. This will
-%need to be changed to match your machine and the files' location. Do not
-%include a trailing separator, i.e. '/my/favorite/directory' not
-%'my/favorite/directory/
-omi_sp_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
+% Specifies whether the script is executing on a cluster; this must be set
+% (globally) in the calling script.  This allows for the execution of code
+% needed on the cluster (i.e. adding necessary folders to the Matlab path,
+% opening a parallel pool) without running them on the local machine.  If
+% onCluster hasn't been defined yet, set it to false.
+global onCluster;
+if isempty(onCluster); 
+    if DEBUG_LEVEL > 0; fprintf('Assuming onCluster is false\n'); end
+    onCluster = false; 
+end
 
-%Add the path to the AMF_tools folder which contains rNmcTmp2.m,
-%omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
-%is the 'AMF_tools' folder.
-amf_tools_path = '/Users/Josh/Documents/MATLAB/BEHR/AMF_tools';
-addpath(amf_tools_path)
+% Defined the number of threads to run, this will be used to open a
+% parallel pool. numThreads should be set in the calling run script,
+% otherwise it will default to 1.
+global numThreads;
+if isempty(numThreads)
+    numThreads = 1;
+end
 
-%This is the directory where the NO2 profiles are stored. This will
-%need to be changed to match your machine and the files' location. Do not
-%include a trailing separator, i.e. '/my/favorite/directory' not
-%'my/favorite/directory/
-no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% DEPENDENCIES %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+%Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
+%the Git repository for BEHR, this is the /Utils folder.
+addpath(genpath('~/Documents/MATLAB/BEHR/Utils'))
+
+
+% Add the paths needed to run on the cluster
+if onCluster;
+    addpath(genpath('~/MATLAB/Classes'));
+    addpath(genpath('~/MATLAB/Utils'));
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% INITIALIZATION %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+E = JLLErrors;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% FILE LOCATIONS %%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% The location of the directories to read or save data to.  If onCluster is
+% true, these will need to be set in the runscript - I figured this would
+% be easier than setting them as shell environmental variables and using
+% getenv - JLL 15 Jan 2015
+
+if onCluster
+    global behr_mat_dir;
+    global sp_mat_dir;
+    global amf_tools_path;
+    global no2_profile_path;
+    
+    % Verify the paths integrity.
+    nonexistant = {};
+    
+    if ~exist(behr_mat_dir,'dir')
+        nonexistant{end+1} = 'behr_mat_dir';
+    end
+    if ~exist(sp_mat_dir,'dir')
+        nonexistant{end+1} = 'sp_mat_dir';
+    end
+    if ~exist(amf_tools_path,'dir')
+        nonexistant{end+1} = 'amf_tools_path';
+    end
+    if ~exist(no2_profile_path,'dir')
+        nonexistant{end+1} = 'no2_profile_path';
+    end
+    
+    if numel(nonexistant)>0
+        string_spec = [repmat('\n\t%s',1,numel(nonexistant)),'\n\n'];
+        msg = sprintf('The following paths are not valid: %s Please double check them in the run file',string_spec);
+        error(E.callError('bad_cluster_path',sprintf(msg,nonexistant{:})));
+    end
+    
+    
+else
+    %This is the directory where the final .mat file will be saved. This will
+    %need to be changed to match your machine and the files' location.
+    behr_mat_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014';
+    
+    %This is the directory where the "OMI_SP_*.mat" files are saved. This will
+    %need to be changed to match your machine and the files' location.
+    sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
+    
+    %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
+    %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
+    %is the 'AMF_tools' folder.
+    amf_tools_path = '/Users/Josh/Documents/MATLAB/BEHR/AMF_tools';
+
+    %This is the directory where the NO2 profiles are stored. This will
+    %need to be changed to match your machine and the files' location.
+    %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
+    no2_profile_path = '/Volumes/share-sat/SAT/BEHR/Monthly_NO2_Profiles';
+end
 
 %Store paths to relevant files
+addpath(amf_tools_path)
 fileTmp = fullfile(amf_tools_path,'nmcTmpYr.txt');
 fileDamf = fullfile(amf_tools_path,'damf.txt');
 fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
@@ -47,8 +123,11 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
-date_start='2014/04/01';
-date_end='2014/08/31';
+if nargin < 2
+    date_start='2014/04/01';
+    date_end='2014/08/31';
+    fprintf('BEHR_main: Used hard-coded start and end dates\n');
+end
 %****************************%
 
 %These will be included in the file name
@@ -64,16 +143,11 @@ cloud_amf = 'omi';
 cloud_rad_amf = 'omi';
 %****************************%
 
-%Add the path to the AMF_tools folder which contains rNmcTmp2.m,
-%omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
-%is the 'AMF_tools' folder.
-addpath('/Users/Josh/Documents/MATLAB/BEHR/AMF_tools')
-
 %Find the last file completed and set the start date to the next day.  This
 %will allow the process to be stopped and started with minimum
 %intervention.
 file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
-last_file=dir(fullfile(mat_dir,sprintf('%s*.mat',file_prefix)));
+last_file=dir(fullfile(behr_mat_dir,sprintf('%s*.mat',file_prefix)));
 
 if ~isempty(last_file)
     last_datenum = datenum(last_file(end).name(l+1:l+8),'yyyymmdd')+1;
@@ -88,7 +162,7 @@ else
 end
 
 tic
-for j=1:length(datenums)
+parfor j=1:length(datenums)
     %Read the desired year, month, and day
   	R=datenums(j);
     date=datestr(R,26);
@@ -99,21 +173,24 @@ for j=1:length(datenums)
     
     filename = ['OMI_SP_noMODISCloud_',year,month,day,'.mat'];
 
-    if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(omi_sp_dir,filename),'...']); end
-    if isequal(exist(fullfile(omi_sp_dir,filename),'file'),0)
+    if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(sp_mat_dir,filename),'...']); end %#ok<PFGV> % The concern with using global variables in a parfor is that changes aren't synchronized.  Since I'm not changing them, it doesn't matter.
+    if isequal(exist(fullfile(sp_mat_dir,filename),'file'),0)
         if DEBUG_LEVEL > 0; disp('No SP file exists for given day'); end
         continue
     else
         if DEBUG_LEVEL > 1; fprintf('\t ...Found.\n'); end
-        load(fullfile(omi_sp_dir,filename)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
+        S=load(fullfile(sp_mat_dir,filename)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
+        Data=S.Data;
+        
         if exist('profile_file','file')==1 && strcmp(profile_file(2:3),month)==1; %JLL 20 Mar 2014: 
         else
             profile_file=['m',month,'_NO2_profile'];
             if DEBUG_LEVEL > 1; disp(['Loading ',fullfile(no2_profile_path,profile_file)]); end
-            load(fullfile(no2_profile_path,profile_file));
+            S=load(fullfile(no2_profile_path,profile_file));
+            PROFILE = S.PROFILE;
         end
         for d=1:length(Data);
-            if Data(d).Longitude==0 | length(Data(d).Longitude)==1;
+            if Data(d).Longitude==0 || length(Data(d).Longitude)==1;
                 if DEBUG_LEVEL > 1; fprintf('  Note: Data(%u) is empty\n',d); end
                 continue %JLL 17 Mar 2014: Skip doing anything if there's really no information in this data
             else
@@ -155,7 +232,6 @@ for j=1:length(datenums)
                 no2_bins = reshape(no2_bins,length(pressure),size(vza,1),size(vza,2));
                 no2Profile1 = no2_bins ./ (10^6); % NO2 from WRF is in ppm in these files
                 prof_i = zeros(size(Data(d).Latitude)); prof_i(isnan(squeeze(no2Profile1(1,:,:)))==1)=1; %JLL 18 Mar 2014: prof_i is a matrix of 0 or 1s that is 1 wherever the bottom of NO2 profile is NaN
-                clear no2_bins no2_mixratio
                 
                 no2Profile2 = no2Profile1;
                 pTerr = surfPres;
@@ -219,6 +295,7 @@ for j=1:length(datenums)
         
         if DEBUG_LEVEL > 0; disp('  Preparing OMI structure'); end
         s=size(Data);
+        OMI=struct;
         hh=0;
         for d=1:s(2);
             if Data(d).ViewingZenithAngle==0;
@@ -232,12 +309,17 @@ for j=1:length(datenums)
         end
 
         savename=[file_prefix,year,month,day];  
-        if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(mat_dir,savename)]); end
-        save(fullfile(mat_dir,savename),'Data','OMI')
+        if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
+        saveData(fullfile(behr_mat_dir,savename),'Data','OMI')
         toc
         t=toc;
         %if t>1200
             %error('Time exceeded 20 min. Stopping')
         %end
     end
+end
+end
+
+function saveData(filename,OMI,Data)
+    save(filename,'OMI','Data')
 end
