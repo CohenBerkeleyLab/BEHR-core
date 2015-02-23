@@ -124,8 +124,8 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 if nargin < 2
-    date_start='2014/04/01';
-    date_end='2014/08/31';
+    date_start='2013/10/01';
+    date_end='2013/11/01';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
 %****************************%
@@ -162,6 +162,11 @@ else
 end
 
 tic
+% Create a parallel pool if one doesn't exist and we are on a cluster
+if onCluster && isempty(gcp('nocreate'))
+    parpool(numThreads);
+end
+
 parfor j=1:length(datenums)
     %Read the desired year, month, and day
   	R=datenums(j);
@@ -171,7 +176,7 @@ parfor j=1:length(datenums)
     day=date(9:10);
     if DEBUG_LEVEL > 0; disp(['Processing data for ', date]); end
     
-    filename = ['OMI_SP_noMODISCloud_',year,month,day,'.mat'];
+    filename = ['OMI_SP_',year,month,day,'.mat'];
 
     if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(sp_mat_dir,filename),'...']); end %#ok<PFGV> % The concern with using global variables in a parfor is that changes aren't synchronized.  Since I'm not changing them, it doesn't matter.
     if isequal(exist(fullfile(sp_mat_dir,filename),'file'),0)
@@ -190,7 +195,11 @@ parfor j=1:length(datenums)
             PROFILE = S.PROFILE;
         end
         for d=1:length(Data);
-            if Data(d).Longitude==0 || length(Data(d).Longitude)==1;
+            % Data is initialized in read_omno2_v_aug2012 with a single 0
+            % in the Longitude field.  Since points outside the lat/lons of
+            % interest are removed completely, we should also check if all
+            % points are gone.
+            if numel(Data(d).Longitude)==1 || isempty(Data(d).Longitude);
                 if DEBUG_LEVEL > 1; fprintf('  Note: Data(%u) is empty\n',d); end
                 continue %JLL 17 Mar 2014: Skip doing anything if there's really no information in this data
             else
@@ -198,7 +207,7 @@ parfor j=1:length(datenums)
                 c=numel(Data(d).Longitude);
                 
                 Data(d).MODISAlbedo(isnan(Data(d).MODISAlbedo)==1)=0; %JLL 17 Mar 2014: replace NaNs with fill values
-                Data(d).GLOBETerpres(isnan(Data(d).GLOBETerpres)==1)=400.0000;
+                Data(d).GLOBETerpres(isnan(Data(d).GLOBETerpres)==1)=1013.0000;
                 
                 %JLL 17 Mar 2014: Load some of the variables from 'Data' to
                 %make referencing them less cumbersome.
@@ -283,9 +292,9 @@ parfor j=1:length(datenums)
         %*********************************%
         %
         if lonmin > lonmax %Just in case I enter something backwards...
-            error('behr_main:lon_maxmin','Lonmin is greater than lonmax')
+            error(E.badinput('Lonmin is greater than lonmax'))
         elseif latmin > latmax
-            error('behr_main:lat_maxmin', 'Latmin is greater than latmax')
+            error(E.badinput('Latmin is greater than latmax'))
         end
         
         %*********************************%
@@ -294,23 +303,38 @@ parfor j=1:length(datenums)
         %*********************************%
         
         if DEBUG_LEVEL > 0; disp('  Preparing OMI structure'); end
-        s=size(Data);
-        OMI=struct;
+        s=numel(Data);
+        
+        % Prepare the OMI data structure which will receive the gridded
+        % data - this will be passed to the gridding functions to keep the
+        % field names in the right order.
+        OMI=struct('Date','','Longitude', [], 'Latitude', [], 'Time', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'ViewingAzimuthAngle', [], 'SolarAzimuthAngle', [],...
+            'RelativeAzimuthAngle', [], 'AMFStrat', [], 'AMFTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
+            'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'vcdQualityFlags',{{}},...
+            'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
+            'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
+        % Matlab treats structures as matrices, so we can duplicate our
+        % structure to have the required number of entries just like a
+        % matrix.
+        OMI = repmat(OMI,1,s);
         hh=0;
-        for d=1:s(2);
+        for d=1:s;
             if Data(d).ViewingZenithAngle==0;
             elseif numel(Data(d).ViewingZenithAngle)==1;
                 continue
             else
                 if DEBUG_LEVEL > 1; fprintf('   Gridding data for swath %u\n',d); end
                 hh=hh+1;
-                OMI(hh) = add2grid_BEHR(Data(d),resolution,resolution2,[lonmin, lonmax],[latmin, latmax]); %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
+                OMI(hh) = add2grid_BEHR(Data(d),OMI(hh),resolution,resolution2,[lonmin, lonmax],[latmin, latmax]); %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
             end
         end
+        
+        % Clean up any unused elements in OMI
+        OMI(hh+1:end) = [];
 
         savename=[file_prefix,year,month,day];  
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
-        saveData(fullfile(behr_mat_dir,savename),'Data','OMI')
+        saveData(fullfile(behr_mat_dir,savename),Data,OMI)
         toc
         t=toc;
         %if t>1200
@@ -320,6 +344,6 @@ parfor j=1:length(datenums)
 end
 end
 
-function saveData(filename,OMI,Data)
+function saveData(filename,Data,OMI)
     save(filename,'OMI','Data')
 end

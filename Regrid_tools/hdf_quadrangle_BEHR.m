@@ -1,4 +1,4 @@
-function OMI = hdf_quadrangle_BEHR(Data, maxx, minx, maxy, miny, lCoordLon, lCoordLat, Lon1, Lon2, Lon4, Lat1, Lat2, Lat4)
+function OMI = hdf_quadrangle_BEHR(Data, OMI, maxx, minx, maxy, miny, lCoordLon, lCoordLat, Lon1, Lon2, Lon4, Lat1, Lat2, Lat4)
 
 % hdf_quadrangle_general: Version of hdf_quadrangle_5km_new by Ashley
 % Russell from 11/19/2009 updated as a function.
@@ -6,7 +6,7 @@ function OMI = hdf_quadrangle_BEHR(Data, maxx, minx, maxy, miny, lCoordLon, lCoo
 %  Requires functions exchange_coord, calcline, clip.
 %
 %   This function should not be called directly; it is intended to be
-%   called only from add2grid_general, which prepares geographic data for
+%   called only from add2grid_BEHR, which prepares geographic data for
 %   this function.  It oversamples satellite data, mapping pixel
 %   information to a fixed grid of smaller pixels.  These grids are
 %   returned as the structure "OMI" (so named because it was first written
@@ -297,6 +297,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
 end
 
 % Create the OMI structure for output
+OMI.Date = Data.Date;
 OMI.BEHRColumnAmountNO2Trop = BEHRColumnAmountNO2Trop;
 OMI.Time = Time;
 OMI.ViewingZenithAngle = ViewingZenithAngle;

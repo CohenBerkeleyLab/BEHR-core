@@ -72,17 +72,17 @@ lonmin = -125;    lonmax = -65;
 latmin = 25;    latmax = 50;
 %****************************%
 if lonmin > lonmax %Just in case I enter something backwards...
-    error('read_omno2:maxmin','Lonmin is greater than lonmax')
+    error(E.badinput('Lonmin is greater than lonmax'))
 elseif latmin > latmax
-    error('read_omno2:maxmin', 'Latmin is greater than latmax')
+    error(E.badinput('Latmin is greater than latmax'))
 end
 
 %Process all files between these dates, in yyyy/mm/dd format unless
 %overriding dates are passed into the function.
 %****************************%
 if nargin < 2
-    date_start='2014/04/01';
-    date_end='2014/08/31';
+    date_start='2013/10/01';
+    date_end='2013/11/01';
 end
 %****************************%
 
@@ -144,7 +144,7 @@ else
     sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
     
     %This is the directory where the he5 files are saved.
-    omi_he5_dir = '/Volumes/share/GROUP/SAT/OMI/OMNO2_32';
+    omi_he5_dir = '/Volumes/share-sat/SAT/OMI/OMNO2';
     
     %This is the directory where the MODIS myd06_L2*.hdf files are saved. It should include subfolders organized by year.
     modis_myd06_dir = '/Volumes/share-sat/SAT/MODIS/MYD06_L2';
@@ -556,7 +556,7 @@ parfor j=1:length(datenums)
                     omi_hr = str2double(sp_files(e).name(29:30));
                     omi_min = str2double(sp_files(e).name(31:32));
                     next_omi_swath_time = 100*(floor((omi_min + 99)/60)+omi_hr) + mod(omi_min + 99,60);
-                    if next_omi_swath_time > 2359; error('read_omno2:modis_cloud','Next OMI swath time for MODIS cloud binning calculated to be in the next day. \nManual attention recommended'); end
+                    if next_omi_swath_time > 2359; error(E.callError('modis_cloud','Next OMI swath time for MODIS cloud binning calculated to be in the next day. \nManual attention recommended')); end
                 end
                 
                 % Initialize the mod_data structure (JLL 15 Jan 2015 -
@@ -648,7 +648,7 @@ parfor j=1:length(datenums)
                         if DEBUG_LEVEL > 0; fprintf(' Found mcd43 file %s \n', alb_filename); end
                         break
                     elseif ii==length(in)
-                        error('read_omno2:mcd43c3_find','Could not find an MCD43C3 (Albedo) file within 21 days');
+                        error(E.filenotfound('MCD43C3 (Albedo) file within 21 days'));
                     end
                 end
                 
@@ -747,6 +747,11 @@ parfor j=1:length(datenums)
                     yall=[y1;y2;y3;y4;y1];
                     
                     %%%%SPEED IT UP%%%%
+                    % Since GLOBE data is on a grid where a row of
+                    % latitudinal points all have the same longitude and
+                    % vice versa, we can quickly reduce the number of
+                    % points by comparing just one lat and lon vector to
+                    % the extent of the pixel.
                     ai=find(globe_lat_matrix(:,1)>=min(yall) & globe_lat_matrix(:,1)<=max(yall));
                     bi=find(globe_lon_matrix(1,:)>=min(xall) & globe_lon_matrix(1,:)<=max(xall));
                     pressurex=terpres(ai,bi);
@@ -754,11 +759,12 @@ parfor j=1:length(datenums)
                     pressure_lonx=globe_lon_matrix(ai,bi);
                     %%%%%%%%%%%%%%%%%%%
                     
+                    % inpolygon is slow compared to a simple logical test,
+                    % so we only apply it to the subset of GLOBE heights
+                    % immediately around our pixel.
                     xx_globe = inpolygon(pressure_latx,pressure_lonx,yall,xall);
                     
-                    pres_vals=pressurex(xx_globe);  pres_zeros=pres_vals==0;
-                    pres_vals(pres_zeros)=NaN; pres_vals(isnan(pres_vals))=[];
-                    %GLOBETerHeight(k) = mean(pres_vals);
+                    pres_vals=pressurex(xx_globe);  
                     GLOBETerpres(k)=1013.25 .* exp(-mean(pres_vals) / 7400 ); %Originally divided by 7640 m
                     
                     
