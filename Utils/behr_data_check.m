@@ -34,7 +34,7 @@ omno2dir = omno2_dir();
 omno2pat_fxn = @(s) omiPat(s);
 omno2_pathbuilder_fxn = @(sat,yr,mn) omiPathBuilder(sat,yr,mn);
 
-%Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, omno2pat_fxn, omno2_pathbuilder_fxn, omno2dir, 'OMNO2', 13, DEBUG_LEVEL);
+Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, omno2pat_fxn, omno2_pathbuilder_fxn, omno2dir, 'OMNO2', 13, DEBUG_LEVEL);
 
 % Next, MODIS cloud data. There should be at least 18 files per day, but
 % we'll relax that to 17 to be careful.
