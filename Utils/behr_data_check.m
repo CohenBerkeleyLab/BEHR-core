@@ -32,31 +32,34 @@ Data_Struct = struct('OMNO2',struct(struct_base{:}),'MYD06',struct(struct_base{:
 if DEBUG_LEVEL > 0; fprintf('\n***** Checking OMNO2 data. *****\n\n'); end
 omno2dir = omno2_dir();
 omno2pat_fxn = @(s) omiPat(s);
+omno2_pathbuilder_fxn = @(sat,yr,mn) omiPathBuilder(sat,yr,mn);
 
-Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, omno2pat_fxn, omno2dir, 'OMNO2', 13, DEBUG_LEVEL);
+%Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, omno2pat_fxn, omno2_pathbuilder_fxn, omno2dir, 'OMNO2', 13, DEBUG_LEVEL);
 
 % Next, MODIS cloud data. There should be at least 18 files per day, but
 % we'll relax that to 17 to be careful.
 if DEBUG_LEVEL > 0; fprintf('\n***** Checking MYD06 data. *****\n\n'); end
 modclddir = modis_cloud_dir;
 modcldpat_fxn = @(s) modisCldPat(s);
+modis_pathbuilder_fxn = @(sat,yr,mn) modisPathBuilder(sat,yr,mn);
 
-Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, modcldpat_fxn, modclddir, 'MYD06', 17, DEBUG_LEVEL);
+Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, modcldpat_fxn, modis_pathbuilder_fxn, modclddir, 'MYD06', 17, DEBUG_LEVEL);
 
 % Finally, MODIS albedo data. 
 if DEBUG_LEVEL > 0; fprintf('\n***** Checking MCD43 data. *****\n\n'); end
 
 modalbdir = modis_albedo_dir;
 modalbpath_fxn = @(s) modisAlbPat(s);
+modis_pathbuilder_fxn = @(sat,yr) modisPathBuilder(sat,yr);
 
-Data_Struct = check8Daily(Data_Struct, todays_y, todays_m, modalbpath_fxn, modalbdir, 'MCD43C3', 1, DEBUG_LEVEL);
+Data_Struct = check8Daily(Data_Struct, todays_y, todays_m, modalbpath_fxn, modis_pathbuilder_fxn, modalbdir, 'MCD43C3', 1, DEBUG_LEVEL);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% SUB FUNCTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
-function Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, sat_pat_fxn, sat_dir, sat_field, req_num_files, DEBUG_LEVEL)
+function Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, sat_pat_fxn, sat_pathbuilder, sat_dir, sat_field, req_num_files, DEBUG_LEVEL)
 % Used in the messages
 statuses = {'Missing', 'Incomplete'};
 
@@ -70,7 +73,7 @@ for ch_year = 2004:todays_y
     for ch_month = months;
         ch_month_str = sprintf('%02d',ch_month);
         if DEBUG_LEVEL > 1; fprintf('\t\tMonth: %s\n',ch_month_str); end
-        ch_path = fullfile(sat_dir,ch_year_str,ch_month_str);
+        ch_path = sat_pathbuilder(sat_dir,ch_year_str,ch_month_str);
         days = 1:eomday(ch_year,ch_month);
         for ch_day = days;
             ch_day_str = sprintf('%02d',ch_day);
@@ -124,7 +127,7 @@ for ch_year = 2004:todays_y
 end
 end
 
-function Data_Struct = check8Daily(Data_Struct, todays_y, todays_m, sat_pat_fxn, sat_dir, sat_field, req_num_files, DEBUG_LEVEL)
+function Data_Struct = check8Daily(Data_Struct, todays_y, todays_m, sat_pat_fxn, sat_pathbuilder_fxn, sat_dir, sat_field, req_num_files, DEBUG_LEVEL)
 % Used in the messages
 statuses = {'Missing', 'Incomplete'};
 
@@ -132,7 +135,10 @@ for ch_year = 2004:todays_y
     ch_year_str = num2str(ch_year);
     if DEBUG_LEVEL > 0; fprintf('\tNow checking year %s\n',ch_year_str); end
     [day_chk, days] = setDays(ch_year, todays_y, todays_m, 8);
-    ch_path = fullfile(sat_dir, ch_year_str);
+    % Here we take advantage of the fact that MATLAB functions don't need
+    % as many arguments as they accept as long as the unpassed arguments
+    % are not required.
+    ch_path = sat_pathbuilder_fxn(sat_dir, ch_year_str);
     % MODIS albedo files are not stored by month, so we just look for each
     % day that should exist in the year folder
     for d = 1:numel(days)
@@ -195,7 +201,7 @@ end
 function [day_chk, days] = setDays(ch_year, todays_y, todays_m, ndays)
 % Returns day_chk - a vector of zeros and days, a sequential vector. ndays
 % determines the step size between days.
-if leapyear(ch_year)
+if false%leapyear(ch_year)
     days = 1:ndays:366;
 else
     days = 1:ndays:365;
@@ -227,5 +233,16 @@ end
 function pat = modisAlbPat(S)
 modalbpat = 'MCD43C3.A%s%s*.hdf';
 pat = sprintf(modalbpat, S.ch_year_str,S.ch_day_str);
+end
+
+function ch_path = omiPathBuilder(sat_dir,ch_year_str,ch_month_str)
+    ch_path = fullfile(sat_dir,ch_year_str,ch_month_str);
+end
+
+function ch_path = modisPathBuilder(sat_dir,ch_year_str,~)
+    % Because the OMI data is stored by month, and since this function is
+    % passed to the checkDaily function, it needs 3 arguments even though
+    % we don't use the month for modis.
+    ch_path = fullfile(sat_dir,ch_year_str);
 end
 
