@@ -24,6 +24,16 @@ load('cld_frac_vectors.mat');
 
 cld_rad_frac = interp1(cld_geo_frac_vec,cld_rad_frac_vec,cld_geo_frac);
 
+% If the geometric fraction is too low, the interpolation will return a
+% NaN. This is undesirable - a cloud fraction of 0 should be a radiance
+% fraction of 0 too. Since a cloud radiance fraction of 0.047 corresponds to
+% a geometric cloud fraction of 0.02, we'll estimate the radiance fraction
+% as twice the geometric fraction. It's very rough, but should do.
+
+% if cld_geo_frac < 0.02 && isnan(cld_rad_frac)
+%     cld_rad_frac = 2*cld_geo_frac;
+% end
+
 
 end
 
