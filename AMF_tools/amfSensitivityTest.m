@@ -18,6 +18,9 @@ function [ AMFs, SZAvec, VZAvec, RAAvec, ALBvec, SURFPRESSvec ] = amfSensitivity
 %%%%%%%%%%%%%%%%%%%
 
 global onCluster;
+if isempty(onCluster);
+    onCluster = false;
+end
 
 % Paths to the dependencies within this file - necessary to run on the
 % cluster. Set the global variable 'onCluster' to true as part of a Matlab
@@ -150,7 +153,7 @@ end
 
 % If no parallel pool is active, start one. If there wasn't one, go ahead
 % and close it at the end.
-if isempty(gcp('nocreate'))
+if isempty(gcp('nocreate')) && onCluster
     parpool(numThreads);
     closeparpool = true;
 else
@@ -173,7 +176,7 @@ for x6 = 1:n6;
         % Read the temperature profile for this lat/lon
         temperature = rNmcTmp2(fileTmp, presLevels, lon(x6), lat(x7), month);
         
-        parfor x1=1:n1;
+        for x1=1:n1;
             fprintf('Now on SZA %d\n',x1);
             for x2=1:n2
                 for x3=1:n3

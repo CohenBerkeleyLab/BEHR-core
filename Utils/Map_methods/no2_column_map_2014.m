@@ -47,19 +47,19 @@ function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( star
 %Josh Laughner <joshlaugh5@gmail.com> 25 Apr 2014
 
 p = inputParser;
-p.addParamValue('mapfield','BEHRColumnAmountNO2Trop',@isstr)
-p.addParamValue('behrdir','/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014',@(x) exist(x,'dir'))
-p.addParamValue('resolution',0.05,@isscalar);
-p.addParamValue('projection','conic',@(x) any(strcmpi(x,{'conic','mercator'}))); %Ensure that the projection type will be recognized
-p.addParamValue('coast','default',@(x) any(strcmpi(x,{'default','high','intermediate','medium','low','crude','default'})));
-p.addParamValue('color','w');
-p.addParamValue('cbrange',[],@(x) length(x) == 2);
-p.addParamValue('states',1,@isscalar);
-p.addParamValue('fileprefix','OMI_BEHR_',@isstr);
-p.addParamValue('flags',{},@iscell);
-p.addParamValue('clouds','omi',@isstr);
-p.addParamValue('cloudfraccrit',-1,@isscalar)
-p.addParamValue('rowanomaly','XTrackFlags',@(x) any(strcmpi(x,{'AlwaysByRow','RowsByTime','XTrackFlags','XTrackFlagsLight'}))) %Ensure that the rowanomaly value is one of the allowed 4
+p.addParameter('mapfield','BEHRColumnAmountNO2Trop',@isstr)
+p.addParameter('behrdir','/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014',@(x) exist(x,'dir'))
+p.addParameter('resolution',0.05,@isscalar);
+p.addParameter('projection','conic',@(x) any(strcmpi(x,{'conic','mercator'}))); %Ensure that the projection type will be recognized
+p.addParameter('coast','default',@(x) any(strcmpi(x,{'default','high','intermediate','medium','low','crude','default'})));
+p.addParameter('color','w');
+p.addParameter('cbrange',[],@(x) length(x) == 2);
+p.addParameter('states',1,@isscalar);
+p.addParameter('fileprefix','OMI_BEHR_',@isstr);
+p.addParameter('flags',{},@iscell);
+p.addParameter('clouds','omi',@isstr);
+p.addParameter('cloudfraccrit',-1,@isscalar)
+p.addParameter('rowanomaly','XTrackFlags',@(x) any(strcmpi(x,{'AlwaysByRow','RowsByTime','XTrackFlags','XTrackFlagsLight'}))) %Ensure that the rowanomaly value is one of the allowed 4
 
 p.parse(varargin{:});
 parsed_vars = p.Results;
