@@ -17,6 +17,8 @@ function BEHR_InSitu_Reprocessing
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 18 Aug 2013
 
+E = JLLErrors;
+
 campaign_name = 'discover-tx';
 
 [Names, merge_dates, merge_dir] = merge_field_names(campaign_name);
@@ -264,6 +266,11 @@ for d=1:numel(dates)
                 this_surfPres = min([surfPres_p(pix),1013]);
                 
                 % Calculate the new AMF
+                mean_lon = nanmean(lon_array{p});
+                mean_lat = nanmean(lat_array{p});
+                if isnan(mean_lon) || isnan(mean(lat)
+                    E.badvar('mean_lon/mean_lat','the mean lon/lat is a NaN');
+                end
                 [temperature, ~] = rNmcTmp2(fileTmp, insitu_pressures, nanmean(lon_array{p}), nanmean(lat_array{p}), str2double(month));
                 dAmfClr2 = rDamf2(fileDamf, insitu_pressures, sza_p(pix), vza_p(pix), phi_p(pix), albedo_p(pix), this_surfPres);
                 cloudalbedo=0.8;
