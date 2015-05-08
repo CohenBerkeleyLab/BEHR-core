@@ -17,8 +17,12 @@ function BEHR_InSitu_Reprocessing
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 18 Aug 2013
 
-start_date = '09/01/2013';
-end_date = '09/30/2013';
+campaign_name = 'discover-tx';
+
+[Names, merge_dates, merge_dir] = merge_field_names(campaign_name);
+
+start_date = merge_dates{1};
+end_date = merge_dates{2};
 
 starttime = '12:00';
 endtime = '15:00';
@@ -30,15 +34,12 @@ cld_field = 'CloudFraction';
 %Which NO2 field from the aircraft file to use; for MD options are
 %'NO2_NCAR' and 'NO2_LIF'; for CA and TX, 'NO2_MixingRatio' or
 %'NO2_MixingRatio_LIF'
-no2field = 'NO2_MixingRatio_LIF';
+no2field = Names.no2_lif;
 
 %The directory where the original BEHR files are located
 behr_prefix = 'OMI_BEHR_omi*';
 behr_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR/';
 
-%The directory where the Merge files that the aircraft data is located in
-%can be found
-merge_dir = '/Volumes/share/GROUP/DISCOVER-AQ/Matlab Files/Aircraft/';
 
 %The file prefix and directory to save the resulting files under
 save_prefix = 'OMI_BEHR_InSitu_';
@@ -118,18 +119,8 @@ for d=1:numel(dates)
         if DEBUG_LEVEL > 1; fprintf('NO2 %.2f NaNs, PRESSURE %.2f NaNs, setting warning flag\n', percent_no2_nans, percent_pres_nans); end
     end
     
-    % Load the profile numbers based on the date of the Merge file;
-    % different DISCOVER campaigns have different fields.  
-    merge_datenum = datenum(Merge.metadata.date);
-    if merge_datenum >= datenum('07/01/2011') && merge_datenum <= datenum('07/31/2011');
-        profnum = Merge.Data.ProfileSequenceNum.Values; % DISCOVER-AQ in Baltimore
-    elseif merge_datenum >= datenum('01/16/2013') && merge_datenum <= datenum('02/06/2013');
-        profnum = Merge.Data.ProfileNumber.Values; % DISCOVER-AQ in CA
-    elseif merge_datenum >= datenum('09/04/2013') && merge_datenum <= datenum('09/29/2013');
-        profnum = Merge.Data.ProfileNumber.Values; % DISCOVER-AQ in Texas
-    else
-        error('sprial_ver:profnum','Profiles not identified.');
-    end
+    % Load the profile numbers 
+    profnum = remove_merge_fills(Merge, Names.profile_numbers);
     
     % Calculate the UTC offset to match flight times to satellite overpass
     tz = round(nanmean(lon)/15);
@@ -273,7 +264,7 @@ for d=1:numel(dates)
                 this_surfPres = min([surfPres_p(pix),1013]);
                 
                 % Calculate the new AMF
-                [temperature, ~] = rNmcTmp2(fileTmp, insitu_pressures, mean(lon_array{p}), mean(lat_array{p}), str2double(month));
+                [temperature, ~] = rNmcTmp2(fileTmp, insitu_pressures, nanmean(lon_array{p}), nanmean(lat_array{p}), str2double(month));
                 dAmfClr2 = rDamf2(fileDamf, insitu_pressures, sza_p(pix), vza_p(pix), phi_p(pix), albedo_p(pix), this_surfPres);
                 cloudalbedo=0.8;
                 dAmfCld2 = rDamf2(fileDamf, insitu_pressures, sza_p(pix), vza_p(pix), phi_p(pix), cloudalbedo, cloudPres_p(pix));
