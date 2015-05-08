@@ -33,8 +33,9 @@ if DEBUG_LEVEL > 0; fprintf('\n***** Checking OMNO2 data. *****\n\n'); end
 omno2dir = omno2_dir();
 omno2pat_fxn = @(s) omiPat(s);
 omno2_pathbuilder_fxn = @(sat,yr,mn) omiPathBuilder(sat,yr,mn);
+omno2_chk_fxn = @(f) omiDataCheck(f);
 
-Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, omno2pat_fxn, omno2_pathbuilder_fxn, omno2dir, 'OMNO2', 13, DEBUG_LEVEL);
+Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, omno2pat_fxn, omno2_pathbuilder_fxn, omno2dir, 'OMNO2', omno2_chk_fxn, DEBUG_LEVEL);
 
 % Next, MODIS cloud data. There should be at least 18 files per day, but
 % we'll relax that to 17 to be careful.
@@ -42,8 +43,9 @@ if DEBUG_LEVEL > 0; fprintf('\n***** Checking MYD06 data. *****\n\n'); end
 modclddir = modis_cloud_dir;
 modcldpat_fxn = @(s) modisCldPat(s);
 modis_pathbuilder_fxn = @(sat,yr,mn) modisPathBuilder(sat,yr,mn);
+modis_chk_fxn = @(f) modisCloudDataCheck(f);
 
-Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, modcldpat_fxn, modis_pathbuilder_fxn, modclddir, 'MYD06', 17, DEBUG_LEVEL);
+Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, modcldpat_fxn, modis_pathbuilder_fxn, modclddir, 'MYD06', modis_chk_fxn, DEBUG_LEVEL);
 
 % Finally, MODIS albedo data. 
 if DEBUG_LEVEL > 0; fprintf('\n***** Checking MCD43 data. *****\n\n'); end
@@ -96,6 +98,8 @@ for ch_year = 2004:todays_y
                 chk = 0;
             end
             
+            chk = sat_test_fxn(FILES);
+
             % Copy this to the year long day vector for today.
             curr_date = sprintf('%s-%s-%s',ch_year_str,ch_month_str,ch_day_str);
             ind = modis_date_to_day(curr_date);
@@ -246,3 +250,72 @@ function ch_path = modisPathBuilder(sat_dir,ch_year_str,~)
     ch_path = fullfile(sat_dir,ch_year_str);
 end
 
+function chk = omiDataCheck(FILES)
+% Check that there are at least 13 files for the given day.
+% If so, mark it as complete. If there are some, but not 13,
+% mark it as incomplete. If there are none, mark it as missing.
+    req_num_files = 13;
+    nF = numel(FILES);
+    if nF >= req_num_files
+        chk = 2;
+    elseif nF > 0 && nF < req_num_files
+        chk = 1;
+    else
+        chk = 0;
+    end
+end
+
+function chk = modisCloudDataCheck(FILES)
+    % Check that the expected MODIS MYD06 granules are present.
+    % You can look at their borders using draw_modis_cloud_swaths
+    % (in BEHR/One-off scripts currently)
+
+    % Define the expected times manually. These will need to be expanded
+    % if BEHR is extended beyond CONUS
+    expected_times = cell(1,16);
+    expected_times{1} = [1745, 1750, 1925, 1930, 2100, 2105, 2110];
+    expected_times{2} = [1655, 1825, 1830, 1835, 2005, 2010, 2015, 2145, 2150];
+    expected_times{3} = [1735, 1740, 1910, 1915, 2050, 2055];
+    expected_times{4} = [1815, 1820, 1955, 2000, 2130, 2135, 2140];
+    expected_times{5} = [1720, 1725, 1855, 1900, 1905, 2035, 2040, 2045];
+    expected_times{6} = [1630, 1800, 1805, 1810, 1940, 1945, 1950, 2120, 2125];
+    expected_times{7} = [1710, 1715, 1845, 1850, 1855, 2025, 2030, 2205, 2210];
+    expected_times{8} = [1750, 1755, 1930, 1935, 2105, 2110, 2115];
+    expected_times{9} = [1700, 1835, 1840, 2010, 2015, 2020, 2150, 2155];
+    expected_times{10} = [1740, 1745, 1915, 1920, 1925, 2055, 2100];
+    expected_times{11} = [1650, 1820, 1825, 1830, 2000, 2005, 2140, 2145];
+    expected_times{12} = [1725, 1730, 1905, 1910, 2045, 2050, 2220, 2225, 2230];
+    expected_times{13} = [1810, 1815, 1945, 1950, 1955, 2125, 2130];
+    expected_times{14} = [1715, 1720, 1850, 1855, 1900, 2030, 2035, 2210, 2215];
+    expected_times{15} = [1625, 1755, 1800, 1805, 1935, 1940, 2115, 2120];
+    expected_times{16} = [1705, 1840, 1845, 2020, 2025, 2155, 2200, 2205];
+
+    % Make a list of times in the file names. Look for four numbers with .'s on either side.
+    times_list = zeros(1,numel(FILES));
+    for a=1:numel(FILES)
+        t_ind = regexp(FILES(a).name,'\.\d\d\d\d\.');
+        times_list(a) = str2num(FILES(a).name(t_ind+1:t_ind+4));
+    end
+    
+    % Check how many of the times are present in the files. Since
+    % the Aqua satellite is on a 16-day repeat cycle, the mod16
+    % of the datenum can be used to indicate which set of times to use.
+    % Add one to that since MATLAB indexing doesn't start at 0.
+    year = FILES(1).name(11:14);
+    doy = FILES(1).name(15:17);
+    file_date = modis_day_to_date(doy,year);
+    mod_ind = mod(datenum(file_date),16);
+
+    xx = ismember(times_list, expected_times{mod_ind});
+    
+    % The status will be "complete" if all expected times are present,
+    % "incomplete" if only some are, and "missing" if none are
+    if all(xx)
+        chk = 2;
+    elseif all(~xx)
+        chk = 0;
+    else
+        chk = 1;
+    end
+
+end
