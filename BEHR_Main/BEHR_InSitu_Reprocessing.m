@@ -268,7 +268,7 @@ for d=1:numel(dates)
                 % Calculate the new AMF
                 mean_lon = nanmean(lon_array{p});
                 mean_lat = nanmean(lat_array{p});
-                if isnan(mean_lon) || isnan(mean(lat)
+                if isnan(mean_lon) || isnan(mean(lat))
                     E.badvar('mean_lon/mean_lat','the mean lon/lat is a NaN');
                 end
                 [temperature, ~] = rNmcTmp2(fileTmp, insitu_pressures, nanmean(lon_array{p}), nanmean(lat_array{p}), str2double(month));
