@@ -61,7 +61,7 @@ end
 %%%%% SUB FUNCTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
-function Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, sat_pat_fxn, sat_pathbuilder, sat_dir, sat_field, req_num_files, DEBUG_LEVEL)
+function Data_Struct = checkDaily(Data_Struct, todays_y, todays_m, sat_pat_fxn, sat_pathbuilder, sat_dir, sat_field, sat_test_fxn, DEBUG_LEVEL)
 % Used in the messages
 statuses = {'Missing', 'Incomplete'};
 
@@ -86,17 +86,6 @@ for ch_year = 2004:todays_y
             S.ch_day_str = ch_day_str;
             day_pat = sat_pat_fxn(S);
             FILES = dir(fullfile(ch_path,day_pat));
-            
-            % If there are at least req_num_files files, consider the day
-            % to be complete. If there are some, but not 13, mark it as
-            % incomplete. If there are none, mark it as empty.
-            if numel(FILES) >= req_num_files;
-                chk = 2;
-            elseif numel(FILES) > 0 && numel(FILES) < req_num_files;
-                chk = 1;
-            else
-                chk = 0;
-            end
             
             chk = sat_test_fxn(FILES);
 
@@ -269,7 +258,14 @@ function chk = modisCloudDataCheck(FILES)
     % Check that the expected MODIS MYD06 granules are present.
     % You can look at their borders using draw_modis_cloud_swaths
     % (in BEHR/One-off scripts currently)
-
+    
+    % First check that there are any files are given, if not, clearly
+    % this is a "missing" day
+    if numel(FILES)==0
+        chk = 0;
+        return;
+    end
+    
     % Define the expected times manually. These will need to be expanded
     % if BEHR is extended beyond CONUS
     expected_times = cell(1,16);
@@ -306,7 +302,7 @@ function chk = modisCloudDataCheck(FILES)
     file_date = modis_day_to_date(doy,year);
     mod_ind = mod(datenum(file_date),16);
 
-    xx = ismember(times_list, expected_times{mod_ind});
+    xx = ismember(times_list, expected_times{mod_ind+1});
     
     % The status will be "complete" if all expected times are present,
     % "incomplete" if only some are, and "missing" if none are
