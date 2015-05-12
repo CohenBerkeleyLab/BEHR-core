@@ -267,24 +267,29 @@ function chk = modisCloudDataCheck(FILES)
     end
     
     % Define the expected times manually. These will need to be expanded
-    % if BEHR is extended beyond CONUS
+    % if BEHR is extended beyond CONUS. This should be organized so that
+    % each cell of expected_times contains another cell array that has
+    % vectors of times for each orbit. You can figure these out by looking
+    % at the MODIS granules using draw_modis_cloud_swaths in BEHR/One off
+    % scripts. You're looking for which granules (by the time identifier)
+    % are needed to cover the area of interest. 
     expected_times = cell(1,16);
-    expected_times{1} = [1745, 1750, 1925, 1930, 2100, 2105, 2110];
-    expected_times{2} = [1655, 1825, 1830, 1835, 2005, 2010, 2015, 2145, 2150];
-    expected_times{3} = [1735, 1740, 1910, 1915, 2050, 2055];
-    expected_times{4} = [1815, 1820, 1955, 2000, 2130, 2135, 2140];
-    expected_times{5} = [1720, 1725, 1855, 1900, 1905, 2035, 2040, 2045];
-    expected_times{6} = [1630, 1800, 1805, 1810, 1940, 1945, 1950, 2120, 2125];
-    expected_times{7} = [1710, 1715, 1845, 1850, 1855, 2025, 2030, 2205, 2210];
-    expected_times{8} = [1750, 1755, 1930, 1935, 2105, 2110, 2115];
-    expected_times{9} = [1700, 1835, 1840, 2010, 2015, 2020, 2150, 2155];
-    expected_times{10} = [1740, 1745, 1915, 1920, 1925, 2055, 2100];
-    expected_times{11} = [1650, 1820, 1825, 1830, 2000, 2005, 2140, 2145];
-    expected_times{12} = [1725, 1730, 1905, 1910, 2045, 2050, 2220, 2225, 2230];
-    expected_times{13} = [1810, 1815, 1945, 1950, 1955, 2125, 2130];
-    expected_times{14} = [1715, 1720, 1850, 1855, 1900, 2030, 2035, 2210, 2215];
-    expected_times{15} = [1625, 1755, 1800, 1805, 1935, 1940, 2115, 2120];
-    expected_times{16} = [1705, 1840, 1845, 2020, 2025, 2155, 2200, 2205];
+    expected_times{1} = {[1745, 1750], [1925, 1930], [2100, 2105, 2110]};
+    expected_times{2} = {[1655], [1825, 1830, 1835], [2005, 2010, 2015], [2145, 2150]};
+    expected_times{3} = {[1735, 1740], [1910, 1915], [2050, 2055]};
+    expected_times{4} = {[1815, 1820], [1955, 2000], [2130, 2135, 2140]};
+    expected_times{5} = {[1720, 1725], [1855, 1900, 1905], [2035, 2040, 2045]};
+    expected_times{6} = {[1630], [1800, 1805, 1810], [1940, 1945, 1950], [2120, 2125]};
+    expected_times{7} = {[1710, 1715], [1845, 1850, 1855], [2025, 2030], [2205, 2210]};
+    expected_times{8} = {[1750, 1755], [1930, 1935], [2105, 2110, 2115]};
+    expected_times{9} = {[1700], [1835, 1840], [2010, 2015, 2020], [2150, 2155]};
+    expected_times{10} = {[1740, 1745], [1915, 1920, 1925], [2055, 2100]};
+    expected_times{11} = {[1650], [1820, 1825, 1830], [2000, 2005], [2140, 2145]};
+    expected_times{12} = {[1725, 1730], [1905, 1910], [2045, 2050], [2220, 2225, 2230]};
+    expected_times{13} = {[1810, 1815], [1945, 1950, 1955], [2125, 2130]};
+    expected_times{14} = {[1715, 1720], [1850, 1855, 1900], [2030, 2035], [2210, 2215]};
+    expected_times{15} = {[1625], [1755, 1800, 1805], [1935, 1940], [2115, 2120]};
+    expected_times{16} = {[1705], [1840, 1845], [2020, 2025], [2155, 2200, 2205]};
 
     % Make a list of times in the file names. Look for four numbers with .'s on either side.
     times_list = zeros(1,numel(FILES));
@@ -301,17 +306,48 @@ function chk = modisCloudDataCheck(FILES)
     doy = FILES(1).name(15:17);
     file_date = modis_day_to_date(doy,year);
     mod_ind = mod(datenum(file_date),16);
-
-    xx = ismember(times_list, expected_times{mod_ind+1});
     
-    % The status will be "complete" if all expected times are present,
-    % "incomplete" if only some are, and "missing" if none are
-    if all(xx)
+    test_times = expected_times{mod_ind+1};
+    cnt = 0;
+    tot = 0;
+    for t=1:numel(test_times)
+        % Add a "buffer" granule to the beginning and end of the swath
+        test_times_t = [timemath(test_times{t}(1),-5), test_times{t}, timemath(test_times{t}(end),5)];
+        
+        % Keep track of how many granules we expect in each orbit
+        n = numel(test_times{t});
+        tot = tot + n;
+        
+        % Keep track of how many of the expected times are present
+        times_found = ismember(test_times_t, times_list);
+        cnt = cnt + sum(times_found);
+    end
+    
+    % The status will be complete if there are as many files as expected,
+    % and they are about the right times. If there are too few, it is
+    % incomplete, and obviously if there are none, the day is missing.
+    if cnt >= tot
         chk = 2;
-    elseif all(~xx)
+    elseif cnt < tot && cnt > 0
         chk = 0;
     else
         chk = 1;
     end
 
+end
+
+function t = timemath(t,m)
+% Add minutes to time t where the hundreds and thousands place are hours
+% and the tens and ones are minutes. 
+minutes = mod(t,100);
+hours = t - minutes;
+
+minutes = minutes + m;
+% what must be added to the hour: >60 = add, <0 = subtract
+h = floor(minutes/60);
+
+new_minutes = mod(minutes,60);
+new_hour = hours + h*100;
+
+t = new_hour + new_minutes;
 end
