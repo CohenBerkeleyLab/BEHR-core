@@ -1,4 +1,4 @@
-function [ output_args ] = BEHR_hdf_v2(  )
+function [  ] = BEHR_hdf_v2(  )
 %BEHR_hdf_v2 Create the HDF files for BEHR products
 %   Detailed explanation goes here
 
@@ -11,23 +11,24 @@ E = JLLErrors;
 % Set to 'native' to save the native OMI resolution pixels. Set to
 % 'gridded' to save the 0.05 x 0.05 gridded data
 
-pixel_type = 'native';
+pixel_type = 'gridded';
 
 % Make the list of variables to put in the HDF files. Std. variables will
 % be added by default; see the "set_variables" function for additional
-% options.
+% options. The pixel type needs to be passed so that it knows whether to
+% keep the pixel specific variables or not.
 
-[vars, savename] = set_variables();
+[vars, savename] = set_variables(pixel_type);
 attr = add_attributes(vars);
 
 % The dates to process, location of the files, and where to save the files.
 % If you want to process all files in a directory, set the start and end
 % dates to something silly.
-start_date = '';
-end_date = '';
+start_date = '2013-01-01';
+end_date = '2013-02-01';
 
-mat_file_dir = '';
-save_dir = '';
+mat_file_dir = '/Users/Josh/Documents/MATLAB/Test data';
+save_dir = '/Users/Josh/Documents/MATLAB/Test data/HDF Creation Test';
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
@@ -58,9 +59,9 @@ end
 FILES = dir(fullfile(mat_file_dir,'OMI_BEHR*.mat'));
 for a=1:numel(FILES)
     % Find the date part of the file
-    d_ind = regexp(FILES(a).name,'\d\d\d\d_\d\d_\d\d');
-    date_string = FILES(a).name(d_ind:d_ind+9);
-    if datenum(date_string) >= datenum(start_date) && datenum(date_string) <= datenum(end_date)
+    d_ind = regexp(FILES(a).name,'\d\d\d\d\d\d\d\d');
+    date_string = FILES(a).name(d_ind:d_ind+7);
+    if datenum(date_string,'yyyymmdd') >= datenum(start_date) && datenum(date_string,'yyyymmdd') <= datenum(end_date)
         load(fullfile(mat_file_dir,FILES(a).name));
         if strcmpi(pixel_type,'native')
             Data_to_save = Data;
@@ -68,7 +69,7 @@ for a=1:numel(FILES)
             Data_to_save = OMI;
         end
         
-        make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename)
+        make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type)
     end
 end
 
@@ -85,11 +86,11 @@ function [vars, savename] = set_variables(varargin)
 % The standard variables to be included (listed in
 % http://behr.cchem.berkeley.edu/TheBEHRProduct.aspx)
 
-vars = {'AMFStrat','AMFTrop','BEHRAMFTrop','BEHRColumnAmountNOTrop','CloudFraction',...
-    'CloudPressure','CloudRadianceFraction','ColumnAmountNO','ColumnAmountNOInitial',...
-    'ColumnAmountNOStrat','ColumnAmountNOTrop','ColumnAmountNOTropStd','GLOBETerpres',...
+vars = {'AMFStrat','AMFTrop','BEHRAMFTrop','BEHRColumnAmountNO2Trop','CloudFraction',...
+    'CloudPressure','CloudRadianceFraction','ColumnAmountNO2',...
+    'ColumnAmountNO2Trop','GLOBETerpres',...
     'Latcorn','Latitude','Loncorn','Longitude','MODISAlbedo','MODISCloud',...
-    'RelativeAzimuthAngle','Row','SlantColumnAmountNO','SolarAzimuthAngle',...
+    'RelativeAzimuthAngle','Row','SlantColumnAmountNO2','SolarAzimuthAngle',...
     'SolarZenithAngle','Swath','TerrainHeight','TerrainPressure','TerrainReflectivity',...
     'Time','ViewingAzimuthAngle','ViewingZenithAngle','XTrackQualityFlags','vcdQualityFlags'};
 
@@ -99,6 +100,15 @@ vars = {'AMFStrat','AMFTrop','BEHRAMFTrop','BEHRColumnAmountNOTrop','CloudFracti
 
 savename = 'OMI_BEHR_';
 
+% Add additional variable categories here. You'll need to add the variable
+% names to the "vars" variable, and you should consider adding an
+% identifier to the save name to make clear what variables are present.
+% Note two other places you'll need to add variables: in the subfunction
+% "remove_ungridded_variables" if any of the new variables should be
+% included in the gridded products and in the "add_attributes" subfunction
+% - there you'll want to include information like unit, range, fill,
+% product, and description.
+
 % The reprocessing related fields
 if ismember('reprocessed',varargin)
     repro_vars = {'InSituAMF','BEHR_R_ColumnAmountNO2Trop','ProfileCount','InSituFlags'};
@@ -106,12 +116,36 @@ if ismember('reprocessed',varargin)
     savename = strcat(savename,'InSitu_');
 end
 
+% Remove pixel specific variables (like AMF, VZA, etc.) if the pixel type
+% is "gridded"
+if ismember('gridded',varargin)
+    vars = remove_ungridded_variables(vars);
+end
+
+end
+
+function vars = remove_ungridded_variables(vars)
+E = JLLErrors;
+if ~iscell(vars) || ~all(iscellcontents(vars,'ischar'))
+    E.badinput('"vars" must be a cell array of variable names as strings')
+end
+
+% Define what variables should be included in gridded products. You'll need
+% to edit this is you add new gridded variables.
+gridded_vars = {'AMFTrop', 'Areaweight', 'BEHRAMFTrop','BEHRColumnAmountNO2Trop',...
+    'CloudFraction', 'CloudRadianceFraction', 'ColumnAmountNO2Trop', 'GLOBETerpres',...
+    'Latitude', 'Longitude', 'MODISAlbedo', 'MODISCloud', 'Row', 'XTrackQualityFlags',...
+    'vcdQualityFlags', 'InSituAMF', 'BEHR_R_ColumnAmountNO2Trop'};
+
+gg = ismember(vars,gridded_vars);
+vars = vars(gg);
+
 end
 
 function attr = add_attributes(vars)
 E = JLLErrors;
 
-if ~~iscell(vars)
+if ~iscell(vars)
     E.badinput('vars must be a cell array');
 end
 
@@ -133,10 +167,8 @@ attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric A
                 'CloudPressure', 'hPa', [0, Inf], shortfill, 'SP', 'OMI cloud top pressure';
                 'CloudRadianceFraction', 'unitless', [0, 1], shortfill2, 'SP', 'OMI cloud radiance (top of atmosphere light fraction)';
                 'ColumnAmountNO2', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Total NO2 VCD';
-                'ColumnAmountNO2Initial', 'molec./cm^2', [0, Inf], longfill, 'SP', '';
-                'ColumnAmountNO2Strat', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Stratospheric NO2 VCD';
                 'ColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Tropospheric NO2 VCD (standard product)';
-                'ColumnAmountNO2TropStd', 'molec./cm^2', [0, Inf], nofill, 'SP', 'Standard deviation of SP NO2 tropospheric VCD';
+                %'ColumnAmountNO2TropStd', 'molec./cm^2', [0, Inf], nofill, 'SP', 'Standard deviation of SP NO2 tropospheric VCD';
                 'GLOBETerpres', 'hPa', [0, Inf], behrfill, 'BEHR', 'Terrain pressure derived from GLOBE (1 x 1 km) topography using standard scale height relation, avg. to OMI pixel';
                 'Latcorn', 'deg', [-90, 90], nofill, 'BEHR', 'Calculated corner latitude of pixels';
                 'Latitude', 'deg', [-90, 90], nofill, 'SP', 'Center latitude of pixels';
@@ -183,7 +215,7 @@ end
 end
 
 
-function make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename)
+function make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename, pixel_type)
 E = JLLErrors;
 global ask_to_overwrite
 if isempty(ask_to_overwrite)
@@ -193,7 +225,7 @@ end
 if ~strcmp(savename(end),'_')
     savename = strcat(savename,'_');
 end
-hdf_filename = strcat(savename, date_string, '.mat');
+hdf_filename = strcat(savename, date_string, '.h5');
 hdf_fullfilename = fullfile(save_dir, hdf_filename);
 
 % Check if the file exists. Give the user 3 options if it does: abort,
@@ -201,7 +233,7 @@ hdf_fullfilename = fullfile(save_dir, hdf_filename);
 
 if exist(hdf_fullfilename,'file') && ask_to_overwrite;
     if ask_to_overwrite
-        user_ans = input(sprintf('File %s exists. [O]verwrite, [A]bort, or Overwrite and [d]on''t ask again? ',hdf_fullfilename));
+        user_ans = input(sprintf('File %s exists. [O]verwrite, [A]bort, or Overwrite and [d]on''t ask again? ',hdf_fullfilename),'s');
         user_ans = lower(user_ans);
         switch user_ans
             case 'o'
@@ -217,27 +249,42 @@ if exist(hdf_fullfilename,'file') && ask_to_overwrite;
     end
 end
 
+% Iterate through each swath and save it as under the group
+% /Data/Swath#####.
 for d=1:numel(Data_in)
     swath_id = max(Data_in(d).Swath(:));
-    group_name = sprintf('/Data/Swath%05d',swath_id);
+    group_name = sprintf('/Data/Swath%d',swath_id);
     for v=1:numel(vars)
         var_name = sprintf('%s/%s',group_name,vars{v});
-        save_data = Data(d).(vars{v});
+        save_data = Data_in(d).(vars{v});
         sz = size(save_data);
         
         % Make NaNs into fill values - apparently this is better for HDF
-        % type files
-        nans = isnan(save_data);
-        save_data(nans) = attr.(vars{v}).Fill;
+        % type files. Cell arrays are created for bit array flags in
+        % gridded products - so we don't want to do any fill values for
+        % them. **We may want to do a bitor op on them in the future so
+        % that any flag set 
+        if ~iscell(save_data)
+            nans = isnan(save_data);
+            save_data(nans) = attr.(vars{v}).Fill;
+        else
+            save_data_cell = save_data;
+            save_data = uint16(zeros(sz));
+            for c=1:numel(save_data_cell)
+                
+            end
+        end
         
         if isa(save_data,'double')
             % Convert doubles to singles to save space for the data people
             % will be downloading
             save_data = single(save_data);
         end
+        % Ensure that the fill value is of the same type as the data
+        fill_val = cast(attr.(vars{v}).Fill, 'like', save_data);
         
         % Create the dataset, then write it and add the attributes
-        h5create(hdf_fullfilename, var_name, sz, 'Datatype', class(save_data), 'FillValue', attr.(vars{v}).Fill);
+        h5create(hdf_fullfilename, var_name, sz, 'Datatype', class(save_data), 'FillValue', fill_val);
         h5write(hdf_fullfilename, var_name, save_data);
         
         atts = fieldnames(attr.(vars{v}));
@@ -249,5 +296,17 @@ for d=1:numel(Data_in)
         end
         
     end
+    
+    % Write an attribute to the swath group describing if it is gridded or
+    % native
+    switch lower(pixel_type)
+        case 'native'
+            swath_attr = 'OMI SP and BEHR data at native OMI resolution';
+        case 'gridded'
+            swath_attr = 'OMI SP and BEHR data gridded to 0.05 x 0.05 deg';
+        otherwise
+            E.badinput('"pixel_type" not recognized');
+    end
+    h5writeatt(hdf_fullfilename,group_name,'Description',swath_attr);
 end
 end
