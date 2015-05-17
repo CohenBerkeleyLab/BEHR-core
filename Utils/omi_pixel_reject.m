@@ -36,7 +36,7 @@ function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_
 %          0 values, or another mathematical mistake.
 %       Row anomaly: see http://www.knmi.nl/omi/research/product/rowanomaly-background.php
 
-
+E = JLLErrors;
 omi = omi_in;
 
 omi.Areaweight(omi.BEHRColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
@@ -56,6 +56,9 @@ if strcmpi(cloud_type,'rad'); %Do not include the element if the cloud fraction 
     omi.Areaweight(isnan(omi.CloudRadianceFraction)) = 0; % Reject pixels with NaN for cloud fraction
     omi.Areaweight(omi.CloudRadianceFraction < 0) = 0; % Reject pixels with fill values for cloud fraction
 elseif strcmpi(cloud_type,'modis'); 
+    if any(omi.MODISCloud == -127)
+        E.callError('no_MODIS_Cloud','There is no MODIS cloud data for this file');
+    end
     omi.Areaweight(omi.MODISCloud > cloud_frac) = 0;
     omi.Areaweight(isnan(omi.MODISCloud)) = 0; % Reject pixels with NaN for cloud fraction
     omi.Areaweight(omi.MODISCloud < 0) = 0;  % Reject pixels with fill values for cloud fraction

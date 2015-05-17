@@ -3,6 +3,8 @@ function [  ] = BEHR_hdf_v2(  )
 %   Detailed explanation goes here
 
 E = JLLErrors;
+global DEBUG_LEVEL
+DEBUG_LEVEL = 1;
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%%%% SET OPTIONS %%%%%
@@ -24,11 +26,11 @@ attr = add_attributes(vars);
 % The dates to process, location of the files, and where to save the files.
 % If you want to process all files in a directory, set the start and end
 % dates to something silly.
-start_date = '2013-01-01';
-end_date = '2013-02-01';
+start_date = '2013-08-01';
+end_date = '2013-09-30';
 
-mat_file_dir = '/Users/Josh/Documents/MATLAB/Test data';
-save_dir = '/Users/Josh/Documents/MATLAB/Test data/HDF Creation Test';
+mat_file_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014/';
+save_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_HDF_v2-1A/Gridded/';
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
@@ -57,6 +59,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%
 
 FILES = dir(fullfile(mat_file_dir,'OMI_BEHR*.mat'));
+ask_to_overwrite = true;
 for a=1:numel(FILES)
     % Find the date part of the file
     d_ind = regexp(FILES(a).name,'\d\d\d\d\d\d\d\d');
@@ -69,9 +72,13 @@ for a=1:numel(FILES)
             Data_to_save = OMI;
         end
         
-        make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type)
+        if DEBUG_LEVEL > 0
+            fprintf('Saving %s HDF for %s\n', pixel_type, date_string);
+        end
+        ask_to_overwrite = make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
     end
 end
+
 
 end
 
@@ -86,9 +93,9 @@ function [vars, savename] = set_variables(varargin)
 % The standard variables to be included (listed in
 % http://behr.cchem.berkeley.edu/TheBEHRProduct.aspx)
 
-vars = {'AMFStrat','AMFTrop','BEHRAMFTrop','BEHRColumnAmountNO2Trop','CloudFraction',...
-    'CloudPressure','CloudRadianceFraction','ColumnAmountNO2',...
-    'ColumnAmountNO2Trop','GLOBETerpres',...
+vars = {'AMFStrat','AMFTrop','BEHRAMFTrop','BEHRColumnAmountNO2Trop','BEHRScatWeights','BEHRAvgKernels',...
+    'BEHRPressureLevels','CloudFraction','CloudPressure','CloudRadianceFraction','ColumnAmountNO2',...
+    'ColumnAmountNO2Trop','ColumnAmountNO2TropStd','ColumnAmountNO2Strat','GLOBETerpres',...
     'Latcorn','Latitude','Loncorn','Longitude','MODISAlbedo','MODISCloud',...
     'RelativeAzimuthAngle','Row','SlantColumnAmountNO2','SolarAzimuthAngle',...
     'SolarZenithAngle','Swath','TerrainHeight','TerrainPressure','TerrainReflectivity',...
@@ -159,41 +166,47 @@ shortfill2 = shortfill / 1000; % This should be fixed in the next run of BEHR to
 behrfill = -9e9;
 nofill = NaN;
 
-attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric AMF';
-                'AMFTrop', 'unitless', [0, Inf], nofill, 'SP', 'Tropospheric AMF (standard product)';
-                'BEHRAMFTrop', 'unitless', [0, Inf], shortfill, 'BEHR', 'Tropospheric AMF (BEHR) calculated with MODIS Albedo, GLOBE Terr. Pres., and 12 km NO2 profiles';
-                'BEHRColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], longfill, 'BEHR', 'Tropospheric NO2 VCD (BEHR) calculated as SCD_trop / AMF_BEHR';
-                'CloudFraction', 'unitless', [0, 1], shortfill2, 'SP', 'OMI geometric cloud fraction';
-                'CloudPressure', 'hPa', [0, Inf], shortfill, 'SP', 'OMI cloud top pressure';
-                'CloudRadianceFraction', 'unitless', [0, 1], shortfill2, 'SP', 'OMI cloud radiance (top of atmosphere light fraction)';
-                'ColumnAmountNO2', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Total NO2 VCD';
-                'ColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Tropospheric NO2 VCD (standard product)';
-                %'ColumnAmountNO2TropStd', 'molec./cm^2', [0, Inf], nofill, 'SP', 'Standard deviation of SP NO2 tropospheric VCD';
-                'GLOBETerpres', 'hPa', [0, Inf], behrfill, 'BEHR', 'Terrain pressure derived from GLOBE (1 x 1 km) topography using standard scale height relation, avg. to OMI pixel';
-                'Latcorn', 'deg', [-90, 90], nofill, 'BEHR', 'Calculated corner latitude of pixels';
-                'Latitude', 'deg', [-90, 90], nofill, 'SP', 'Center latitude of pixels';
-                'Loncorn', 'deg', [-180, 180], nofill, 'BEHR', 'Calculated corner longitude of pixels';
-                'Longitude', 'deg', [-180, 180], nofill, 'SP', 'Center longitude of pixels';
-                'MODISAlbedo', 'unitless', [0, 1], behrfill, 'BEHR', 'MODIS MCD43C3 16-day avg. window every 8 days, avg. to OMI pixel';
-                'MODISCloud', 'unitless', [0, 1], behrfill, 'BEHR', 'MODIS MYD06_L2 5 x 5 km cloud fraction, avg. to OMI pixel';
-                'RelativeAzimuthAngle', 'deg', [0, 180], nofill, 'BEHR', 'Calculated azimuth angle between sun and satellite';
-                'Row', 'unitless', [0, 59], nofill, 'SP', 'Across track row number, 0 based';
-                'SlantColumnAmountNO2', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Total NO2 SCD';
-                'SolarAzimuthAngle', 'deg', [-180, 180], nofill, 'SP', 'Solar azimuth angle';
-                'SolarZenithAngle', 'deg', [0 90], nofill, 'SP', 'Solar zenith angle';
-                'Swath', 'unitless', [0, Inf], nofill, 'SP', 'Swath number since OMI launch';
-                'TerrainHeight', 'm', [-Inf, Inf], nofill, 'SP', 'Terrain height';
-                'TerrainPressure', 'hPa', [0, Inf], nofill 'SP', 'Terrain pressure';
-                'TerrainReflectivity', 'unitless', [0, 1], shortfill2, 'SP', 'Terrain albedo (OMI albedo product)';
-                'Time', 's', [0, Inf], nofill, 'SP', 'Time at start of scan (TAI93: seconds since Jan 1, 1993)';
-                'ViewingAzimuthAngle', 'deg', [-180, 180], nofill, 'SP', 'Viewing azimuth angle';
-                'ViewingZenithAngle', 'deg', [0, 90], nofill, 'SP', 'Viewing zenith angle';
-                'XTrackQualityFlags', 'bit array flag', 'N/A', nofill, 'SP', 'Across track quality flag (for row anomaly)';
-                'vcdQualityFlags', 'bit array flag', 'N/A', nofill, 'SP', 'Ground pixel quality flags';
-                'InSituAMF', 'unitless', [0, Inf], behrfill, 'BEHR-InSitu', 'AMF calculated using co-located in situ NO2 profile';
-                'BEHR_R_ColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], behrfill, 'BEHR-InSitu', 'BEHR Tropospheric NO2 VCD calculated with the in situ AMF';
-                'ProfileCount', 'unitless', [0, Inf], behrfill, 'BEHR-InSitu', 'Number of aircraft profiles averaged to create the in situ a priori NO2 profile';
-                'InSituFlags', 'bit array flag', 'N/A', nofill, 'BEHR-InSitu', 'In situ profile quality flag';
+attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric AMF';...
+                'AMFTrop', 'unitless', [0, Inf], nofill, 'SP', 'Tropospheric AMF (standard product)';...
+                'BEHRAMFTrop', 'unitless', [0, Inf], shortfill, 'BEHR', 'Tropospheric AMF (BEHR) calculated with MODIS Albedo, GLOBE Terr. Pres., and 12 km NO2 profiles';...
+                'BEHRColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], longfill, 'BEHR', 'Tropospheric NO2 VCD (BEHR) calculated as SCD_trop / AMF_BEHR';...
+                'BEHRScatWeights', 'unitless', [0, Inf], behrfill, 'BEHR', 'Scattering weights derived from the MODIS albedo and GLOBE surface pressure. Includes NO2 cross section temperature correction.';...
+                'BEHRAvgKernels', 'unitless', [0, Inf], behrfill, 'BEHR', 'Averaging kernels computed for the weighted average of cloudy and clear conditions';...
+                'BEHRPressureLevels', 'hPa', [0, Inf], behrfill, 'BEHR', 'Pressure levels that correspond to the scattering weight and averaging kernel vectors';...
+                'CloudFraction', 'unitless', [0, 1], shortfill2, 'SP', 'OMI geometric cloud fraction';...
+                'CloudPressure', 'hPa', [0, Inf], shortfill, 'SP', 'OMI cloud top pressure';...
+                'CloudRadianceFraction', 'unitless', [0, 1], shortfill2, 'SP', 'OMI cloud radiance (top of atmosphere light fraction)';...
+                'ColumnAmountNO2', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Total NO2 VCD';...
+                'ColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Tropospheric NO2 VCD (standard product)';...
+                'ColumnAmountNO2TropStd', 'molec./cm^2', [0, Inf], nofill, 'SP', 'Standard deviation of SP NO2 tropospheric VCD';...
+                'ColumnAmountNO2Strat', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Stratospheric NO2 VCD';...
+                'GLOBETerpres', 'hPa', [0, Inf], behrfill, 'BEHR', 'Terrain pressure derived from GLOBE (1 x 1 km) topography using standard scale height relation, avg. to OMI pixel';...
+                'Latcorn', 'deg', [-90, 90], nofill, 'BEHR', 'Calculated corner latitude of pixels';...
+                'Latitude', 'deg', [-90, 90], nofill, 'SP', 'Center latitude of pixels';...
+                'Loncorn', 'deg', [-180, 180], nofill, 'BEHR', 'Calculated corner longitude of pixels';...
+                'Longitude', 'deg', [-180, 180], nofill, 'SP', 'Center longitude of pixels';...
+                'MODISAlbedo', 'unitless', [0, 1], behrfill, 'BEHR', 'MODIS MCD43C3 16-day avg. window every 8 days, avg. to OMI pixel';...
+                'MODISCloud', 'unitless', [0, 1], behrfill, 'BEHR', 'MODIS MYD06_L2 5 x 5 km cloud fraction, avg. to OMI pixel';...
+                'RelativeAzimuthAngle', 'deg', [0, 180], nofill, 'BEHR', 'Calculated azimuth angle between sun and satellite';...
+                'Row', 'unitless', [0, 59], nofill, 'SP', 'Across track row number, 0 based';...
+                'SlantColumnAmountNO2', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Total NO2 SCD';...
+                'SolarAzimuthAngle', 'deg', [-180, 180], nofill, 'SP', 'Solar azimuth angle';...
+                'SolarZenithAngle', 'deg', [0 90], nofill, 'SP', 'Solar zenith angle';...
+                'Swath', 'unitless', [0, Inf], nofill, 'SP', 'Swath number since OMI launch';...
+                'TerrainHeight', 'm', [-Inf, Inf], nofill, 'SP', 'Terrain height';...
+                'TerrainPressure', 'hPa', [0, Inf], nofill 'SP', 'Terrain pressure';...
+                'TerrainReflectivity', 'unitless', [0, 1], shortfill2, 'SP', 'Terrain albedo (OMI albedo product)';...
+                'Time', 's', [0, Inf], nofill, 'SP', 'Time at start of scan (TAI93: seconds since Jan 1, 1993)';...
+                'ViewingAzimuthAngle', 'deg', [-180, 180], nofill, 'SP', 'Viewing azimuth angle';...
+                'ViewingZenithAngle', 'deg', [0, 90], nofill, 'SP', 'Viewing zenith angle';...
+                'XTrackQualityFlags', 'bit array flag', 'N/A', nofill, 'SP', 'Across track quality flag (for row anomaly)';...
+                'vcdQualityFlags', 'bit array flag', 'N/A', nofill, 'SP', 'Ground pixel quality flags';...
+                'InSituAMF', 'unitless', [0, Inf], behrfill, 'BEHR-InSitu', 'AMF calculated using co-located in situ NO2 profile';...
+                'BEHR_R_ColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], behrfill, 'BEHR-InSitu', 'BEHR Tropospheric NO2 VCD calculated with the in situ AMF';...
+                'ProfileCount', 'unitless', [0, Inf], behrfill, 'BEHR-InSitu', 'Number of aircraft profiles averaged to create the in situ a priori NO2 profile';...
+                'InSituFlags', 'bit array flag', 'N/A', nofill, 'BEHR-InSitu', 'In situ profile quality flag';...
+                'BEHRColumnAmountNO2Trop_L3',[0, Inf], behrfill, 'BEHR-L3','BEHR tropospheric NO2 VCDs filtered for quality and row anomaly';...
+                'BEHRColumnAmountNO2Trop_L3MODISCloud',[0, Inf], behrfill, 'BEHR-L3','BEHR tropospheric NO2 VCDs additionally filtered for MODIS Cloud < 20%';...
                 };
             
 fns = fieldnames(attr);
@@ -215,11 +228,12 @@ end
 end
 
 
-function make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename, pixel_type)
+function ask_to_overwrite = make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename, pixel_type, ask_to_overwrite)
 E = JLLErrors;
-global ask_to_overwrite
-if isempty(ask_to_overwrite)
-    ask_to_overwrite = true;
+
+global DEBUG_LEVEL
+if isempty(DEBUG_LEVEL)
+    DEBUG_LEVEL = 0;
 end
 
 if ~strcmp(savename(end),'_')
@@ -231,9 +245,9 @@ hdf_fullfilename = fullfile(save_dir, hdf_filename);
 % Check if the file exists. Give the user 3 options if it does: abort,
 % overwrite, overwrite all.
 
-if exist(hdf_fullfilename,'file') && ask_to_overwrite;
+if exist(hdf_fullfilename,'file')
     if ask_to_overwrite
-        user_ans = input(sprintf('File %s exists. [O]verwrite, [A]bort, or Overwrite and [d]on''t ask again? ',hdf_fullfilename),'s');
+        user_ans = input(sprintf('File %s exists.\n[O]verwrite, [A]bort, or Overwrite and [d]on''t ask again? ',hdf_fullfilename),'s');
         user_ans = lower(user_ans);
         switch user_ans
             case 'o'
@@ -254,6 +268,15 @@ end
 for d=1:numel(Data_in)
     swath_id = max(Data_in(d).Swath(:));
     group_name = sprintf('/Data/Swath%d',swath_id);
+    
+    if swath_id == 0
+        % A swath ID of 0 means that no pixels were gridded, so skip this
+        % swath has it has no useful data.
+        continue
+    end
+    
+    if DEBUG_LEVEL > 1; fprintf('\t Now writing %s\n',group_name); end
+    if DEBUG_LEVEL > 2; tic; end
     for v=1:numel(vars)
         var_name = sprintf('%s/%s',group_name,vars{v});
         save_data = Data_in(d).(vars{v});
@@ -262,8 +285,9 @@ for d=1:numel(Data_in)
         % Make NaNs into fill values - apparently this is better for HDF
         % type files. Cell arrays are created for bit array flags in
         % gridded products - so we don't want to do any fill values for
-        % them. **We may want to do a bitor op on them in the future so
-        % that any flag set 
+        % them. Rather, since each cell contains a matrix of the bit array
+        % flags, we'll do a bitwise OR operation on them so that if a flag
+        % is set for any pixel used in that grid cell it carries through.
         if ~iscell(save_data)
             nans = isnan(save_data);
             save_data(nans) = attr.(vars{v}).Fill;
@@ -271,7 +295,15 @@ for d=1:numel(Data_in)
             save_data_cell = save_data;
             save_data = uint16(zeros(sz));
             for c=1:numel(save_data_cell)
-                
+                if DEBUG_LEVEL > 3 && mod(c,10000)==1; fprintf('Cell %d of %d\n',c,numel(save_data_cell)); end
+                flag = uint16(save_data_cell{c}(:));
+                % An empty matrix in the cell means there was no data
+                % there, so just assign it a value of 0.
+                if isempty(flag); 
+                    save_data(c) = uint16(0); 
+                else
+                    save_data(c) = bitopmat(flag,'or');
+                end
             end
         end
         
@@ -308,5 +340,6 @@ for d=1:numel(Data_in)
             E.badinput('"pixel_type" not recognized');
     end
     h5writeatt(hdf_fullfilename,group_name,'Description',swath_attr);
+    if DEBUG_LEVEL > 2; toc; end
 end
 end

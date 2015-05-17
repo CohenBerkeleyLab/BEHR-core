@@ -21,35 +21,40 @@ function OMI = hdf_quadrangle_BEHR(Data, OMI, maxx, minx, maxy, miny, lCoordLon,
 % oversampled grid.  Those expected to receive quality flags will be cell
 % arrays instead.
 
-BEHRColumnAmountNO2Trop=zeros(maxx,maxy);
-Time=zeros(maxx,maxy);
-ViewingZenithAngle=zeros(maxx,maxy);
-SolarZenithAngle=zeros(maxx,maxy);
-ViewingAzimuthAngle=zeros(maxx,maxy);
-SolarAzimuthAngle=zeros(maxx,maxy);
-CloudFraction=zeros(maxx,maxy);
-CloudRadianceFraction=zeros(maxx,maxy);
-ColumnAmountNO2=zeros(maxx,maxy);
-SlantColumnAmountNO2=zeros(maxx,maxy);
-TerrainHeight=zeros(maxx,maxy);
-TerrainPressure=zeros(maxx,maxy);
-TerrainReflectivity=zeros(maxx,maxy);
-CloudPressure=zeros(maxx,maxy);
-RelativeAzimuthAngle=zeros(maxx,maxy);
-Latitude=zeros(maxx,maxy);
-Longitude=zeros(maxx,maxy);
-ColumnAmountNO2Trop=zeros(maxx,maxy);
-ColumnAmountNO2TropStd=zeros(maxx,maxy);
-ColumnAmountNO2Strat=zeros(maxx,maxy);
-GLOBETerpres=zeros(maxx,maxy);
-MODISAlbedo=zeros(maxx,maxy);
-BEHRAMFTrop=zeros(maxx,maxy);
-MODISCloud=zeros(maxx,maxy);
-Row=zeros(maxx,maxy);
-Swath=zeros(maxx,maxy);
-AMFTrop=zeros(maxx,maxy);
-AMFStrat=zeros(maxx,maxy);
-TropopausePressure=zeros(maxx,maxy);
+fill_val = -9e9;
+
+BEHRColumnAmountNO2Trop=fill_val * ones(maxx,maxy);
+Time=fill_val * ones(maxx,maxy);
+ViewingZenithAngle=fill_val * ones(maxx,maxy);
+SolarZenithAngle=fill_val * ones(maxx,maxy);
+ViewingAzimuthAngle=fill_val * ones(maxx,maxy);
+SolarAzimuthAngle=fill_val * ones(maxx,maxy);
+CloudFraction=fill_val * ones(maxx,maxy);
+CloudRadianceFraction=fill_val * ones(maxx,maxy);
+ColumnAmountNO2=fill_val * ones(maxx,maxy);
+SlantColumnAmountNO2=fill_val * ones(maxx,maxy);
+TerrainHeight=fill_val * ones(maxx,maxy);
+TerrainPressure=fill_val * ones(maxx,maxy);
+TerrainReflectivity=fill_val * ones(maxx,maxy);
+CloudPressure=fill_val * ones(maxx,maxy);
+RelativeAzimuthAngle=fill_val * ones(maxx,maxy);
+Latitude=fill_val * ones(maxx,maxy);
+Longitude=fill_val * ones(maxx,maxy);
+ColumnAmountNO2Trop=fill_val * ones(maxx,maxy);
+ColumnAmountNO2TropStd=fill_val * ones(maxx,maxy);
+ColumnAmountNO2Strat=fill_val * ones(maxx,maxy);
+GLOBETerpres=fill_val * ones(maxx,maxy);
+MODISAlbedo=fill_val * ones(maxx,maxy);
+BEHRAMFTrop=fill_val * ones(maxx,maxy);
+MODISCloud=fill_val * ones(maxx,maxy);
+Row=fill_val * ones(maxx,maxy);
+Swath=fill_val * ones(maxx,maxy);
+AMFTrop=fill_val * ones(maxx,maxy);
+AMFStrat=fill_val * ones(maxx,maxy);
+TropopausePressure=fill_val * ones(maxx,maxy);
+
+BEHRColumnAmountNO2Trop_AMF2=fill_val * ones(maxx,maxy);
+
 Count = zeros(maxx, maxy);
 Area = nan(maxx, maxy);
 Areaweight = nan(maxx, maxy);
@@ -162,6 +167,8 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     vcdQualityFlags_val = Data.vcdQualityFlags(x);
     XTrackQualityFlags_val = Data.XTrackQualityFlags(x);
     
+    BEHRColumnAmountNO2Trop_AMF2_val = Data.BEHRColumnAmountNO2Trop_AMF2(x);
+    
     
     %dim=[maxx maxy];
     bottom=y1+1; %JLL 18 Mar 2014: Having the bottom advance by one ensures that data points right on the bottom/top border don't get double counted (at least, I think that's the point here)
@@ -213,7 +220,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                 % there, average the new and existing measurements,
                 % weighted by the number of measurments that went into the
                 % existing average
-                if BEHRColumnAmountNO2Trop(x_quad, y_quad) ~= 0 && ~isnan(Data.BEHRColumnAmountNO2Trop(x,y));
+                if BEHRColumnAmountNO2Trop(x_quad, y_quad) ~= fill_val && ~isnan(Data.BEHRColumnAmountNO2Trop(x,y));
                     % Count, area, and areaweight require special handling
                     Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                     Area(x_quad,y_quad)=nansum([Area(x_quad,y_quad)*(Count(x_quad,y_quad)-1), pixelarea])/(Count(x_quad, y_quad));
@@ -249,6 +256,8 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     AMFTrop(x_quad, y_quad) = sum([AMFTrop(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFTrop_val])/Count(x_quad,y_quad);
                     AMFStrat(x_quad, y_quad) = sum([AMFStrat(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFStrat_val])/Count(x_quad,y_quad);
                     TropopausePressure(x_quad, y_quad) = sum([TropopausePressure(x_quad, y_quad)*(Count(x_quad, y_quad)-1), TropopausePressure_val])/Count(x_quad,y_quad);
+                    
+                    BEHRColumnAmountNO2Trop_AMF2(x_quad, y_quad) = sum([BEHRColumnAmountNO2Trop_AMF2(x_quad, y_quad)*(Count(x_quad, y_quad)-1), BEHRColumnAmountNO2Trop_AMF2_val])/Count(x_quad,y_quad);
                     
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
@@ -293,6 +302,8 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     AMFTrop(x_quad, y_quad) = AMFTrop_val;
                     AMFStrat(x_quad, y_quad) = AMFStrat_val;
                     TropopausePressure(x_quad, y_quad) = TropopausePressure_val;
+                    
+                    BEHRColumnAmountNO2Trop_AMF2(x_quad, y_quad) = BEHRColumnAmountNO2Trop_AMF2_val;
                     
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
@@ -340,5 +351,16 @@ OMI.Areaweight = Areaweight;
 OMI.TropopausePressure = TropopausePressure;
 OMI.vcdQualityFlags = vcdQualityFlags;
 OMI.XTrackQualityFlags = XTrackQualityFlags;
+
+OMI.BEHRColumnAmountNO2Trop_AMF2 = BEHRColumnAmountNO2Trop_AMF2;
+
+% Replace fill values with NaNs. Of course, we can only do this for numeric
+% fields, not cells or structs
+fns = fieldnames(OMI);
+for a=1:numel(fns)
+    if isnumeric(OMI.(fns{a}))
+        OMI.(fns{a})(OMI.(fns{a}) == fill_val) = NaN;
+    end
+end
 
 end

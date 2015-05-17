@@ -139,7 +139,7 @@ lons = lon_bdy(1):res:lon_bdy(2);
 cloud_type = parsed_vars.clouds;
 cloud_frac = parsed_vars.cloudfraccrit;
 if strcmpi(cloud_type,'omi') && cloud_frac < 0
-    cloud_frac = 200; %Set the cloud fraction criteria to 200 (20% unscaled) if OMI clouds used and no other value given
+    cloud_frac = 0.2; %Set the cloud fraction criteria to 20% unscaled if OMI clouds used and no other value given
 elseif strcmpi(cloud_type,'modis') && cloud_frac < 0
     cloud_frac = 0;
 elseif strcmpi(cloud_type, 'omi') || strcmpi(cloud_type, 'modis') %Check that the cloud type is recognized, if the value of cloud_frac is valid
@@ -194,21 +194,17 @@ for period = 1:per %Loop over each temporal period you wish to average
                 first_time_through = 0; % Don't run this section again.
             end
             
-            for s=1:length(OMI)
-                
+           
+            for s=1:numel(OMI) 
                 if any(OMI(s).Latitude ~= omilats | OMI(s).Longitude ~= omilons)
                     error('NO2ColMap:OMILatLons','OMI Lat and Lons for %s, swath %u do not agree with previous lat/lon matrices',date,s);
                 end
-                
-                if useBEHR
-                    omi = omi_pixel_reject(OMI(s), cloud_type, cloud_frac, parsed_vars.rowanomaly); %We will set the area weight to 0 for any elements that should not contribute to the average
-                else
-                    omi = omi_sp_pixel_reject(OMI(s), cloud_type, cloud_frac, parsed_vars.rowanomaly);
-                end
-                                
-                SumWeightedColumn = SumWeightedColumn + eval(sprintf('omi.%s',mapfield)) .* omi.Areaweight;
-                SumWeight = SumWeight + omi.Areaweight;
-            end %End loop over swaths in OMI
+            end
+            
+            [this_WeightedColumn, this_Weight] = BEHR_day_no2(OMI,'mapfield', mapfield, 'cloud_prod', cloud_type, 'cloud_frac_max', cloud_frac, 'row_anomaly', parsed_vars.rowanomaly);
+            SumWeightedColumn = SumWeightedColumn + this_WeightedColumn;
+            SumWeight = SumWeight + this_Weight;
+               
         end %End if statement checking if the BEHR file for the current day exists
     end %End the loop over all days in this time period
 end %End the loop over all time periods

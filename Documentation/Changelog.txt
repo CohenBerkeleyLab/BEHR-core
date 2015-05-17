@@ -1,0 +1,68 @@
+**************************************
+****   Berkeley High Resolution   ****
+**** (BEHR) NO2 Product Changelog ****
+**************************************
+
+Current maintainer: Josh Laughner (jlaughner@berkeley.edu)
+
+==========
+1) Preface
+==========
+
+(I) Version numbering system
+
+The BEHR version numbering system combines the OMNO2 version number with an
+internal version letter. So, v2.1A represents the first BEHR product based on
+version 2.1 of the NASA OMNO2 product. A subsequent version of BEHR still based
+on version 2.1 of OMNO2 would be v2.1B. If OMNO2 were to update to version 3,
+the BEHR product based on that would be v3.0A.
+
+Should a minor change be made (e.g. one that adds information to the output but
+does not change the core algorithm), a revision number will be appended to the
+version number. For example, v2.1A and v2.1Arev0 will be the same, but v2.1Arev1
+would indicate this sort of minor change.
+
+============
+2) Changelog
+============
+
+**** 2.0A ****
+
+-- Final version produced by Ashley Russell
+-- Albedo: MODIS MCD43C3 16-day average (every 8 days)
+-- Terrain pressure: Global Land One-kilometer Base Elevation (GLOBE) topography
+used to calculate surface pressure using scale height relationship. GLOBE data
+pre-averaged to 4-km.
+-- NO2 profiles calculated for continental US using WRF-Chem at 12 km resolution
+using NEI 2005 emissions.
+
+
+**** 2.1A ****
+
+-- First version produced by Josh Laughner
+-- Updated to OMNO2 version 2.1
+-- The field ColumnAmountNO2Initial is no longer available
+-- GLOBE terrain height now averaged directly to OMI pixels (no pre-averaging to
+~4 km resolution)
+-- 400 is no longer a fill value for the GLOBETerpres field. There should be no
+fill values in this field - grid points in the GLOBE database that do not have a
+value are over ocean, and so are assigned a pressure of 1013 hPa.
+-- Corrected bug in which the cloud fractions were scaled by 1000 twice before
+inclusion in AMF calculation. (This had only a minor effect on NO2 columns.)
+-- Flag fields (vcdQualityFlags, XTrackQualityFlags) will now represent the most
+cautious flag in the gridded product (the flags from all pixels averaged
+together for a particular grid cell will be combined using a bitwise OR)
+-- Dataset numbers in the HDF may have changed due to the removal of
+ColumnAmountNO2Initial from OMNO2 (sorry!). Dataset names should be the same.
+-- Added scattering weights, averaging kernels, and the pressure levels for
+those quantities.  These are calculated as the average of the clear and cloudy
+scatter weights weighted by the radiance cloud fraction.  Both include the OMI
+temperature correction for the NO2 cross section.
+-- Attributes have been added to the HDF files' variables, including unit, 
+range, fill value, product (standard (SP) or BEHR), and a description. Each
+swath also has an attribute indicating if it is organized by native pixel or
+0.05 x 0.05 deg grid.
+-- HDF files will now end in ".h5" instead of ".hdf" to accurately reflect that
+they are HDF v. 5 files. I believe this has always been the case (I open them
+with HDFv5 tools in Matlab) but the .hdf extension (at least in the case of
+MODIS files) implies v. 4.

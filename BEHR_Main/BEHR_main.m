@@ -125,7 +125,7 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 if nargin < 2
     date_start='2013/08/01';
-    date_end='2013/08/31';
+    date_end='2013/09/30';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
 %****************************%
@@ -142,6 +142,18 @@ retrieval='BEHR_omiCloudAMF';
 cloud_amf = 'omi';
 cloud_rad_amf = 'omi';
 %****************************%
+
+
+% Check that all directories given ARE directories
+if ~exist(behr_mat_dir,'dir')
+    E.filenotfound(behr_mat_dir)
+elseif ~exist(sp_mat_dir,'dir')
+    E.filenotfound(sp_mat_dir)
+elseif ~exist(amf_tools_path,'dir')
+    E.filenotfound(amf_tools_path)
+elseif ~exist(no2_profile_path,'dir')
+    E.filenotfound(no2_profile_path)
+end
 
 %Find the last file completed and set the start date to the next day.  This
 %will allow the process to be stopped and started with minimum
@@ -258,10 +270,16 @@ parfor j=1:length(datenums)
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
                 noGhost=1; ak=1;
-                [amf, amfCld, amfClr] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+                [amf, ~, ~, scattering_weights, avg_kernels, amf_2] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
                 amf(prof_i==1)=NaN;
+                scattering_weights(prof_i==1)=NaN;
+                avg_kernels(prof_i==1)=NaN;
                 
                 Data(d).BEHRAMFTrop = amf; %JLL 18 Mar 2014: Save the resulting AMF of the pixel
+                Data(d).BEHRScatWeights = scattering_weights;
+                Data(d).BEHRAvgKernels = avg_kernels;
+                Data(d).BEHRPressureLevels = pressure;
+                Data(d).BEHRAMFTropWeightedSWs = amf_2; % JLL 15 May 2015 - this is a testing AMF to see how much of a difference weighting clear/cloudy SWs vs. clear/cloudy AMFs matters
             end
         end
         
@@ -271,6 +289,7 @@ parfor j=1:length(datenums)
                 continue
             else
                 Data(z).BEHRColumnAmountNO2Trop=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTrop;
+                Data(z).BEHRColumnAmountNO2Trop_AMF2 = Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTropWeightedSWs;
                 if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
             end
         end
@@ -312,7 +331,7 @@ parfor j=1:length(datenums)
             'RelativeAzimuthAngle', [], 'AMFStrat', [], 'AMFTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
             'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'ColumnAmountNO2TropStd',[],'ColumnAmountNO2Strat',[],'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'vcdQualityFlags',{{}},...
             'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
-            'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
+            'BEHRAMFTrop', [], 'BEHRColumnAmountNO2Trop_AMF2',[],'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
         % Matlab treats structures as matrices, so we can duplicate our
         % structure to have the required number of entries just like a
         % matrix.
