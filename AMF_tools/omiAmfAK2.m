@@ -104,9 +104,16 @@ amf = cldRadFrac .* amfCld + (1-cldRadFrac).*amfClr;
 % average scattering weights
 amf_wghost = amf;
 
+% JLL 17 May 2015: The ghost correction factor is now pre calculated, so it can
+% be returned easier. Also, the AMF is now DIVIDED by it, rather than multiplied,
+% because it is the ratio of total to visible column, so V_total = V_vis * ghost, 
+% and V = S/A, so if V_total = S/A_total, and A_total = A_vis/ghost, then
+% V_total = S/(A_vis / ghost) = V_vis * ghost.
+ghost = vcdGnd ./ (vcdCld .* cldFrac + vcdGnd .* (1.-cldFrac));
+
 if numel(noGhost) == 1;
     if noGhost > 0;
-        amf  = amf .* vcdGnd ./ (vcdCld.*cldFrac  +  vcdGnd.*(1.-cldFrac));
+        amf  = amf ./ ghost;
     end
 end
 
