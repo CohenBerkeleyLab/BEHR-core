@@ -270,15 +270,16 @@ for j=1:length(datenums)
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
                 noGhost=1; ak=1;
-                [amf, ~, ~, ~, ~, ~] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+                [amf, ~, ~, scattering_weights, avg_kernels, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
                 amf(prof_i==1)=NaN;
-                %scattering_weights(prof_i==1)=NaN;
-                %avg_kernels(prof_i==1)=NaN;
+                scattering_weights(:,prof_i==1)=NaN;
+                avg_kernels(:,prof_i==1)=NaN;
+                sw_plevels(:,prof_i==1)=NaN;
                 
                 Data(d).BEHRAMFTrop = amf; %JLL 18 Mar 2014: Save the resulting AMF of the pixel
-                %Data(d).BEHRScatWeights = scattering_weights;
-                %Data(d).BEHRAvgKernels = avg_kernels;
-                Data(d).BEHRPressureLevels = pressure;
+                Data(d).BEHRScatWeights = scattering_weights';
+                Data(d).BEHRAvgKernels = avg_kernels';
+                Data(d).BEHRPressureLevels = sw_plevels';
                 %Data(d).BEHRAMFTropWeightedSWs = amf_2; % JLL 15 May 2015 - this is a testing AMF to see how much of a difference weighting clear/cloudy SWs vs. clear/cloudy AMFs matters
             end
         end
