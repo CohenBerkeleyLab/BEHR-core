@@ -78,8 +78,17 @@ vcdCld=zeros(size(pTerr));
 amfClr=zeros(size(pTerr));
 amfCld=zeros(size(pTerr));
 
+plevClr=cell(size(pTerr));
+swClr=cell(size(pTerr));
+plevCld=cell(size(pTerr));
+swCld=cell(size(pTerr));
+no2Profile3=cell(size(pTerr));
+
 for i=1:numel(pTerr)
-    vcdGnd(i) = integPr2(no2Profile1(:,i), pressure, pTerr(i));             
+    vcdGnd(i) = integPr2(no2Profile1(:,i), pressure, pTerr(i));  
+    [~, ~, no2Profile3{i}] = integPr2(no2Profile1(:,i), pressure, pTerr(i), [pTerr(i), pCld(i)]);
+    [~,plevClr{i},swClr{i}] = integPr2((dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i), [pTerr(i), pCld(i)]);
+    [~,plevCld{i},swCld{i}] = integPr2((dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i), [pTerr(i), pCld(i)]);
     if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0;
         vcdCld(i) = integPr2(no2Profile1(:,i), pressure, pCld(i));
     else
@@ -113,7 +122,7 @@ ghost = vcdGnd ./ (vcdCld .* cldFrac + vcdGnd .* (1.-cldFrac));
 
 if numel(noGhost) == 1;
     if noGhost > 0;
-        amf  = amf ./ ghost;
+        amf  = amf .* ghost;
     end
 end
 
@@ -122,32 +131,44 @@ amf = max(amf,1.e-6);   % clamp at min value (2008-06-20)
 if numel(ak) == 1;
    if ak > 0;
        % Preallocation added 13 May 2015 - JLL
-       avgKernel = nan(size(dAmfCld0));
-       sc_weights = nan(size(dAmfCld0));
+       avgKernel = cell(size(pTerr));
+       sc_weights = cell(size(pTerr));
+       sc_weights_old = zeros(size(dAmfClr0));
        % Now compute averaging kernel.............................................
 
        % These 2 sets of lines are an approximation of what we do in the OMI NO2 algorithm
        for i=1:numel(pTerr)
+           ii = find(plevClr{i} > pTerr(i));
+           if min(ii) >= 1;
+               swClr{i}(ii)=1E-30;
+           end
+           ii = find(plevCld{i} > pCld(i));
+           if min(ii) >= 1;
+               swCld{i}(ii)=1E-30;
+           end
+
+           % more temporary testing code - JLL 19 May 2015.................
            ii = find(pressure > pTerr(i));
            if min(ii) >= 1;
-               dAmfClr0(ii,i)=1E-30;
+               dAmfClr0(ii,i) = 1E-30;
            end
            ii = find(pressure > pCld(i));
            if min(ii) >= 1;
-               dAmfCld0(ii,i)=1E-30;
+               dAmfCld0(ii,i) = 1E-30;
            end
-
-           avgKernel(:,i) = (cldRadFrac(i).*dAmfCld0(:,i) + (1-cldRadFrac(i)).*dAmfClr0(:,i)) .* alpha(:,i) ./ amf(i);
+           %...............................................................
+           
+           %avgKernel(:,i) = (cldRadFrac(i).*swCld(:,i) + (1-cldRadFrac(i)).*swClr(:,i)) ./ amf(i);
            
            % Added 14-15 May 2015 to handle outputting scattering weights
            % and removing the ghost column if necessary
-           sc_weights(:,i) = (cldRadFrac(i).*dAmfCld0(:,i) + (1-cldRadFrac(i)).*dAmfClr0(:,i)) .* alpha(:,i);
-           
+           sc_weights{i} = (cldRadFrac(i).*swCld{i} + (1-cldRadFrac(i)).*swClr{i});
+           sc_weights_old(:,i) = (cldRadFrac(i).*dAmfCld0(:,i) + (1-cldRadFrac(i)).*dAmfClr0(:,i));
 
            % Temporary code to make amfs with ghost columns using the new sc weights
-           amf_avg_wghost(i) = integPr2( (no2Profile1(:,i).*sc_weights(:,i)),pressure, pTerr(i) ) ./ vcdGnd(i);
-    
-           if numel(noGhost) == 1 && noGhost > 0
+           amf_avg_wghost(i) = integPr2( (no2Profile3{i}.*sc_weights{i}),plevClr{i}, pTerr(i) ) ./ vcdGnd(i);
+           amf_old_avg_ghost(i) = integPr2( no2Profile1(:,i) .* sc_weights_old(:,i), pressure, pTerr(i) ) ./ vcdGnd(i);
+           if numel(noGhost) == 1 && noGhost > 100000
                sc_weights(:,i) = sc_weights(:,i) .* vcdGnd(i) ./ (vcdCld(i).*cldFrac(i)  +  vcdGnd(i).*(1.-cldFrac(i)));
                avgKernel(:,i) = avgKernel(:,i) .* vcdGnd(i) ./ (vcdCld(i).*cldFrac(i)  +  vcdGnd(i).*(1.-cldFrac(i)));
            end
@@ -160,7 +181,7 @@ end
 % of the clear and cloudy amfs
 amf_avg = zeros(size(pTerr));
 for i=1:numel(pTerr)
-    amf_avg(i) = integPr2( (no2Profile1(:,i).*sc_weights(:,i)), pressure, pTerr(i) ) ./ vcdGnd(i);
+    amf_avg(i) = integPr2( (no2Profile3{i}.*sc_weights{i}), plevClr{i}, pTerr(i) ) ./ vcdGnd(i);
 % if (~isnan(amf_avg(i)) && ~isnan(amf_wghost(i))) && amf_avg(i) ~= amf(i)
 %     fprintf('Avg: %f, w/ghost: %f, final: %f\n',amf_avg(i),amf_wghost(i),amf(i));
 %     dum=1;
