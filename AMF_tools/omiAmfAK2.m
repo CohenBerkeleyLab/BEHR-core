@@ -168,9 +168,8 @@ amf = max(amf,1.e-6);   % clamp at min value (2008-06-20)
 if numel(ak) == 1;
    if ak > 0;
        % Preallocation added 13 May 2015 - JLL.............................
-       avgKernel = nan(size(swPlev));
-       sc_weights = nan(size(swPlev));
-       sc_weights_old = zeros(size(dAmfClr0));
+       avgKernel = nan(size(dAmfClr));
+       sc_weights = nan(size(dAmfClr));
        % ..................................................................
        % Now compute averaging kernel.............................................
 
@@ -212,21 +211,29 @@ if numel(ak) == 1;
                dAmfCld0(ii,i) = 1E-30;
            end
            %...............................................................
+           % JLL: Added 14-15 May 2015 to handle outputting scattering
+           % weights
+           this_sc_weights = (cldRadFrac(i).*swCld_i + (1-cldRadFrac(i)).*swClr_i);
+           % Do a linear interpolation in log-log space to get the
+           % scattering weights back to the standard OMNO2 pressure bin
+           % vector - this may make it easier for end users rather than
+           % having to use slightly different pressure levels for every
+           % pixel, although we still need those extra levels up to this
+           % point to get the scattering weights right.
+           this_sc_weights_interp = interp1(log(this_swPlev), log(this_sc_weights), log(pressure));
+           sc_weights(:,i) = exp(this_sc_weights_interp);
+           %...............................................................
            
-           avgKernel(:,i) = (cldRadFrac(i).*swCld_i + (1-cldRadFrac(i)).*swClr_i) ./ amf(i);
+           avgKernel(:,i) = sc_weights(:,i) ./ amf(i);
            
-           % Added 14-15 May 2015 to handle outputting scattering weights
-           % and removing the ghost column if necessary
-           sc_weights(:,i) = (cldRadFrac(i).*swCld_i + (1-cldRadFrac(i)).*swClr_i);
-           sc_weights_old(:,i) = (cldRadFrac(i).*dAmfCld0(:,i) + (1-cldRadFrac(i)).*dAmfClr0(:,i));
+           
+           
 
            % Temporary code to make amfs with ghost columns using the new sc weights
            if sum(not_nans_i) > 0
-            amf_avg_wghost(i) = integPr2( (no2Profile3{i}.*sc_weights(not_nans_i,i)),swPlev(not_nans_i,i), pTerr(i) ) ./ vcdGnd(i);
-            amf_old_avg_ghost(i) = integPr2( no2Profile1(:,i) .* sc_weights_old(:,i), pressure, pTerr(i) ) ./ vcdGnd(i);
+            amf_avg_wghost(i) = integPr2( (no2Profile1(:,i).*sc_weights(:,i)),pressure, pTerr(i) ) ./ vcdGnd(i);
            else
                amf_avg_wghost(i) = nan;
-               amf_old_avg_ghost(i) = nan;
            end
        end
    end
