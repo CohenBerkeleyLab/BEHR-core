@@ -45,7 +45,7 @@
 %   Josh Laughner <joshlaugh5@gmail.com> 
 
 %function [amf, amfCld, amfClr, avgKernel, vcd, vcdAvgKernel] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
-function [amf, amfCld, amfClr, sc_weights, avgKernel, swPlev] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
+function [amf, amfCld, amfClr, sc_weights, avgKernel, no2Profile3, swPlev] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
 
 
 % Each profile is expected to be a column in the no2Profile matrix.  Check
@@ -89,7 +89,7 @@ amfCld=zeros(size(pTerr));
 swPlev=zeros(size(no2Profile1)+[2, 0]);
 swClr=zeros(size(no2Profile1)+[2, 0]);
 swCld=zeros(size(no2Profile1)+[2, 0]);
-no2Profile3=cell(size(pTerr));
+no2Profile3=zeros(size(no2Profile1)+[2, 0]);
 nP = size(swPlev,1);
 %..........................................................................
 
@@ -116,7 +116,7 @@ for i=1:numel(pTerr)
     % Added these lines to interpolate to the terrain & cloud pressures and
     % output a vector - this results in better agreement between our AMF and
     % the AMF calculated from "published" scattering weights.
-    [~, ~, no2Profile3{i}] = integPr2(no2Profile1(:,i), pressure, pTerr(i), [pTerr(i), pCld(i)]);
+    [~, ~, this_no2Profile3] = integPr2(no2Profile1(:,i), pressure, pTerr(i), [pTerr(i), pCld(i)]);
     [~,this_swPlev,this_swClr] = integPr2((dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i), [pTerr(i), pCld(i)]);
     [~,~,this_swCld] = integPr2((dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i), [pTerr(i), pCld(i)]);
     
@@ -126,6 +126,8 @@ for i=1:numel(pTerr)
         E.badvar('this_swClr', 'Must be a column vector');
     elseif ~iscolumn(this_swCld)
         E.badvar('this_swCld', 'Must be a column vector');
+    elseif ~iscolumn(this_no2Profile3)
+        E.badvar('this_no2Profile3', 'Must be a column vector');
     end
     
     % Pad with NaNs if there are fewer than nP (number of pressures in the
@@ -135,10 +137,12 @@ for i=1:numel(pTerr)
     this_swPlev = padarray(this_swPlev, nP - length(this_swPlev), nan, 'post');
     this_swClr = padarray(this_swClr, nP -  length(this_swClr), nan, 'post');
     this_swCld = padarray(this_swCld, nP - length(this_swCld), nan, 'post');
+    this_no2Profile3 = padarray(this_no2Profile3, nP - length(this_no2Profile3), nan, 'post');
     
     swPlev(:,i) = this_swPlev;
     swClr(:,i) = this_swClr;
     swCld(:,i) = this_swCld;
+    no2Profile3(:,i) = this_no2Profile3;
     %......................................................................
 
 end
@@ -170,7 +174,6 @@ if numel(ak) == 1;
        % Preallocation added 13 May 2015 - JLL.............................
        avgKernel = nan(size(swPlev));
        sc_weights = nan(size(swPlev));
-       sc_weights_old = zeros(size(dAmfClr0));
        % ..................................................................
        % Now compute averaging kernel.............................................
 
@@ -212,22 +215,11 @@ if numel(ak) == 1;
                dAmfCld0(ii,i) = 1E-30;
            end
            %...............................................................
-           
-           avgKernel(:,i) = (cldRadFrac(i).*swCld_i + (1-cldRadFrac(i)).*swClr_i) ./ amf(i);
-           
            % Added 14-15 May 2015 to handle outputting scattering weights
-           % and removing the ghost column if necessary
+           % 
            sc_weights(:,i) = (cldRadFrac(i).*swCld_i + (1-cldRadFrac(i)).*swClr_i);
-           sc_weights_old(:,i) = (cldRadFrac(i).*dAmfCld0(:,i) + (1-cldRadFrac(i)).*dAmfClr0(:,i));
-
-           % Temporary code to make amfs with ghost columns using the new sc weights
-           if sum(not_nans_i) > 0
-            amf_avg_wghost(i) = integPr2( (no2Profile3{i}.*sc_weights(not_nans_i,i)),swPlev(not_nans_i,i), pTerr(i) ) ./ vcdGnd(i);
-            amf_old_avg_ghost(i) = integPr2( no2Profile1(:,i) .* sc_weights_old(:,i), pressure, pTerr(i) ) ./ vcdGnd(i);
-           else
-               amf_avg_wghost(i) = nan;
-               amf_old_avg_ghost(i) = nan;
-           end
+           %...............................................................
+           avgKernel(:,i) = sc_weights(:,i) ./ amf(i); % JLL 19 May 2015 - changed to use the scattering weights we're already calculating.
        end
    end
 end
