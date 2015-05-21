@@ -142,7 +142,7 @@ for i = 1:n-1;
     
 end
 
-if any(isnan(deltaVcd(i0:n-1)))
+if any(isnan(deltaVcd(i0:n-1))) && ~all(isnan(deltaVcd(i0:n-1)))
     warning('NaNs detected in partial columns. They will not be added into the total column density.')
 end
 vcd = nansum2(deltaVcd(i0:n-1));

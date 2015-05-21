@@ -45,7 +45,7 @@
 %   Josh Laughner <joshlaugh5@gmail.com> 
 
 %function [amf, amfCld, amfClr, avgKernel, vcd, vcdAvgKernel] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
-function [amf, amfCld, amfClr, sc_weights, avgKernel, no2Profile3, swPlev] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
+function [amf, amfCld, amfClr, sc_weights, avgKernel, no2Profile3, swPlev, ghost] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
 
 
 % Each profile is expected to be a column in the no2Profile matrix.  Check
@@ -150,15 +150,12 @@ end
 
 amf = cldRadFrac .* amfCld + (1-cldRadFrac).*amfClr;
 
-% save this pre-ghost AMF for comparison against the amf derived from
-% average scattering weights
-amf_wghost = amf;
 
 % JLL 17 May 2015: The ghost correction factor is now pre calculated, so it can
-% be returned easier. Also, the AMF is now DIVIDED by it, rather than multiplied,
-% because it is the ratio of total to visible column, so V_total = V_vis * ghost, 
-% and V = S/A, so if V_total = S/A_total, and A_total = A_vis/ghost, then
-% V_total = S/(A_vis / ghost) = V_vis * ghost.
+% be returned easier. Also, should the AMF be DIVIDED by it, rather than
+% multiplied? It is the ratio of total to visible column, so
+% V_total = V_vis * ghost, and V = S/A, so if V_total = S/A_total, and
+% A_total = A_vis/ghost, then V_total = S/(A_vis / ghost) = V_vis * ghost.
 ghost = vcdGnd ./ (vcdCld .* cldFrac + vcdGnd .* (1.-cldFrac));
 
 if numel(noGhost) == 1;

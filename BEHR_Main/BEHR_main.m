@@ -179,7 +179,7 @@ if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
-for j=1:length(datenums)
+parfor j=1:length(datenums)
     %Read the desired year, month, and day
   	R=datenums(j);
     date=datestr(R,26);
@@ -270,19 +270,20 @@ for j=1:length(datenums)
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
                 noGhost=1; ak=1;
-                [amf, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+                [amf, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels, ghost_fraction] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
                 amf(prof_i==1)=NaN;
                 scattering_weights(:,prof_i==1)=NaN;
                 avg_kernels(:,prof_i==1)=NaN;
                 sw_plevels(:,prof_i==1)=NaN;
                 no2_prof_interp(:,prof_i==1)=NaN;
+                ghost_fraction(prof_i==1)=NaN;
                 
                 Data(d).BEHRAMFTrop = amf; %JLL 18 Mar 2014: Save the resulting AMF of the pixel
-                Data(d).BEHRScatWeights = scattering_weights';
+                Data(d).BEHRGhostFraction = ghost_fraction;
+                Data(d).BEHRScatteringWeights = scattering_weights';
                 Data(d).BEHRAvgKernels = avg_kernels';
                 Data(d).BEHRNO2apriori = no2_prof_interp';
                 Data(d).BEHRPressureLevels = sw_plevels';
-                %Data(d).BEHRAMFTropWeightedSWs = amf_2; % JLL 15 May 2015 - this is a testing AMF to see how much of a difference weighting clear/cloudy SWs vs. clear/cloudy AMFs matters
             end
         end
         
@@ -292,7 +293,6 @@ for j=1:length(datenums)
                 continue
             else
                 Data(z).BEHRColumnAmountNO2Trop=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTrop;
-                Data(z).BEHRColumnAmountNO2Trop_AMF2 = Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTropWeightedSWs;
                 if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
             end
         end
@@ -334,7 +334,7 @@ for j=1:length(datenums)
             'RelativeAzimuthAngle', [], 'AMFStrat', [], 'AMFTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
             'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'ColumnAmountNO2TropStd',[],'ColumnAmountNO2Strat',[],'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'vcdQualityFlags',{{}},...
             'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
-            'BEHRAMFTrop', [], 'BEHRColumnAmountNO2Trop_AMF2',[],'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
+            'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
         % Matlab treats structures as matrices, so we can duplicate our
         % structure to have the required number of entries just like a
         % matrix.
