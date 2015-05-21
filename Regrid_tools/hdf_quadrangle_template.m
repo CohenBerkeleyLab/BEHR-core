@@ -1,4 +1,4 @@
-function OMI = hdf_quadrangle_template(Data, maxx, minx, maxy, miny, lCoordLon, lCoordLat, Lon1, Lon2, Lon4, Lat1, Lat2, Lat4)
+function OMI = hdf_quadrangle_template(Data, OMI, maxx, minx, maxy, miny, lCoordLon, lCoordLat, Lon1, Lon2, Lon4, Lat1, Lat2, Lat4)
 
 % hdf_quadrangle_general: Version of hdf_quadrangle_5km_new by Ashley
 % Russell from 11/19/2009 that serves as the template for oversampled
@@ -32,7 +32,8 @@ function OMI = hdf_quadrangle_template(Data, maxx, minx, maxy, miny, lCoordLon, 
 % oversampled grid.  Those expected to receive quality flags will be cell
 % arrays instead.
 
-%$f $field=zeros(maxx,maxy);
+fill_val = -9e9;
+%$f $field=fill_val * ones(maxx,maxy);
 Count = zeros(maxx, maxy);
 Area = nan(maxx, maxy);
 Areaweight = nan(maxx, maxy);
@@ -205,5 +206,14 @@ OMI.Count = Count;
 OMI.Area = Area;
 OMI.Areaweight = Areaweight;
 %$c OMI.$cellfield = $cellfield;
+
+% Replace fill values with NaNs. Of course, we can only do this for numeric
+% fields, not cells or structs
+fns = fieldnames(OMI);
+for a=1:numel(fns)
+    if isnumeric(OMI.(fns{a}))
+        OMI.(fns{a})(OMI.(fns{a}) == fill_val) = NaN;
+    end
+end
 
 end
