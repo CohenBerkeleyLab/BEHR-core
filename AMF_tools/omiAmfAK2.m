@@ -45,7 +45,7 @@
 %   Josh Laughner <joshlaugh5@gmail.com> 
 
 %function [amf, amfCld, amfClr, avgKernel, vcd, vcdAvgKernel] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
-function [amf, amfCld, amfClr, sc_weights, avgKernel, amf_avg] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
+function [amf, amfCld, amfClr, sc_weights, avgKernel] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak)
 
 
 % Each profile is expected to be a column in the no2Profile matrix.  Check
@@ -151,16 +151,16 @@ end
 % Temporary code to double check that the a priori profile convolved with
 % the cloud-weighted scattering weights is the same as the weighted average
 % of the clear and cloudy amfs
-amf_avg = zeros(size(pTerr));
-for i=1:numel(pTerr)
-    amf_avg(i) = integPr2( (no2Profile1(:,i).*sc_weights(:,i)), pressure, pTerr(i) ) ./ vcdGnd(i);
+% amf_avg = zeros(size(pTerr));
+% for i=1:numel(pTerr)
+%     amf_avg(i) = integPr2( (no2Profile1(:,i).*sc_weights(:,i)), pressure, pTerr(i) ) ./ vcdGnd(i);
 % if (~isnan(amf_avg(i)) && ~isnan(amf_wghost(i))) && amf_avg(i) ~= amf(i)
 %     fprintf('Avg: %f, w/ghost: %f, final: %f\n',amf_avg(i),amf_wghost(i),amf(i));
 %     dum=1;
 % end
 end
 % 
-dum=1;
+
 
 % Integrate NO2 profile with and without averaging kernel .................
 %            ii           = find(pressure >= minPressure);

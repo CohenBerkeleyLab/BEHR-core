@@ -53,8 +53,6 @@ AMFTrop=fill_val * ones(maxx,maxy);
 AMFStrat=fill_val * ones(maxx,maxy);
 TropopausePressure=fill_val * ones(maxx,maxy);
 
-BEHRColumnAmountNO2Trop_AMF2=fill_val * ones(maxx,maxy);
-
 Count = zeros(maxx, maxy);
 Area = nan(maxx, maxy);
 Areaweight = nan(maxx, maxy);
@@ -167,7 +165,6 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     vcdQualityFlags_val = Data.vcdQualityFlags(x);
     XTrackQualityFlags_val = Data.XTrackQualityFlags(x);
     
-    BEHRColumnAmountNO2Trop_AMF2_val = Data.BEHRColumnAmountNO2Trop_AMF2(x);
     
     
     %dim=[maxx maxy];
@@ -220,7 +217,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                 % there, average the new and existing measurements,
                 % weighted by the number of measurments that went into the
                 % existing average
-                if BEHRColumnAmountNO2Trop(x_quad, y_quad) ~= fill_val && ~isnan(Data.BEHRColumnAmountNO2Trop(x,y));
+                if BEHRColumnAmountNO2Trop(x_quad, y_quad) ~= fill_val && ~isnan(BEHRColumnAmountNO2Trop_val); % JLL 27 May 2015 - changed from Data.BEHRColumnAmountNO2Trop(x,y) to the _val version - see comment at the elseif for why
                     % Count, area, and areaweight require special handling
                     Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                     Area(x_quad,y_quad)=nansum([Area(x_quad,y_quad)*(Count(x_quad,y_quad)-1), pixelarea])/(Count(x_quad, y_quad));
@@ -255,9 +252,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     Swath(x_quad, y_quad) = sum([Swath(x_quad, y_quad)*(Count(x_quad, y_quad)-1), Swath_val])/Count(x_quad,y_quad);
                     AMFTrop(x_quad, y_quad) = sum([AMFTrop(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFTrop_val])/Count(x_quad,y_quad);
                     AMFStrat(x_quad, y_quad) = sum([AMFStrat(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFStrat_val])/Count(x_quad,y_quad);
-                    TropopausePressure(x_quad, y_quad) = sum([TropopausePressure(x_quad, y_quad)*(Count(x_quad, y_quad)-1), TropopausePressure_val])/Count(x_quad,y_quad);
-                    
-                    BEHRColumnAmountNO2Trop_AMF2(x_quad, y_quad) = sum([BEHRColumnAmountNO2Trop_AMF2(x_quad, y_quad)*(Count(x_quad, y_quad)-1), BEHRColumnAmountNO2Trop_AMF2_val])/Count(x_quad,y_quad);
+                    TropopausePressure(x_quad, y_quad) = sum([TropopausePressure(x_quad, y_quad)*(Count(x_quad, y_quad)-1), TropopausePressure_val])/Count(x_quad,y_quad);                    
                     
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
@@ -266,7 +261,13 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     XTrackQualityFlags(x_quad, y_quad) = {[XTrackQualityFlags{x_quad, y_quad}, XTrackQualityFlags_val]};
                     
                     % If there is no existing field
-                elseif ~isnan(Data.BEHRColumnAmountNO2Trop(x,y)) %JLL 19 Mar 2014: I added the logical test here, before this was just an 'else' statement, but it would make sense not to add a value if there was no valid NO2 column.
+                elseif ~isnan(BEHRColumnAmountNO2Trop_val) %JLL 19 Mar 2014: I added the logical test here, before this was just an 'else' statement, but it would make sense not to add a value if there was no valid NO2 column.
+                    % JLL 27 Mar 2015 - changed from
+                    % Data.BEHRColumnAmountNO2Trop(x,y) to
+                    % BEHRColumnAmountNO2Trop_val because we already find
+                    % this pixels value once - why do it again? Also
+                    % handles switching to 2-D variables (from 1-D) better.
+                    
                     % Count, area, and areaweight require special handling
                     Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                     Area(x_quad,y_quad)=pixelarea;
@@ -303,7 +304,6 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     AMFStrat(x_quad, y_quad) = AMFStrat_val;
                     TropopausePressure(x_quad, y_quad) = TropopausePressure_val;
                     
-                    BEHRColumnAmountNO2Trop_AMF2(x_quad, y_quad) = BEHRColumnAmountNO2Trop_AMF2_val;
                     
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
@@ -351,8 +351,6 @@ OMI.Areaweight = Areaweight;
 OMI.TropopausePressure = TropopausePressure;
 OMI.vcdQualityFlags = vcdQualityFlags;
 OMI.XTrackQualityFlags = XTrackQualityFlags;
-
-OMI.BEHRColumnAmountNO2Trop_AMF2 = BEHRColumnAmountNO2Trop_AMF2;
 
 % Replace fill values with NaNs. Of course, we can only do this for numeric
 % fields, not cells or structs

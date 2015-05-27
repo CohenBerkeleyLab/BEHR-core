@@ -82,7 +82,7 @@ end
 %****************************%
 if nargin < 2
     date_start='2013/08/01';
-    date_end='2013/08/31';
+    date_end='2013/08/06';
 end
 %****************************%
 
@@ -344,7 +344,7 @@ parfor j=1:length(datenums)
             
             %This will handle values that only have a single value per swath.
             %They are still converted to double precision numbers and pivoted.
-            offset = [(min(i_i)-1)];
+            offset = [(min(i_i)-1)]; % need to change to 0-based indexing for HDF files
             slabsize = [length(cut_y)];
             memspaceID = H5S.create_simple(length(slabsize), slabsize, slabsize);
             
@@ -356,16 +356,18 @@ parfor j=1:length(datenums)
             datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'SpacecraftLongitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); SpacecraftLongitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); SpacecraftLongitude=double(SpacecraftLongitude); SpacecraftLongitude=SpacecraftLongitude';
             %Time
             datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'Time')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); Time = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); Time=double(Time); Time=Time';
-            Time=repmat(Time,1,60);
+            Time=repmat(Time',1,60);
             
             
             
-            %Deletes any point that falls outside of the boundaries specified.
+            %Deletes any rows that have no points in the domain specified
+            %Lon and Lat will be used
             Lat=Latitude; Lon=Longitude;
-            x=find(Lon>lonmax | Lon<lonmin);
-            y=find(Lat>latmax | Lat<latmin);
-            Lon(x)=NaN;     Lon(y)=NaN;     Lon(isnan(Lon))=[];
-            Lat(x)=NaN;     Lat(y)=NaN;     Lat(isnan(Lat))=[];
+            x = Lon < lonmax & Lon > lonmin;
+            y = Lat < latmax & Lat > latmin;
+            rows_to_keep = any(x,2) & any(y,2);
+            Lon = Lon(rows_to_keep,:);
+            Lat = Lat(rows_to_keep,:);
             
             
             time_ind = regexp(filename,'t\d\d\d\d-o');
@@ -386,11 +388,10 @@ parfor j=1:length(datenums)
                 lat = corners(:,:,2,5); %Assign the center of each pixel to lat and lon
                 lon = corners(:,:,1,5);
                 latcorn = corners(:,:,2,1:4); latcorn = squeeze(latcorn);
-                a = latcorn(:,:,1); a = a(:); b = latcorn(:,:,2); b = b(:); c = latcorn(:,:,3); c = c(:); d = latcorn(:,:,4); d = d(:);
-                latcorn = [a,b,c,d]; latcorn = latcorn';
+                latcorn = permute(latcorn,[3,1,2]);
                 loncorn = corners(:,:,1,1:4); loncorn = squeeze(loncorn);
-                a = loncorn(:,:,1); a = a(:); b = loncorn(:,:,2); b = b(:); c = loncorn(:,:,3); c = c(:); d = loncorn(:,:,4); d = d(:);
-                loncorn = [a,b,c,d]; loncorn = loncorn';
+                loncorn = permute(loncorn,[3,1,2]);
+                
                 
                 if DEBUG_LEVEL > 0; fprintf('\n Importing OMI data fields \n'); end
                 
@@ -465,65 +466,61 @@ parfor j=1:length(datenums)
                 RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle);
                 RelativeAzimuthAngle(RelativeAzimuthAngle > 180)=360-RelativeAzimuthAngle(RelativeAzimuthAngle > 180);
                 
-                % Use Inf instead of NaN here because some days seems to
-                % have NaN values populated in NO2/NO2 Trop column density,
-                % with the result that this section causes unequal removal
-                % of matrix elements if NaNs used as markers.
-                %x=find(lon<lonmin | lon>lonmax);
-                %y=find(lat<latmin | lat>latmax);
-                x = find((lon < lonmin | lon > lonmax) | (lat < latmin | lat > latmax));
-                lon(x)=[];                         %lon(y)=Inf;                         lon(isinf(lon))=[];
-                lat(x)=[];                         %lat(y)=Inf;                         lat(isinf(lat))=[];
-                loncorn(:,x)=[];                   %loncorn(:,y)=Inf;                   loncorn(:,any(isinf(loncorn))) = [];
-                latcorn(:,x)=[];                   %latcorn(:,y)=Inf;                   latcorn(:,any(isinf(latcorn))) = [];
-                FoV75CornerLatitude(:,x)=[];       %FoV75CornerLatitude(:,y)=Inf;       FoV75CornerLatitude(:,any(isinf(FoV75CornerLatitude))) = [];
-                FoV75CornerLongitude(:,x)=[];      %FoV75CornerLongitude(:,y)=Inf;      FoV75CornerLongitude(:,any(isinf(FoV75CornerLongitude))) = [];
-                SolarAzimuthAngle(x)=[];           %SolarAzimuthAngle(y)=Inf;           SolarAzimuthAngle(isinf(SolarAzimuthAngle))=[];
-                SolarZenithAngle(x)=[];            %SolarZenithAngle(y)=Inf;            SolarZenithAngle(isinf(SolarZenithAngle))=[];
-                ViewingAzimuthAngle(x)=[];         %ViewingAzimuthAngle(y)=Inf;         ViewingAzimuthAngle(isinf(ViewingAzimuthAngle))=[];
-                ViewingZenithAngle(x)=[];          %ViewingZenithAngle(y)=Inf;          ViewingZenithAngle(isinf(ViewingZenithAngle))=[];
-                Time(x)=[];                        %Time(y)=Inf;                        Time(isinf(Time))=[];
-                AMFStrat(x)=[];                    %AMFStrat(y)=Inf;                    AMFStrat(isinf(AMFStrat))=[];
-                AMFTrop(x)=[];                     %AMFTrop(y)=Inf;                     AMFTrop(isinf(AMFTrop))=[];
-                CloudFraction(x)=[];               %CloudFraction(y)=Inf;               CloudFraction(isinf(CloudFraction))=[];
-                CloudPressure(x)=[];               %CloudPressure(y)=Inf;               CloudPressure(isinf(CloudPressure))=[];
-                CloudRadianceFraction(x)=[];       %CloudRadianceFraction(y)=Inf;       CloudRadianceFraction(isinf(CloudRadianceFraction))=[];
-                ColumnAmountNO2(x)=[];             %ColumnAmountNO2(y)=Inf;             ColumnAmountNO2(isinf(ColumnAmountNO2))=[];
-                SlantColumnAmountNO2(x)=[];        %SlantColumnAmountNO2(y)=Inf;        SlantColumnAmountNO2(isinf(SlantColumnAmountNO2))=[];
-                TerrainHeight(x)=[];               %TerrainHeight(y)=Inf;               TerrainHeight(isinf(TerrainHeight))=[];
-                TerrainPressure(x)=[];             %TerrainPressure(y)=Inf;             TerrainPressure(isinf(TerrainPressure))=[];
-                TerrainReflectivity(x)=[];         %TerrainReflectivity(y)=Inf;         TerrainReflectivity(isinf(TerrainReflectivity))=[];
-                TropopausePressure(x) = [];
-                vcdQualityFlags(x)=[];             %vcdQualityFlags(y)=Inf;             vcdQualityFlags(isinf(vcdQualityFlags))=[];
-                XTrackQualityFlags(x)=[];          %XTrackQualityFlags(y)=Inf;          XTrackQualityFlags(isinf(XTrackQualityFlags))=[];
-                RelativeAzimuthAngle(x)=[];        %RelativeAzimuthAngle(y)=Inf;        RelativeAzimuthAngle(isinf(RelativeAzimuthAngle))=[];
-                ColumnAmountNO2Trop(x)=[];         %ColumnAmountNO2Trop(y)=Inf;         ColumnAmountNO2Trop(isinf(ColumnAmountNO2Trop))=[];
-                ColumnAmountNO2Strat(x)=[];
-                ColumnAmountNO2TropStd(x) = [];
-                Row(x)=[];                         %Row(y)=Inf;                         Row(isinf(Row))=[];
-                Pixel(x)=[];
-                Swath(x)=[];                       %Swath(y)=Inf;                       Swath(isinf(Swath))=[];
+                % We already identified what rows to keep, so we'll reuse
+                % that here 
+                lon(~rows_to_keep,:)=[];                         
+                lat(~rows_to_keep,:)=[];                         
+                loncorn(:,~rows_to_keep,:)=[];                   
+                latcorn(:,~rows_to_keep,:)=[];                   
+                FoV75CornerLatitude(:,~rows_to_keep,:)=[];       
+                FoV75CornerLongitude(:,~rows_to_keep,:)=[];      
+                SolarAzimuthAngle(~rows_to_keep,:)=[];           
+                SolarZenithAngle(~rows_to_keep,:)=[];            
+                ViewingAzimuthAngle(~rows_to_keep,:)=[];         
+                ViewingZenithAngle(~rows_to_keep,:)=[];          
+                Time(~rows_to_keep,:)=[];                        
+                AMFStrat(~rows_to_keep,:)=[];                    
+                AMFTrop(~rows_to_keep,:)=[];                     
+                CloudFraction(~rows_to_keep,:)=[];               
+                CloudPressure(~rows_to_keep,:)=[];               
+                CloudRadianceFraction(~rows_to_keep,:)=[];       
+                ColumnAmountNO2(~rows_to_keep,:)=[];             
+                SlantColumnAmountNO2(~rows_to_keep,:)=[];        
+                TerrainHeight(~rows_to_keep,:)=[];               
+                TerrainPressure(~rows_to_keep,:)=[];             
+                TerrainReflectivity(~rows_to_keep,:)=[];         
+                TropopausePressure(~rows_to_keep,:) = [];
+                vcdQualityFlags(~rows_to_keep,:)=[];             
+                XTrackQualityFlags(~rows_to_keep,:)=[];          
+                RelativeAzimuthAngle(~rows_to_keep,:)=[];        
+                ColumnAmountNO2Trop(~rows_to_keep,:)=[];         
+                ColumnAmountNO2Strat(~rows_to_keep,:)=[];
+                ColumnAmountNO2TropStd(~rows_to_keep,:) = [];
+                Row(~rows_to_keep,:)=[];                         
+                Pixel(~rows_to_keep,:)=[];
+                Swath(~rows_to_keep,:)=[];                       
                 
                 if DEBUG_LEVEL > 0; disp(' Saving imported OMI fields to "Data"'); end
-                %Save the imported items to the structure 'Data'.  As is,
-                %these structures will be vectors.
-                Data(E).Latitude = lat(:);                                  Data(E).LatBdy = [latmin latmax];
-                Data(E).Longitude = lon(:);                                 Data(E).LonBdy = [lonmin lonmax];
-                Data(E).Loncorn = loncorn(1:4,:);                           Data(E).FoV75CornerLongitude = FoV75CornerLongitude(1:4,:);
-                Data(E).Latcorn = latcorn(1:4,:);                           Data(E).FoV75CornerLatitude = FoV75CornerLatitude(1:4,:);
-                Data(E).SolarAzimuthAngle = SolarAzimuthAngle(:);           Data(E).AMFTrop = AMFTrop(:);
-                Data(E).SolarZenithAngle = SolarZenithAngle(:);             Data(E).AMFStrat = AMFStrat(:);
-                Data(E).ViewingAzimuthAngle = ViewingAzimuthAngle(:);       Data(E).TerrainHeight = TerrainHeight(:);
-                Data(E).ViewingZenithAngle = ViewingZenithAngle(:);         Data(E).TerrainPressure = TerrainPressure(:);
-                Data(E).Time = Time(:);                                     Data(E).TerrainReflectivity = TerrainReflectivity(:);
-                Data(E).ColumnAmountNO2 = ColumnAmountNO2(:);               Data(E).vcdQualityFlags = vcdQualityFlags(:);
-                Data(E).ColumnAmountNO2Trop = ColumnAmountNO2Trop(:);       Data(E).SlantColumnAmountNO2 = SlantColumnAmountNO2(:);
-                Data(E).ColumnAmountNO2TropStd = ColumnAmountNO2TropStd(:); Data(E).ColumnAmountNO2Strat = ColumnAmountNO2Strat(:);
-                Data(E).CloudRadianceFraction = CloudRadianceFraction(:);   Data(E).CloudPressure = CloudPressure(:);
-                Data(E).RelativeAzimuthAngle = RelativeAzimuthAngle(:);     Data(E).CloudFraction = CloudFraction(:);
-                Data(E).Row = Row(:);                                       Data(E).XTrackQualityFlags = XTrackQualityFlags(:);
-                Data(E).Swath = Swath(:);                                   Data(E).Date=date;
-                Data(E).TropopausePressure = TropopausePressure(:);         Data(E).Pixel=Pixel(:);
+                %Save the imported items to the structure 'Data'.  Changed
+                %on 21 May 2015 so that these matrices will retain their
+                %shape
+                Data(E).Latitude = lat;                                  Data(E).LatBdy = [latmin latmax];
+                Data(E).Longitude = lon;                                 Data(E).LonBdy = [lonmin lonmax];
+                Data(E).Loncorn = loncorn;                               Data(E).FoV75CornerLongitude = FoV75CornerLongitude;
+                Data(E).Latcorn = latcorn;                               Data(E).FoV75CornerLatitude = FoV75CornerLatitude;
+                Data(E).SolarAzimuthAngle = SolarAzimuthAngle;           Data(E).AMFTrop = AMFTrop;
+                Data(E).SolarZenithAngle = SolarZenithAngle;             Data(E).AMFStrat = AMFStrat;
+                Data(E).ViewingAzimuthAngle = ViewingAzimuthAngle;       Data(E).TerrainHeight = TerrainHeight;
+                Data(E).ViewingZenithAngle = ViewingZenithAngle;         Data(E).TerrainPressure = TerrainPressure;
+                Data(E).Time = Time;                                     Data(E).TerrainReflectivity = TerrainReflectivity;
+                Data(E).ColumnAmountNO2 = ColumnAmountNO2;               Data(E).vcdQualityFlags = vcdQualityFlags;
+                Data(E).ColumnAmountNO2Trop = ColumnAmountNO2Trop;       Data(E).SlantColumnAmountNO2 = SlantColumnAmountNO2;
+                Data(E).ColumnAmountNO2TropStd = ColumnAmountNO2TropStd; Data(E).ColumnAmountNO2Strat = ColumnAmountNO2Strat;
+                Data(E).CloudRadianceFraction = CloudRadianceFraction;   Data(E).CloudPressure = CloudPressure;
+                Data(E).RelativeAzimuthAngle = RelativeAzimuthAngle;     Data(E).CloudFraction = CloudFraction;
+                Data(E).Row = Row;                                       Data(E).XTrackQualityFlags = XTrackQualityFlags;
+                Data(E).Swath = Swath;                                   Data(E).Date=date;
+                Data(E).TropopausePressure = TropopausePressure;         Data(E).Pixel=Pixel;
                 
                 %Add MODIS cloud info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
@@ -531,17 +528,7 @@ parfor j=1:length(datenums)
                 %Convert the OMI date to a Julian calendar day
                 d2=1+datenum(str2double(year),str2double(month),str2double(day))-datenum(str2double(year),1,1);
                 julian_day = sprintf('%03d',d2);
-                % JLL 01-15-2015: line above is a more elegant way of doing
-                % the next several (commented out) lines.  Remove the
-                % following lines if the above method works.
-%                 x=numel(num2str(d2));
-%                 if x==1;
-%                     julian_day=(['00',num2str(d2)]);
-%                 elseif x==2;
-%                     julian_day=(['0',num2str(d2)]);
-%                 elseif x==3;
-%                     julian_day=num2str(d2);
-%                 end
+                
                 
                 %Find all MODIS files that occur after the current OMI file
                 %but before the next OMI file.
@@ -610,9 +597,10 @@ parfor j=1:length(datenums)
                 %MODIS cloud pixels in each OMI pixel and average them
                 %together.
                 if isempty(mod_Data.Longitude)
-                    Data(E).MODISCloud=-127*ones(length(Data(E).Latitude),1);
+                    Data(E).MODISCloud=behr_fill_val()*ones(size(Data(E).Latitude));
                 else
-                    for jj=1:length(Data(E).Latitude);
+                    Data(E).MODISCloud=nan(size(Data(E).Latitude));
+                    for jj=1:numel(Data(E).Latitude);
                         x1 = Data(E).Loncorn(1,jj);   y1 = Data(E).Latcorn(1,jj);
                         x2 = Data(E).Loncorn(2,jj);   y2 = Data(E).Latcorn(2,jj);
                         x3 = Data(E).Loncorn(3,jj);   y3 = Data(E).Latcorn(3,jj);
@@ -624,7 +612,8 @@ parfor j=1:length(datenums)
                         
                         cld_vals=mod_Data.CloudFraction(xx_cld);
                         cld_vals(isnan(cld_vals))=[];
-                        Data(E).MODISCloud(jj,1)=mean(cld_vals);
+                        
+                        Data(E).MODISCloud(jj)=mean(cld_vals);
                         Data(E).MODIS_Cloud_File=mod_filename;
                         
                     end
@@ -735,7 +724,6 @@ parfor j=1:length(datenums)
                 if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
                 
                 GLOBETerpres = zeros(size(Data(E).Latitude));
-                %GLOBETerHeight = zeros(size(Data(E).Latitude));
                 
                 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
                 %corner and terpres(end, end) is in the NE corner.
@@ -779,7 +767,6 @@ parfor j=1:length(datenums)
                 end
                 
                 Data(E).GLOBETerpres = GLOBETerpres;
-                %Data(E).GLOBEHeight = GLOBETerHeight;
                 
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

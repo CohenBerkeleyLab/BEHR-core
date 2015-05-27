@@ -205,8 +205,8 @@ attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric A
                 'BEHR_R_ColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], behrfill, 'BEHR-InSitu', 'BEHR Tropospheric NO2 VCD calculated with the in situ AMF';...
                 'ProfileCount', 'unitless', [0, Inf], behrfill, 'BEHR-InSitu', 'Number of aircraft profiles averaged to create the in situ a priori NO2 profile';...
                 'InSituFlags', 'bit array flag', 'N/A', nofill, 'BEHR-InSitu', 'In situ profile quality flag';...
-                'BEHRColumnAmountNO2Trop_L3',[0, Inf], behrfill, 'BEHR-L3','BEHR tropospheric NO2 VCDs filtered for quality and row anomaly';...
-                'BEHRColumnAmountNO2Trop_L3MODISCloud',[0, Inf], behrfill, 'BEHR-L3','BEHR tropospheric NO2 VCDs additionally filtered for MODIS Cloud < 20%';...
+                'BEHRColumnAmountNO2Trop_L3','molec./cm^2',[0, Inf], behrfill, 'BEHR-L3','BEHR tropospheric NO2 VCDs filtered for quality and row anomaly';...
+                'BEHRColumnAmountNO2Trop_L3MODISCloud','molec./cm^2',[0, Inf], behrfill, 'BEHR-L3','BEHR tropospheric NO2 VCDs additionally filtered for MODIS Cloud < 20%';...
                 };
             
 fns = fieldnames(attr);
@@ -269,9 +269,9 @@ for d=1:numel(Data_in)
     swath_id = max(Data_in(d).Swath(:));
     group_name = sprintf('/Data/Swath%d',swath_id);
     
-    if swath_id == 0
-        % A swath ID of 0 means that no pixels were gridded, so skip this
-        % swath has it has no useful data.
+    if swath_id == 0 || isnan(swath_id)
+        % A swath ID of 0 or NaN means that no pixels were gridded, so skip
+        % this swath since has it has no useful data.
         continue
     end
     
