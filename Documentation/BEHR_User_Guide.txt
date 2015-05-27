@@ -1,0 +1,77 @@
+BEHR PRODUCT USER GUIDE
+
+Josh Laughner - 20 May 2015
+jlaughner@berkeley.edu
+
+=================================
+1. References
+=================================
+
+    Russell, et al. (2011) Atmos. Chem. Phys. 11, 8543-8554.
+
+=================================
+2. Available products
+=================================
+
+
+
+=================================
+2. Recommended filtering criteria
+=================================
+
+    When filtering the pixels, I look for 6 criteria:
+        1) The VCD must be > 0 (values < 0 are present in the OMNO2 data, but do
+not make physical sense)
+        2) The vcdQualityFlags field must be an even number. This indicates that
+the summary bit is not set, meaning there were no significant processing issues.
+        3) Cloud fraction: BEHR contains three cloud fractions: OMI geometric,
+OMI radiance, and MODIS cloud fraction.
+        4) The column amount should be < 1 x 10^17. Such values are expected to
+indicate that the pixel has been affected by the row anomaly.
+        5) The column amount must not be a NaN.
+        6) Filter for row anomaly, typically by requiring that the
+XTrackQualityFlags field = 0.
+
+
+================================
+3. BEHR Fields in native pixels
+================================
+
+BEHRAMFTrop: The AMF for each pixel that is calculated using the NASA OMNO2
+scattering weights, but with MODIS albedo, GLOBE terrain pressure, and WRF-Chem
+12-km resolution NO2 profiles and scaled by BEHRGhostFraction.
+
+BEHRGhostFraction: A factor for each pixel that multiplies the initial AMF
+calculated as a cloud radiance fraction weighted average of a clear and cloudy
+AMF. 
+
+BEHRScatteringWeights: Each row of scattering weights corresponds to a pixel.
+These scattering weights are the weighted average of the clear and cloudy
+scattering weights used to calculate the BEHR AMF. There are 28-30 scattering
+weights per pixel; 28 are at the standard OMNO2 pressures and the remaining two
+are the scattering weights calculated for the terrain and cloud pressure - this
+helps ensure that the interpolation we use to obtain those levels is reflected
+in these published scattering weights. If the terrain or cloud pressure equals
+one of the OMNO2 pressures, there will be fewer than 30 scattering weights for
+that pixel, and the vector will be padded with fill values to bring it up to 30
+elements.
+
+BEHRAvgKernels: The above scattering weights divided by the AMF for this pixel -
+there is no more complicated computation than that, these are present to make
+that calculation easier for users. As with the scattering weights, each row
+represents a pixel and if less than 30 values are used to describe the vector,
+it is padded with fill values to make a 30 element vector.
+
+BEHRNO2apriori: This is the NO2 profile for the pixel used to calculate the AMF
+for this pixel. As above, each row in the matrix represents a pixel and fill
+values are used if there are less than 30 elements. It is given as a mixing
+ratio in parts-per-part. Note that an AMF should be calculated by integrating
+over number density; we follow the conversion described in the appendix of
+Ziemke, et al. (2001) J. Geophys. Res., 106, p. 9853 to perform this integration
+using the hydrostatic relation.
+
+BEHRPressureLevels: These are the pressure levels for the last 3 fields; as in
+those, each row corresponds to a pixel. 28 of the 30 pressures will always be
+the standard OMNO2 pressure levels, the remaining two (as discussed for the
+scattering weights) as the terrain and cloud pressure. 
+ 

@@ -302,7 +302,7 @@ parfor j=1:length(datenums)
             
             %Restrict latitude to those that fall within the bounds specified
             %at the begininning of the file. Also pivot the dataset so that
-            %each row is a swath.
+            %the matrix is along track x across track.
             lat=Latitude';
             lat_i=[latmin, latmax];
             [i_i, j_j]=find(lat > lat_i(1) - 0.25 & lat < lat_i(2) + 0.25);
@@ -325,10 +325,10 @@ parfor j=1:length(datenums)
             fileID = H5F.open(fullfile(file_dir,filename), 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
             
             %This will handle each of the variables that are 60x(number of
-            %swaths).  It also converts all data from single precision to
-            %double precision and pivots the matrix the the convention of row =
-            %swath. These are the values needed to compute the pixel corner
-            %points.
+            %lines of pixels along track).  It also converts all data from
+            %single precision to double precision and pivots the matrix the
+            %the convention of row = swath. These are the values needed to
+            %compute the pixel corner points.
             
             %Longitude
             datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'Longitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); Longitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); Longitude=double(Longitude); Longitude=Longitude';
@@ -342,8 +342,9 @@ parfor j=1:length(datenums)
             datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'SolarZenithAngle')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); SolarZenithAngle = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); SolarZenithAngle=double(SolarZenithAngle); SolarZenithAngle=SolarZenithAngle';
             
             
-            %This will handle values that only have a single value per swath.
-            %They are still converted to double precision numbers and pivoted.
+            %This will handle values that only have a single value per
+            %across track line of pixels. They are still converted to
+            %double precision numbers and pivoted.
             offset = [(min(i_i)-1)]; % need to change to 0-based indexing for HDF files
             slabsize = [length(cut_y)];
             memspaceID = H5S.create_simple(length(slabsize), slabsize, slabsize);

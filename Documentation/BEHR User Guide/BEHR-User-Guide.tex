@@ -1,0 +1,157 @@
+\documentclass[12pt]{article}
+
+%Bring in the packages I'll need normally
+\usepackage{amsmath} %AMS Math Package
+\usepackage{amsthm} %Theorem formatting
+\usepackage{amssymb} %Math symbols like \mathbb
+\usepackage{cancel} %Allows you to draw diagonal cancelling out lines
+\usepackage{multicol} % Allows for multiple columns
+\usepackage{graphicx} %Allows images to be inserted using \includegraphics
+\usepackage{enumitem} %Allows for fancier lists, use [noitemsep] or [noitemsep, nolistsep] after \begin{}
+\usepackage{braket} %Dirac bra-ket notation
+\usepackage{textcomp}
+\usepackage[hidelinks]{hyperref} %Allows the use of web links (\url, \href) and computer paths (\path)
+
+\usepackage{listings} %Way to typeset code; listings respect whitespace. Can be set inline with {\lstinline[breaklines=true]||} or as an environment
+\lstset{basicstyle=\ttfamily} %Causes the code environments to be typeset with a Courier-like font
+
+\usepackage[version=3]{mhchem} %Simpler chemistry notation, use \ce{} to typeset chemical formula
+	%e.g. \ce{H2O} for water and \ce{1/2SO4^2-} to set half a mol of sulfate ion.
+
+%Set the page to be letter sized with 1" margins
+\usepackage[dvips,letterpaper,margin=1in]{geometry}
+
+\usepackage[round]{natbib} % A citation package that allows author-date citations
+
+%title
+\title{BErkeley High Resolution (BEHR) \ce{NO2} product - User Guide}
+\author{Josh Laughner}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{References}
+
+\section{Product overview}
+
+	\subsection{Product types}
+	Currently, we have two data products available: one at the native OMI pixel resolution and one in which each swath has been gridded to a $0.05^\circ \times 0.05^\circ$ fixed grid. The gridded product is ideal for users who simply wish to obtain an \ce{NO2} VCD, as the latitude and longitude of each grid point will remain fixed over time, whereas the native OMI pixels do not. However, the native OMI resolution files have additional variables compared to the gridded product, such as scattering weights, averaging kernels, our \ce{NO2} \emph{a priori} profile, etc. that will be useful to users wishing to modify the product in some way.
+	
+	Plans to produce a third product with a single, daily grid are underway and we hope to have this available soon.
+	
+	\subsection{Version numbering}
+	The BEHR version numbering system combines the OMNO2 version number with an
+internal version letter. So, v2.1A represents the first BEHR product based on
+version 2.1 of the NASA OMNO2 product. A subsequent version of BEHR still based
+on version 2.1 of OMNO2 would be v2.1B. If OMNO2 were to update to version 3,
+the BEHR product based on that would be v3.0A.
+
+	Should a minor change be made (e.g. one that adds information to the output but
+does not change the core algorithm), a revision number will be appended to the
+version number. For example, v2.1A and v2.1Arev0 will be the same, but v2.1Arev1
+would indicate this sort of minor change.
+	
+	\subsection{File format}
+	All products will be made available as HDF version 5 (\texttt{.h5}) files (\emph{c.f.} \url{https://www.hdfgroup.org}).  Please note when trying to open these that many programming languages and utilities have different commands and tools for opening version 4 and 5 HDF files. If you are having trouble opening these files:
+	\begin{enumerate}
+		\item Ensure that you are using the correct command for an HDF5 file, not an HDF4 file.
+		\item Try using HDFView (available from \url{https://www.hdfgroup.org/products/java/index.html} to browse the file. This will confirm that it downloaded properly.
+		\item Check if the utility or programming language you are using requires the HDF5 library (\url{https://www.hdfgroup.org/HDF5/}) to be installed. 
+	\end{enumerate}
+	
+	For both the native and gridded products, the HDF files are organized similarly. Under the \texttt{/Data} group, each swath is contained within its own group, named as \texttt{Swath\#}. There will be 3--5 swaths per day. Each swath will contain all relevant variables as datasets.
+	
+	Starting with BEHR version 2.1A, fill values will be directly stored in the HDF FillValue information for each dataset, along with four additional attributes: Description, Range, Product, and Unit.  \emph{Description} is a brief, one-line description of the meaning of each variable. \emph{Range} is the range of values that variable may correctly take on. \emph{Product} indicates whether this dataset is copied directly from the NASA standard product (represented by \textbf{SP}) or is added by the BEHR product (unsurprisingly represented by \textbf{BEHR}). Finally, \emph{Unit} is the physical unit assigned to each dataset. 
+	
+	The native product will also be provided as comma separated value files. Because part of the value of the gridded product is the 2-dimensional structure of the grid reflects the geographic distribution, and because this would be difficult to maintain in a .csv file, we will continue to provide the gridded product in HDF format only.
+	
+	\subsection{Tools for working with HDF files}
+	The following programs or programming languages are known to be able to read HDF files:
+	\begin{itemize}
+		\item MATLAB: current versions have high-level functions such as \texttt{h5info} and \texttt{h5read} which can easily read in HDF5 files. This does not seem to rely on the external HDF library.
+		\item Python: the \texttt{h5py} package (\url{http://www.h5py.org}) can read HDF5 files, however it does depend on having the HDF library installed, at least on Unix based systems. 
+		\item IDL: various users have sucessfully read HDF5 files in IDL; however since we do not use it ourselves, we cannot offer specific advice on the best way to do so. 
+		\item Igor Pro, v. $>5.04$: \url{http://www.wavemetrics.com/products/igorpro/dataaccess/hdf5.htm}
+		\item GNU Octave: \url{https://www.gnu.org/software/octave/}
+	\end{itemize}
+	
+	This is not an exclusive list, however these are common scientific software packages that indicate they have the capability to read HDF5 files. Note that our experience is focused on MATLAB and Python, so our ability to offer specific advice for other utilities is limited.
+	
+\section{Variables}
+
+\section{Considerations when working with BEHR files}
+	\subsection{Pixel filtering}
+	For users wishing to identify high quality \ce{NO2} column information to ground, there are six key criteria to look for:
+	\begin{enumerate}
+		\item The VCD must be $> 0$ (values $< 0$ are present in the OMNO2 data, but likely result from error in stratospheric separation)
+        \item The vcdQualityFlags field must be an even number. This indicates that
+the summary bit is not set, meaning there were no significant processing issues.
+        \item Cloud fraction: BEHR contains three cloud fractions: OMI geometric,
+OMI radiance, and MODIS cloud fraction. We generally filter for OMI geometric or MODIS fraction to be $< 0.2$ (20\%).  As discussed in Russell et al. 2011, MODIS cloud fraction is often less susceptible to identifying high albedo ground surfaces as clouds.
+        \item The column amount should be $< 1 \times 10^{17}$. Such values are expected to
+indicate that the pixel has been affected by the row anomaly.
+        \item The column amount must not be a fill value.
+        \item Filter for row anomaly, typically by requiring that the 
+XTrackQualityFlags field = 0.
+	\end{enumerate}
+	
+	\subsection{Weighting temporal averaging}
+	When averaging the gridded product over time, use the \emph{Areaweight} variable to weight each contribution.  This is calculated for each grid cell as the average of the reciprocals of the areas of each pixel included in that grid cell.  Thus, grid cells containing contributions from large pixels are weighted less than those from smaller, more representative pixels.
+	
+	\subsection{Using scattering weights/averaging kernels}
+	\subsubsection{Variable layout}
+	These are for advanced users who might wish to either use their own \emph{a priori} \ce{NO2} profile or to compare modeled \ce{NO2} VCDs correctly with BEHR VCDs.  Note that the averaging kernels for each pixel are simply the scattering weights divided by the BEHR AMF; they are provided separately simply for user convenience.
+	
+	For new users wishing to begin using these variables, several resources will be helpful. \citet{palmer2001} contains the original formulation of the relationship between scattering weights, \emph{a priori} \ce{NO2} profiles, and air mass factors and should definitely be studied. The first several chapters of \emph{The Remote Sensing of Tropospheric Composition from Space} assembled by Burrows, Platt, and Borrell \citep{burrows-platt} also describes the relationship of scattering weights, averaging kernels, and air mass factors.
+	
+	What follows will be a description of why the scattering weights are presented how they are.  BEHRScatteringWeights, BEHRAvgKernels, BEHRPressureLevels, and BEHRNO2apriori are 3D variables; the first dimension is the vertical dimension, the second and third correspond to the dimensions of the normal 2D variables. To put this another way, if $X$ were the array of values for these variables, then $X(:,1,1)$ would be the vector of values for the $(1,1)$ pixel, $X(:,1,2)$ the vector for the $(1,2)$ pixel and so on.
+	
+	The BEHRPressureLevels variable gives the vertical coordinates for the other three.  28 of the pressure levels will be the same for every pixel; the remaining two will correspond to the terrain and cloud pressure. Should the terrain or cloud pressure match one of the standard 28 pressures, then the vector of values for this pixel will still be 30 elements long, but will end with fill values which should be removed.
+	
+	\subsubsection{Calculation of scattering weights}
+	The scattering weights presented ($w_{\mathrm{tot}}$) are calculated as the weighted average of a vector of clear and cloudy scattering weights obtained by interpolating the NASA OMNO2 TOMRAD look up table to the appropriate values of SZA, VZA, RAA (relative azimuth angle), albedo, and surface pressure. Mathematically:
+	\begin{align}
+		w_{i, \mathrm{tot}} = f_r w_{i, \mathrm{cld}} + (1 - f_r) w_{i, \mathrm{clr}} \label{eqn-pubSW}\\
+		w_{i, \mathrm{clr}} = \left\lbrace 
+			\begin{matrix}
+				0 & \text{ if } p_i > p_\mathrm{terr} \\
+				w_{i, \mathrm{clr}} & \text{ otherwise }
+			\end{matrix}\right. \\
+		w_{i, \mathrm{cld}} = \left\lbrace 
+			\begin{matrix} 
+				0 & \text{ if } p_i > p_\mathrm{cld} \\
+				w_{i, \mathrm{cld}} & \text{ otherwise }
+			\end{matrix}\right. \label{eqn-cldSW}
+	\end{align}
+	where $f_r$ is the radiance cloud fraction, $w_{i, \mathrm{clr}}$ is the $i$th element in the clear sky scattering weight vector, $w_{i, \mathrm{cld}}$ is the $i$th element in the cloudy scattering weight vector, $p_i$ is the pressure level for the $i$th element in the vectors, $p_\mathrm{terr}$ is the terrain pressure for the pixel, and $p_\mathrm{cld}$ is the cloud top pressure for the pixel.
+	
+	Therefore the final vector of scattering weights is the cloud radiance fraction-weighted average of the clear and cloudy scattering weight vectors after setting the clear sky vectors to 0 below the ground, and the cloudy vectors to 0 below the cloud top.  This is an approximation of how the NASA scattering weights are reported.  These scattering weights can be combined with an \emph{a priori} \ce{NO2} profile to get the total AMF as:
+	\begin{equation}
+		A = \int_{p_\mathrm{terr}}^{p_\mathrm{trop}} g(p) w(p) \: dp
+	\end{equation}
+	where $p_\mathrm{terr}$ is the terrain pressure, $p_\mathrm{trop}$ is the tropopause pressure, and $g(p)$ is the \emph{a priori} profile shape factor. Note that integration must be done w.r.t. number density, see Appendix B of \citet{ziemka01} for information on how mixing ratio integrated over pressure can be made equivalent to number density integrated over altitude.
+	
+	\subsubsection{Justification for including terrain and cloud pressure weights}
+	Although we publish the scattering weights in this form, we calculate our AMF as:
+	\begin{equation} \label{eqn-ourAMF}
+		A = f_r A_\mathrm{cld} + (1-f_r) A_\mathrm{clr}
+	\end{equation}
+	where
+	\begin{align}
+		A_\mathrm{cld} = \int_{p_\mathrm{cld}}^{p_\mathrm{trop}} g(p) w_{\mathrm{cld}}(p) \: dp \label{eqn-cldAMF} \\
+		A_\mathrm{clr} = \int_{p_\mathrm{terr}}^{p_\mathrm{trop}} g(p) w_{\mathrm{clr}}(p) \: dp \label{eqn-clrAMF}
+	\end{align}
+	Mathematically, this should be the same as:
+	\begin{equation} \label{eqn-totAMF}
+		A_\mathrm{tot} = \int_{p_\mathrm{terr}}^{p_\mathrm{trop}} g(p) w_{\mathrm{tot}}(p) \: dp
+	\end{equation}
+	however computationally it was not.  This was because in Eqns. \ref{eqn-cldAMF}-\ref{eqn-clrAMF} we interpolate $w(p)$ to the terrain or cloud top pressure \emph{before} setting $w(p)$ to zero below those pressures.  This is done because the interpolation should not modify the scattering weights---surface pressure is already accounted for in the lookup table---but rather is only meant to find the scattering weight at our lower integration limit.
+	
+	However, if the same approach is carried out with $w_\mathrm{tot}$ in Eqn. \ref{eqn-totAMF}, we are not interpolating between the same values, because now we \emph{have} set $w_\mathrm{clr}(p)$ and $w_\mathrm{cld}(p)$ to 0 below terrain and cloud top, respectively.  To avoid this problem, $w_\mathrm{clr}(p)$ and $w_\mathrm{cld}(p)$ are each interpolated to both terrain and cloud top height before being used in Eqns. \ref{eqn-pubSW}--\ref{eqn-cldSW}.  Using data from 1 Aug 2013, with the same \ce{NO2} profile, the difference between the AMFs calculated using Eqns. \ref{eqn-ourAMF} and Eqn. \ref{eqn-totAMF} decrease from a median of 12.9\% without pre-interpolating to 0.299\% with pre-interpolating.
+	
+%%%%% BIBLIOGRAPHY %%%%%
+\bibliographystyle{copernicus}
+\bibliography{BEHR-User-Guide-refs}
+
+\end{document}
