@@ -53,8 +53,6 @@ AMFTrop=fill_val * ones(maxx,maxy);
 AMFStrat=fill_val * ones(maxx,maxy);
 TropopausePressure=fill_val * ones(maxx,maxy);
 
-BEHRColumnAmountNO2Trop_AMF2=fill_val * ones(maxx,maxy);
-
 Count = zeros(maxx, maxy);
 Area = nan(maxx, maxy);
 Areaweight = nan(maxx, maxy);
@@ -167,8 +165,6 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     vcdQualityFlags_val = Data.vcdQualityFlags(x);
     XTrackQualityFlags_val = Data.XTrackQualityFlags(x);
     
-    BEHRColumnAmountNO2Trop_AMF2_val = Data.BEHRColumnAmountNO2Trop_AMF2(x);
-    
     
     %dim=[maxx maxy];
     bottom=y1+1; %JLL 18 Mar 2014: Having the bottom advance by one ensures that data points right on the bottom/top border don't get double counted (at least, I think that's the point here)
@@ -257,8 +253,6 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     AMFStrat(x_quad, y_quad) = sum([AMFStrat(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFStrat_val])/Count(x_quad,y_quad);
                     TropopausePressure(x_quad, y_quad) = sum([TropopausePressure(x_quad, y_quad)*(Count(x_quad, y_quad)-1), TropopausePressure_val])/Count(x_quad,y_quad);
                     
-                    BEHRColumnAmountNO2Trop_AMF2(x_quad, y_quad) = sum([BEHRColumnAmountNO2Trop_AMF2(x_quad, y_quad)*(Count(x_quad, y_quad)-1), BEHRColumnAmountNO2Trop_AMF2_val])/Count(x_quad,y_quad);
-                    
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
                     
@@ -302,8 +296,6 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     AMFTrop(x_quad, y_quad) = AMFTrop_val;
                     AMFStrat(x_quad, y_quad) = AMFStrat_val;
                     TropopausePressure(x_quad, y_quad) = TropopausePressure_val;
-                    
-                    BEHRColumnAmountNO2Trop_AMF2(x_quad, y_quad) = BEHRColumnAmountNO2Trop_AMF2_val;
                     
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
@@ -351,8 +343,6 @@ OMI.Areaweight = Areaweight;
 OMI.TropopausePressure = TropopausePressure;
 OMI.vcdQualityFlags = vcdQualityFlags;
 OMI.XTrackQualityFlags = XTrackQualityFlags;
-
-OMI.BEHRColumnAmountNO2Trop_AMF2 = BEHRColumnAmountNO2Trop_AMF2;
 
 % Replace fill values with NaNs. Of course, we can only do this for numeric
 % fields, not cells or structs
