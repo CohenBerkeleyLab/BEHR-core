@@ -125,7 +125,7 @@ fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 if nargin < 2
     date_start='2013/08/01';
-    date_end='2013/09/30';
+    date_end='2013/08/06';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
 %****************************%
@@ -222,30 +222,31 @@ parfor j=1:length(datenums)
                 Data(d).GLOBETerpres(isnan(Data(d).GLOBETerpres)==1)=1013.0000;
                 
                 %JLL 17 Mar 2014: Load some of the variables from 'Data' to
-                %make referencing them less cumbersome.
-                lon = Data(d).Longitude;
-                lat = Data(d).Latitude;
+                %make referencing them less cumbersome. Also convert some
+                %to column vectors to work with rNmcTmp2 and rDamf2
+                lon = Data(d).Longitude(:);
+                lat = Data(d).Latitude(:);
                 loncorns=Data(d).Loncorn;
                 latcorns=Data(d).Latcorn;
                 
-                sza = Data(d).SolarZenithAngle;
-                vza = Data(d).ViewingZenithAngle;
-                phi = Data(d).RelativeAzimuthAngle;
+                sza = Data(d).SolarZenithAngle(:);
+                vza = Data(d).ViewingZenithAngle(:);
+                phi = Data(d).RelativeAzimuthAngle(:);
                 
-                mon = str2double(month)*ones(size(Data(d).Latitude));
+                mon = str2double(month)*ones(size(Data(d).Latitude(:)));
                 pressure = [1020 1015 1010 1005 1000 990 980 970 960 945 925 900 875 850 825 800 770 740 700 660 610 560 500 450 400 350 280 200];% 100 50 20 5];
                 if DEBUG_LEVEL > 1; disp('   Interpolating temperature data'); end
                 [temperature, tmpSAVE] = rNmcTmp2(fileTmp, pressure, lon, lat, mon); %JLL 17 Mar 2014: Interpolates temperature values to the pressures and lat/lon coordinates desired
                 
-                surfPres = Data(d).GLOBETerpres;
-                albedo = Data(d).MODISAlbedo;
+                surfPres = Data(d).GLOBETerpres(:);
+                albedo = Data(d).MODISAlbedo(:);
                 
                 surfPres(surfPres>=1013)=1013; %JLL 17 Mar 2014: Clamp surface pressure to sea level or less.
-                cldPres = Data(d).CloudPressure;
+                cldPres = Data(d).CloudPressure(:);
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating clear and cloudy AMFs'); end
                 dAmfClr = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres); %JLL 18 Mar 2014: Interpolate the values in dAmf to the albedo and other conditions input
-                cloudalbedo=0.8*ones(size(Data(d).CloudFraction)); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
+                cloudalbedo=0.8*ones(size(Data(d).CloudFraction(:))); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
                 dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
                 
                 if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
@@ -258,15 +259,13 @@ parfor j=1:length(datenums)
                 pTerr = surfPres;
                 pCld = cldPres;
                 if strcmpi(cloud_amf,'omi')
-                    cldFrac = Data(d).CloudFraction; 
+                    cldFrac = Data(d).CloudFraction(:); 
                 else
-                    cldFrac = Data(d).MODISCloud;
+                    cldFrac = Data(d).MODISCloud(:);
                 end
-                if strcmpi(cloud_rad_amf,'omi')
-                    cldRadFrac = Data(d).CloudRadianceFraction;
-                else
-                    cldRadFrac = Data(d).MODISCloud;
-                end
+                
+                cldRadFrac = Data(d).CloudRadianceFraction(:);
+                
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
                 noGhost=1; ak=1;
@@ -278,12 +277,16 @@ parfor j=1:length(datenums)
                 no2_prof_interp(:,prof_i==1)=NaN;
                 ghost_fraction(prof_i==1)=NaN;
                 
-                Data(d).BEHRAMFTrop = amf; %JLL 18 Mar 2014: Save the resulting AMF of the pixel
-                Data(d).BEHRGhostFraction = ghost_fraction;
-                Data(d).BEHRScatteringWeights = scattering_weights';
-                Data(d).BEHRAvgKernels = avg_kernels';
-                Data(d).BEHRNO2apriori = no2_prof_interp';
-                Data(d).BEHRPressureLevels = sw_plevels';
+                sz = size(Data(d).Longitude);
+                len_vecs = size(scattering_weights,1);  % JLL 26 May 2015 - find out how many pressure levels there are. Will often be 30, but might change.
+                                                        % Need this to properly reshape the scattering weights, AKs, pressure levels, and (soon) profiles
+                
+                Data(d).BEHRAMFTrop = reshape(amf,sz); %JLL 18 Mar 2014: Save the resulting AMF of the pixel
+                Data(d).BEHRGhostFraction = reshape(ghost_fraction,sz);
+                Data(d).BEHRScatteringWeights = reshape(scattering_weights, [len_vecs, sz]);
+                Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
+                Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
+                Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
             end
         end
         

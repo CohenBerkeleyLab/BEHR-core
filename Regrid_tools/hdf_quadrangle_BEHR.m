@@ -166,6 +166,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     XTrackQualityFlags_val = Data.XTrackQualityFlags(x);
     
     
+    
     %dim=[maxx maxy];
     bottom=y1+1; %JLL 18 Mar 2014: Having the bottom advance by one ensures that data points right on the bottom/top border don't get double counted (at least, I think that's the point here)
     top=y3;
@@ -216,7 +217,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                 % there, average the new and existing measurements,
                 % weighted by the number of measurments that went into the
                 % existing average
-                if BEHRColumnAmountNO2Trop(x_quad, y_quad) ~= fill_val && ~isnan(Data.BEHRColumnAmountNO2Trop(x,y));
+                if BEHRColumnAmountNO2Trop(x_quad, y_quad) ~= fill_val && ~isnan(BEHRColumnAmountNO2Trop_val); % JLL 27 May 2015 - changed from Data.BEHRColumnAmountNO2Trop(x,y) to the _val version - see comment at the elseif for why
                     % Count, area, and areaweight require special handling
                     Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                     Area(x_quad,y_quad)=nansum([Area(x_quad,y_quad)*(Count(x_quad,y_quad)-1), pixelarea])/(Count(x_quad, y_quad));
@@ -260,7 +261,13 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     XTrackQualityFlags(x_quad, y_quad) = {[XTrackQualityFlags{x_quad, y_quad}, XTrackQualityFlags_val]};
                     
                     % If there is no existing field
-                elseif ~isnan(Data.BEHRColumnAmountNO2Trop(x,y)) %JLL 19 Mar 2014: I added the logical test here, before this was just an 'else' statement, but it would make sense not to add a value if there was no valid NO2 column.
+                elseif ~isnan(BEHRColumnAmountNO2Trop_val) %JLL 19 Mar 2014: I added the logical test here, before this was just an 'else' statement, but it would make sense not to add a value if there was no valid NO2 column.
+                    % JLL 27 Mar 2015 - changed from
+                    % Data.BEHRColumnAmountNO2Trop(x,y) to
+                    % BEHRColumnAmountNO2Trop_val because we already find
+                    % this pixels value once - why do it again? Also
+                    % handles switching to 2-D variables (from 1-D) better.
+                    
                     % Count, area, and areaweight require special handling
                     Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                     Area(x_quad,y_quad)=pixelarea;

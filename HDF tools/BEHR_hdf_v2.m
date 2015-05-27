@@ -272,9 +272,9 @@ for d=1:numel(Data_in)
     swath_id = max(Data_in(d).Swath(:));
     group_name = sprintf('/Data/Swath%d',swath_id);
     
-    if swath_id == 0
-        % A swath ID of 0 means that no pixels were gridded, so skip this
-        % swath has it has no useful data.
+    if swath_id == 0 || isnan(swath_id)
+        % A swath ID of 0 or NaN means that no pixels were gridded, so skip
+        % this swath since has it has no useful data.
         continue
     end
     
