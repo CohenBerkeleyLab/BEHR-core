@@ -9,7 +9,9 @@ pressure = PROFILE.Pressure;
 lat_prs  = PROFILE.Latitude;
 lon_prs  = PROFILE.Longitude;
 
-no2=reshape(PROFILE.NO2_profile,length(pressure),194300);
+sz = size(PROFILE.NO2_profile);
+%no2=reshape(PROFILE.NO2_profile,length(pressure),194300);
+no2=reshape(PROFILE.NO2_profile,length(pressure),sz(2)*sz(3)); % reshape to a 2D matrix
 no2_bins=zeros(length(pressure),c);
 for j=1:c;
                     

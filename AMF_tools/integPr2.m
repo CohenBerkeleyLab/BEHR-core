@@ -111,7 +111,9 @@ end
 
 numIP = numel(interpPres);
 if numIP > 0
-    p_out = p';
+    if ~iscolumn(p); p_out = p'; 
+    else p_out = p;
+    end
     f_out = f;
     for a=1:numIP
         if all(p~=interpPres(a))
