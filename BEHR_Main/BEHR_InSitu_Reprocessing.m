@@ -53,7 +53,7 @@ behr_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR/';
 
 %The file prefix and directory to save the resulting files under
 save_prefix = 'OMI_BEHR_InSitu_';
-save_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR_REPROCESSED/wrf-unscaled';
+save_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR_REPROCESSED/one-profile';
 
 amf_tools_path = '/Users/Josh/Documents/MATLAB/BEHR/AMF_tools';
 fileTmp = fullfile(amf_tools_path,'nmcTmpYr.txt');
@@ -134,9 +134,6 @@ for d=1:numel(dates)
         % Load the profile numbers 
         profnum = remove_merge_fills(Merge, Names.profile_numbers);
 
-        % Calculate the UTC offset to match flight times to satellite overpass
-        tz = round(nanmean(lon)/15);
-
         % Get all unique profile numbers and their start times
         unique_profnums = unique(profnum(profnum~=0));
         start_times = zeros(numel(unique_profnums),1);
@@ -144,6 +141,16 @@ for d=1:numel(dates)
             xx = profnum == unique_profnums(a);
             start_times(a) = min(utc(xx));
         end
+        
+        % Calculate the UTC offset to match flight times to satellite
+        % overpass. Since all four DISCOVER flights were in relatively
+        % constrained geographic areas, all profiles will be in the same
+        % timezone. So unlike the UTC ranges case, we can safely assume all
+        % profiles will be in the same time zone, and so just replicate tz
+        % into mct ("most common timezone" - makes more sense with the UTC
+        % ranges)
+        tz = round(nanmean(lon)/15);
+        mct = repmat(tz, numel(unique_profnums), 1);
 
         % Remove from consideration any profiles with a start time before 10:45
         % am or after 4:45 pm local standard time
@@ -185,12 +192,14 @@ for d=1:numel(dates)
         % data points that correspond to it, get the most common timezone,
         % use that to set whether to include that range or not. Also, check
         % the "user_profnums" variable which will have specific UTC ranges
-        % to allow
+        % to allow. mct will save the "most common timezone" for each UTC
+        % range.
         yy = false(size(Ranges(rr).Ranges,1),1);
+        mct = zeros(size(Ranges(rr).Ranges,1),1);
         for a=1:size(Ranges(rr).Ranges,1)
             tz_ind = utc >= Ranges(rr).Ranges(a,1) & utc <= Ranges(rr).Ranges(a,2);
-            mct = mode(tz(tz_ind));
-            range_start_local = utc2local_sec(Ranges(rr).Ranges(a,1),mct);
+            mct(a) = mode(tz(tz_ind));
+            range_start_local = utc2local_sec(Ranges(rr).Ranges(a,1),mct(a));
             yy(a) = range_start_local >= local2utc(starttime,0) && range_start_local <= local2utc(endtime,0);
         end
         
@@ -200,6 +209,8 @@ for d=1:numel(dates)
         end
         
         ranges_in_time = Ranges(rr).Ranges(yy,:);
+        start_times = ranges_in_time(:,1);
+        mct = mct(yy);
         s = [1,sum(yy)];
         no2_array = cell(s); 
         lat_array = cell(s); 
@@ -247,9 +258,10 @@ for d=1:numel(dates)
         behr_no2 = Data(s).BEHRColumnAmountNO2Trop; 
         
         
-        % This will be where the amfs due to each profile go to be averaged
-        % together to find the average amf for the pixel
+        % This will be where the amfs due to each profile go to be selected
+        % from to find the best amf for the pixel.
         tmp_amfs = nan(numel(behr_no2),numel(no2_array));
+        tmp_starttimes = nan(numel(behr_no2), numel(no2_array));
         tmp_count = zeros(size(behr_no2));
         for p=1:numel(no2_array)
             
@@ -313,7 +325,7 @@ for d=1:numel(dates)
             if DEBUG_LEVEL > 1; fprintf('\t\tRecalculating AMFs\n'); end
             for pix=1:numel(omi_lon_p)
                 % Extrapolate and bin the profile using median extrapolation on
-                % the bottom and by inserting a scaled WRF profile on the top,
+                % the bottom and by inserting an unscaled WRF profile on the top,
                 % if needed.  Only the surface pressure changes for each
                 % pixel.                 
 
@@ -344,12 +356,35 @@ for d=1:numel(dates)
                 amfs_p(pix) = omiAmfAK2(this_surfPres, cloudPres_p(pix), cldFrac_p(pix), cldRadFrac_p(pix), insitu_pressures, dAmfClr2, dAmfCld2, temperature, insitu_profile, insitu_profile, noGhost, ak);
             end
             
+            % amfs_p will contain new AMFs for the pixels that overlapped
+            % this particular profile. tmp_starttimes is set up so that for
+            % each pixel only the profiles applied will have their start
+            % times saved, the rest will be NaNs. This will make it easy to
+            % find which profile is closest to overpass time.
             tmp_amfs(pix_indices,p) = amfs_p;
+            tmp_starttimes(pix_indices,p) = start_times(p);
             tmp_count(pix_indices) = tmp_count(pix_indices) + 1;
         end
         
-        new_amfs = nanmean(tmp_amfs,2);
-        new_amfs = reshape(new_amfs,size(omi_lat));
+        % Calculate which profile (for each pixel) is closest to overpass,
+        % assuming overpass to be ~13:45 local time, reasonable
+        % approximation for OMI overpass.
+        swath_tz = round(nanmean(Data(s).Longitude(:))/15);
+        overpass_utc = local2utc('13:45', swath_tz);
+        new_amfs = nan(size(tmp_amfs,1),1);
+        for pix2=1:size(tmp_amfs,1)
+            dtime = abs(tmp_starttimes(pix2,:) - overpass_utc);
+            % if dtime is all nans, that should mean that a profile was
+            % never assigned to that pixel (which will be most of the time)
+            % so we do nothing, leaving new_amfs a nan (which will carry
+            % through to the reprocessed column)
+            if ~all(isnan(dtime))
+                [~,min_ind] = min(dtime(:));
+                new_amfs(pix2) = tmp_amfs(pix2, min_ind);
+            end
+        end
+        
+        new_amfs = reshape(new_amfs,size(omi_lat)); % reshape will error if there are the wrong number of AMFs somehow
         new_columns = Data(s).BEHRColumnAmountNO2Trop .* Data(s).BEHRAMFTrop ./ new_amfs;
         
         Data(s).InSituAMF = new_amfs;
