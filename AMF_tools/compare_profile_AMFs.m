@@ -6,14 +6,14 @@ function [ amf1, amf2 ] = compare_profile_AMFs( profile1, pressures1, profile2, 
 SZA = 55;
 VZA = 55;
 RAA = 100;
-ALB = 0.02;
-SurfP = 1013;
+ALB = 0.0355;
+SurfP = 1001;
 cldFrac = 0;
 cldRadFrac = 0;
 
 % Set geographic parameters (used for temperature correction)
-lon = 0;
-lat = 0;
+lon = -88.39;
+lat = 33.755;
 this_month = 6;
 
 % File locations
