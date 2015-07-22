@@ -99,16 +99,37 @@ end
             U_a = U(xx,yy,a);
             V_a = V(xx,yy,a);
             mag = (U_a.^2 + V_a.^2).^0.5;
-            theta = mod(atand(V_a./U_a),360); % puts the angle in [0, 359] rather than [-180, 180]
+            theta = nan(size(U_a));
+            for b=1:numel(U_a)
+                if U_a(b) >= 0
+                    theta(b) = atand(V_a(b)/U_a(b));
+                else
+                    theta(b) = atand(V_a(b)/U_a(b))+180;
+                end
+            end
         
             mag_mean(a) = nanmean(mag(:));
             if radius > 0
                 mag_std(a) = nanstd(mag(:));
             end
             
-            theta_mean(a) = nanmean(theta(:));
-            if radius > 0
-                theta_std(a) = nanstd(theta(:));
+            % If all the points are between -90 and 90, we want to average
+            % before taking mod(360) b/c that will properly handle points
+            % around 0: mean([1,-1]) = 0 vs. mean([1,359]) = 180
+            % Otherwise it's okay to take the mod(360) first then average,
+            % and in fact we must to correctly handle points around 180:
+            % mean([179,181]) = 180 but mean([179,-179]) = 0. Similar
+            % logic applies to the std. deviation.
+            if all(theta(:)<90) && all(theta(:)>-90)
+                theta_mean(a) = mod(nanmean(theta(:)),360);
+                if radius > 0
+                    theta_std(a) = nanstd(theta(:));
+                end
+            else
+                theta_mean(a) = nanmean(mod(theta(:),360));
+                if radius > 0
+                    theta_std(a) = nanstd(mod(theta(:),360));
+                end
             end
         end
         
@@ -263,7 +284,7 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% OTHER FUNCTION %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%`
 
     function [xx, yy] = find_square_around(lon, lat, center_lon, center_lat, radius)
         % Finds indicies for a square of points centered on center_lon and
