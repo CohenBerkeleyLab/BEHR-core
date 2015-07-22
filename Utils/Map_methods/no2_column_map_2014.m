@@ -43,6 +43,9 @@ function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( star
 %   rowanomaly = Parse mode for row anomaly (see function
 %       "omi_rowanomaly"). Default value is 'XTrackFlags', other options
 %       are 'AlwaysByRow', 'RowsByTime', and 'XTrackFlagsLight'.
+%   makefig = true or false; whether to make a figure or not. Defaults to
+%       true. Errors if set to false but only 1 output requested, as this
+%       means that the NO2 column data would not be saved.
 %
 %Josh Laughner <joshlaugh5@gmail.com> 25 Apr 2014
 
@@ -60,6 +63,7 @@ p.addParameter('flags',{},@iscell);
 p.addParameter('clouds','omi',@isstr);
 p.addParameter('cloudfraccrit',-1,@isscalar)
 p.addParameter('rowanomaly','XTrackFlags',@(x) any(strcmpi(x,{'AlwaysByRow','RowsByTime','XTrackFlags','XTrackFlagsLight'}))) %Ensure that the rowanomaly value is one of the allowed 4
+p.addParameter('makefig', true, @(x) (isscalar(x) && (isnumeric(x) || islogical(x))));
 
 p.parse(varargin{:});
 parsed_vars = p.Results;
@@ -73,6 +77,10 @@ behr_dir = parsed_vars.behrdir;
 DEBUG_LEVEL = 2;
 %****************************%
 
+E = JLLErrors;
+if ~parsed_vars.makefig && nargout < 2
+    E.badinput('makefig is false, but the NO2 column output has no variable to go to. Additional outputs required.');
+end
 
 %****************************%
 %       FLAG PARSING         %
@@ -217,43 +225,47 @@ nans = find(isnan(ColumnData));
 ColumnData(nans) = []; omilats(nans) = []; omilons(nans) = [];
 GriddedColumn = griddata(omilons,omilats,ColumnData,longrid,latgrid);
 
-% Open a new figure.
-figure;
-
-% Prepare the map
-if strcmpi('conic',parsed_vars.projection)
-    m_proj('Albers Equal-Area Conic', 'lon', lon_bdy, 'lat', lat_bdy);
-elseif strcmpi('mercator', parsed_vars.projection)
-    m_proj('Mercator', 'long', lon_bdy, 'lat', lat_bdy);
+if parsed_vars.makefig
+    % Open a new figure.
+    figure;
+    
+    % Prepare the map
+    if strcmpi('conic',parsed_vars.projection)
+        m_proj('Albers Equal-Area Conic', 'lon', lon_bdy, 'lat', lat_bdy);
+    elseif strcmpi('mercator', parsed_vars.projection)
+        m_proj('Mercator', 'long', lon_bdy, 'lat', lat_bdy);
+    end
+    
+    % Map the NO2 concentrations
+    m_pcolor(longrid, latgrid, GriddedColumn); shading('flat');
+    
+    % Draw the coast
+    switch parsed_vars.coast
+        case 'full'
+            m_gshhs_f('color',parsed_vars.color);
+        case 'high'
+            m_gshhs_h('color',parsed_vars.color);
+        case {'intermediate', 'medium'}
+            m_gshhs_i('color',parsed_vars.color);
+        case 'low'
+            m_gshhs_l('color',parsed_vars.color);
+        case 'crude'
+            m_gshhs_c('color',parsed_vars.color);
+        otherwise
+            m_coast('color',parsed_vars.color);
+    end
+    
+    % Draw the states, as long as their drawing is not overridden
+    if parsed_vars.states; m_states('w'); end
+    
+    % Add the lat lon grid with no lines to fix the appearance of the map
+    m_grid('linestyle','none');
+    
+    cbhandle = colorbar;
+    if ~isempty(parsed_vars.cbrange); caxis(parsed_vars.cbrange); end
+else
+    cbhandle = nan;
 end
-
-% Map the NO2 concentrations
-m_pcolor(longrid, latgrid, GriddedColumn); shading('flat');
-
-% Draw the coast
-switch parsed_vars.coast
-    case 'full'
-        m_gshhs_f('color',parsed_vars.color);
-    case 'high'
-        m_gshhs_h('color',parsed_vars.color);
-    case {'intermediate', 'medium'}
-        m_gshhs_i('color',parsed_vars.color);
-    case 'low'
-        m_gshhs_l('color',parsed_vars.color);
-    case 'crude'
-        m_gshhs_c('color',parsed_vars.color);
-    otherwise
-        m_coast('color',parsed_vars.color);     
-end
-
-% Draw the states, as long as their drawing is not overridden
-if parsed_vars.states; m_states('w'); end
-
-% Add the lat lon grid with no lines to fix the appearance of the map
-m_grid('linestyle','none');
-
-cbhandle = colorbar;
-if ~isempty(parsed_vars.cbrange); caxis(parsed_vars.cbrange); end
 
 end %end function
 
