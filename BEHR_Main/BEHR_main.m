@@ -21,9 +21,9 @@ DEBUG_LEVEL = 2;
 % opening a parallel pool) without running them on the local machine.  If
 % onCluster hasn't been defined yet, set it to false.
 global onCluster;
-if isempty(onCluster); 
+if isempty(onCluster);
     if DEBUG_LEVEL > 0; fprintf('Assuming onCluster is false\n'); end
-    onCluster = false; 
+    onCluster = false;
 end
 
 % Defined the number of threads to run, this will be used to open a
@@ -96,17 +96,17 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Original - No clouds';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
-    sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
+    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta OMI SP Links';
     
     %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
     %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
     %is the 'AMF_tools' folder.
     amf_tools_path = '/Users/Josh/Documents/MATLAB/BEHR/AMF_tools';
-
+    
     %This is the directory where the NO2 profiles are stored. This will
     %need to be changed to match your machine and the files' location.
     %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
@@ -117,23 +117,27 @@ end
 addpath(amf_tools_path)
 fileTmp = fullfile(amf_tools_path,'nmcTmpYr.txt');
 fileDamf = fullfile(amf_tools_path,'damf.txt');
-fileNO2 = fullfile(amf_tools_path,'PRFTAV.txt');
 %****************************%
 
 %****************************%
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 if nargin < 2
-    date_start='2013/08/01';
-    date_end='2013/08/06';
+    date_start='2013/06/10';
+    date_end='2013/06/10';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
+%****************************%
+
+% Which WRF profiles to use
+%****************************%
+wrf_avg_mode = 'monthly';
 %****************************%
 
 %These will be included in the file name
 %****************************%
 satellite='OMI';
-retrieval='BEHR_omiCloudAMF';
+retrieval='BEHR';
 %****************************%
 
 %****************************%
@@ -179,9 +183,9 @@ if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
-parfor j=1:length(datenums)
+for j=1:length(datenums)
     %Read the desired year, month, and day
-  	R=datenums(j);
+    R=datenums(j);
     date=datestr(R,26);
     year=date(1:4);
     month=date(6:7);
@@ -189,7 +193,7 @@ parfor j=1:length(datenums)
     if DEBUG_LEVEL > 0; disp(['Processing data for ', date]); end
     
     filename = ['OMI_SP_',year,month,day,'.mat'];
-
+    
     if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(sp_mat_dir,filename),'...']); end %#ok<PFGV> % The concern with using global variables in a parfor is that changes aren't synchronized.  Since I'm not changing them, it doesn't matter.
     if isequal(exist(fullfile(sp_mat_dir,filename),'file'),0)
         if DEBUG_LEVEL > 0; disp('No SP file exists for given day'); end
@@ -199,7 +203,7 @@ parfor j=1:length(datenums)
         S=load(fullfile(sp_mat_dir,filename)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
         Data=S.Data;
         
-        if exist('profile_file','file')==1 && strcmp(profile_file(2:3),month)==1; %JLL 20 Mar 2014: 
+        if exist('profile_file','file')==1 && strcmp(profile_file(2:3),month)==1; %JLL 20 Mar 2014:
         else
             profile_file=['m',month,'_NO2_profile'];
             if DEBUG_LEVEL > 1; disp(['Loading ',fullfile(no2_profile_path,profile_file)]); end
@@ -218,68 +222,60 @@ parfor j=1:length(datenums)
                 if DEBUG_LEVEL>0; fprintf('  Swath %u of %s \n',d,date); end
                 c=numel(Data(d).Longitude);
                 
-                Data(d).MODISAlbedo(isnan(Data(d).MODISAlbedo)==1)=0; %JLL 17 Mar 2014: replace NaNs with fill values
-                Data(d).GLOBETerpres(isnan(Data(d).GLOBETerpres)==1)=1013.0000;
+                Data(d).MODISAlbedo(isnan(Data(d).MODISAlbedo))=0; %JLL 17 Mar 2014: replace NaNs with fill values
+                Data(d).GLOBETerpres(isnan(Data(d).GLOBETerpres))=1013.0000;
                 
                 %JLL 17 Mar 2014: Load some of the variables from 'Data' to
                 %make referencing them less cumbersome. Also convert some
                 %to column vectors to work with rNmcTmp2 and rDamf2
-                lon = Data(d).Longitude(:);
-                lat = Data(d).Latitude(:);
+                lon = Data(d).Longitude;
+                lat = Data(d).Latitude;
                 loncorns=Data(d).Loncorn;
                 latcorns=Data(d).Latcorn;
                 
-                sza = Data(d).SolarZenithAngle(:);
-                vza = Data(d).ViewingZenithAngle(:);
-                phi = Data(d).RelativeAzimuthAngle(:);
+                sza = Data(d).SolarZenithAngle;
+                vza = Data(d).ViewingZenithAngle;
+                phi = Data(d).RelativeAzimuthAngle;
                 
-                mon = str2double(month)*ones(size(Data(d).Latitude(:)));
+                mon = str2double(month)*ones(size(Data(d).Latitude));
                 pressure = [1020 1015 1010 1005 1000 990 980 970 960 945 925 900 875 850 825 800 770 740 700 660 610 560 500 450 400 350 280 200];% 100 50 20 5];
                 if DEBUG_LEVEL > 1; disp('   Interpolating temperature data'); end
                 [temperature, tmpSAVE] = rNmcTmp2(fileTmp, pressure, lon, lat, mon); %JLL 17 Mar 2014: Interpolates temperature values to the pressures and lat/lon coordinates desired
                 
-                surfPres = Data(d).GLOBETerpres(:);
-                albedo = Data(d).MODISAlbedo(:);
+                surfPres = Data(d).GLOBETerpres;
+                albedo = Data(d).MODISAlbedo;
                 
                 surfPres(surfPres>=1013)=1013; %JLL 17 Mar 2014: Clamp surface pressure to sea level or less.
-                cldPres = Data(d).CloudPressure(:);
+                cldPres = Data(d).CloudPressure;
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating clear and cloudy AMFs'); end
                 dAmfClr = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres); %JLL 18 Mar 2014: Interpolate the values in dAmf to the albedo and other conditions input
-                cloudalbedo=0.8*ones(size(Data(d).CloudFraction(:))); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
+                cloudalbedo=0.8*ones(size(Data(d).CloudFraction)); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
                 dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
                 
-                if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
-                [no2_bins] = rProfile_US(PROFILE, loncorns, latcorns, c); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
-                no2_bins = reshape(no2_bins,length(pressure),size(vza,1),size(vza,2));
-                no2Profile1 = no2_bins ./ (10^6); % NO2 from WRF is in ppm in these files
-                prof_i = zeros(size(Data(d).Latitude)); prof_i(isnan(squeeze(no2Profile1(1,:,:)))==1)=1; %JLL 18 Mar 2014: prof_i is a matrix of 0 or 1s that is 1 wherever the bottom of NO2 profile is NaN
                 
-                no2Profile2 = no2Profile1;
                 pTerr = surfPres;
                 pCld = cldPres;
                 if strcmpi(cloud_amf,'omi')
-                    cldFrac = Data(d).CloudFraction(:); 
+                    cldFrac = Data(d).CloudFraction;
                 else
-                    cldFrac = Data(d).MODISCloud(:);
+                    cldFrac = Data(d).MODISCloud;
                 end
                 
-                cldRadFrac = Data(d).CloudRadianceFraction(:);
+                cldRadFrac = Data(d).CloudRadianceFraction;
                 
+                if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
+                no2_bins = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, pTerr, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+                no2Profile1 = no2_bins;
+                no2Profile2 = no2_bins;
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
                 noGhost=1; ak=1;
                 [amf, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels, ghost_fraction] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
-                amf(prof_i==1)=NaN;
-                scattering_weights(:,prof_i==1)=NaN;
-                avg_kernels(:,prof_i==1)=NaN;
-                sw_plevels(:,prof_i==1)=NaN;
-                no2_prof_interp(:,prof_i==1)=NaN;
-                ghost_fraction(prof_i==1)=NaN;
                 
                 sz = size(Data(d).Longitude);
                 len_vecs = size(scattering_weights,1);  % JLL 26 May 2015 - find out how many pressure levels there are. Will often be 30, but might change.
-                                                        % Need this to properly reshape the scattering weights, AKs, pressure levels, and (soon) profiles
+                % Need this to properly reshape the scattering weights, AKs, pressure levels, and (soon) profiles
                 
                 Data(d).BEHRAMFTrop = reshape(amf,sz); %JLL 18 Mar 2014: Save the resulting AMF of the pixel
                 Data(d).BEHRGhostFraction = reshape(ghost_fraction,sz);
@@ -311,7 +307,7 @@ parfor j=1:length(datenums)
         %to average, this will allow easier averaging over multiple OMI
         %swaths. This is a form of oversampling.
         %*********************************%
-        lonmin = -125;  lonmax = -65;  
+        lonmin = -125;  lonmax = -65;
         latmin = 25;   latmax = 50;
         resolution = 0.05; resolution2 = 0.05;
         %*********************************%
@@ -333,11 +329,14 @@ parfor j=1:length(datenums)
         % Prepare the OMI data structure which will receive the gridded
         % data - this will be passed to the gridding functions to keep the
         % field names in the right order.
-        OMI=struct('Date','','Longitude', [], 'Latitude', [], 'Time', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'ViewingAzimuthAngle', [], 'SolarAzimuthAngle', [],...
-            'RelativeAzimuthAngle', [], 'AMFStrat', [], 'AMFTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
-            'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'ColumnAmountNO2TropStd',[],'ColumnAmountNO2Strat',[],'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'vcdQualityFlags',{{}},...
-            'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
-            'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
+        %         OMI=struct('Date','','Longitude', [], 'Latitude', [], 'Time', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'ViewingAzimuthAngle', [], 'SolarAzimuthAngle', [],...
+        %             'RelativeAzimuthAngle', [], 'AMFStrat', [], 'AMFTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
+        %             'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'ColumnAmountNO2TropStd',[],'ColumnAmountNO2Strat',[],'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'vcdQualityFlags',{{}},...
+        %             'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
+        %             'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
+        OMI = struct('BEHRColumnAmountNO2Trop', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'AMFTrop', [], 'CloudFraction', [], 'CloudRadianceFraction', [],...
+            'CloudPressure', [], 'ColumnAmountNO2Trop', [], 'RelativeAzimuthAngle', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'BEHRAMFTrop', [], 'OriginalBEHRAMF', [], 'OriginalBEHRColumn', [],...
+            'Latitude', [], 'Longitude', [], 'MapData', struct, 'Count', [], 'Area', [], 'Areaweight', [], 'vcdQualityFlags', {{}}, 'XTrackQualityFlags', {{}});
         % Matlab treats structures as matrices, so we can duplicate our
         % structure to have the required number of entries just like a
         % matrix.
@@ -350,25 +349,27 @@ parfor j=1:length(datenums)
             else
                 if DEBUG_LEVEL > 1; fprintf('   Gridding data for swath %u\n',d); end
                 hh=hh+1;
-                OMI(hh) = add2grid_BEHR(Data(d),OMI(hh),resolution,resolution2,[lonmin, lonmax],[latmin, latmax]); %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
+                % JLL 23 Jul 2015: temporary change to study wind effects.
+                % Return to add2grid_BEHR when done.
+                OMI(hh) = add2grid_BEHR_winds(Data(d),OMI(hh),resolution,resolution2,[lonmin, lonmax],[latmin, latmax]); %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
             end
         end
         
         % Clean up any unused elements in OMI
         OMI(hh+1:end) = [];
-
-        savename=[file_prefix,year,month,day];  
+        
+        savename=[file_prefix,year,month,day];
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
         saveData(fullfile(behr_mat_dir,savename),Data,OMI)
         toc
         t=toc;
         %if t>1200
-            %error('Time exceeded 20 min. Stopping')
+        %error('Time exceeded 20 min. Stopping')
         %end
     end
 end
 end
 
 function saveData(filename,Data,OMI)
-    save(filename,'OMI','Data')
+save(filename,'OMI','Data')
 end

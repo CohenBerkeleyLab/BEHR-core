@@ -86,10 +86,13 @@ amfCld=zeros(size(pTerr));
 % both of the pressures to interpolate to is already in the pressure
 % vector). We add two to the first dimension of these matrices to make room
 % for the two interpolated pressures.
-swPlev=zeros(size(no2Profile1)+[2, 0]);
-swClr=zeros(size(no2Profile1)+[2, 0]);
-swCld=zeros(size(no2Profile1)+[2, 0]);
-no2Profile3=zeros(size(no2Profile1)+[2, 0]);
+pad_vec = zeros(size(size(no2Profile1)));
+pad_vec(1) = 2;
+
+swPlev=zeros(size(no2Profile1)+pad_vec);
+swClr=zeros(size(no2Profile1)+pad_vec);
+swCld=zeros(size(no2Profile1)+pad_vec);
+no2Profile3=zeros(size(no2Profile1)+pad_vec);
 nP = size(swPlev,1);
 %..........................................................................
 
