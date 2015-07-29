@@ -12,8 +12,13 @@ switch lower(plttype)
         plot_wind_magnitude_and_angle(varargin{:});
     case 'plotnearprof'
         plot_nearest_profile(varargin{:});
+    case 'plotapriori'
+        plot_apriori(varargin{:});
     case 'getnearprof'
         varargout{1} = get_nearest_profiles(varargin{:});
+    case 'calcwind'
+        varargout{1} = calc_wind_mag(varargin{1}, varargin{2});
+        varargout{2} = calc_wind_dir(varargin{1}, varargin{2});
     otherwise
         fprintf('plttype not recognized\n');
 end
@@ -281,6 +286,78 @@ end
 
     end
 
+    function plot_apriori(DataHourly, DataMonthly, indicies, shape_factor)
+        % Function that will plot the a priori profiles from a given
+        % satellite pixel to compare the daily and monthly profiles. Takes
+        % two Data structures output from BEHR_Main and an n-by-2 matrix of
+        % indicies to plot. These are the indicies of the pixels in the
+        % matrices in Data. Each row should correspond to a different
+        % pixel, and will be plotted in it's own figure.  The profiles will
+        % be normalized by their VCDs so that the shape factor is plotted,
+        % unless a 0 is given as the optional fourth argument.
+        
+        % Input checking
+        req_fields = {'BEHRNO2apriori','BEHRPressureLevels','GLOBETerpres'};
+        if ~isstruct(DataHourly) || ~isstruct(DataMonthly) ||... %continued next line
+                any(~isfield(DataHourly, req_fields)) || any(~isfield(DataMonthly, req_fields))
+            E.badinput('DataHourly and DataMonthly must be Data structures output from BEHR_Main (must contain the fields %s)',strjoin(req_fields,', '));
+        end
+        
+        if ~isnumeric(indicies) || size(indicies, 2) ~= 2
+            E.badinput('indicies must be an n-by-2 matrix of subscript indicies')
+        end
+        
+        if nargin < 4
+            shape_factor = 1;
+        elseif (~isnumeric(shape_factor) && ~islogical(shape_factor)) || ~isscalar(shape_factor)
+            E.badinput('shape_factor must be scalar numeric or logical, or be omitted')
+        end
+        
+        % Plotting
+        for a=1:size(indicies,1)
+            x = indicies(a,1);
+            y = indicies(a,2);
+            
+            apriori_hr = DataHourly.BEHRNO2apriori(:,x,y);
+            pres_hr = DataHourly.BEHRPressureLevels(:,x,y);
+            surfP_hr = DataHourly.GLOBETerpres(x,y);
+            if shape_factor
+                vcd_hr = integPr2(apriori_hr, pres_hr, surfP_hr);
+            else 
+                vcd_hr = 1;
+            end
+            
+            apriori_mn = DataMonthly.BEHRNO2apriori(:,x,y);
+            pres_mn = DataMonthly.BEHRPressureLevels(:,x,y);
+            surfP_mn = DataMonthly.GLOBETerpres(x,y);
+            if shape_factor
+                vcd_mn = integPr2(apriori_mn, pres_mn, surfP_mn);
+            else
+                vcd_mn = 1;
+            end
+            
+            figure; 
+            plot(apriori_hr/vcd_hr, pres_hr);
+            hold on
+            plot(apriori_mn/vcd_mn, pres_mn);
+            
+            set(gca,'ydir','reverse');
+            set(gca,'fontsize',14);
+            if shape_factor
+                xlabel('Shape factor')
+            else
+                xlabel('[NO_2]')
+            end
+            ylabel('Pressure (hPa)')
+            legend('Hourly','Monthly');
+            if shape_factor
+                title_sf = 'shape factor';
+            else
+                title_sf = 'conc';
+            end
+            title(sprintf('Pixel at %.2f W, %.2f N (%s) - %s',DataHourly.Longitude(x,y),DataHourly.Latitude(x,y),mat2str([x,y]), title_sf));
+        end
+    end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% OTHER FUNCTION %%%%%
@@ -360,6 +437,21 @@ end
         for a=1:size(profiles,4)
             [x,y] = find_square_around(lon(:,:,a), lat(:,:,a), target_lon, target_lat, 0);
             profs(:,a) = squeeze(profiles(x,y,:,a));
+        end
+    end
+
+    function mag = calc_wind_mag(U,V)
+        mag = (U.^2 + V.^2).^0.5;
+    end
+
+    function theta = calc_wind_dir(U,V)
+        theta = nan(size(U));
+        for b=1:numel(U)
+            if U(b) >= 0
+                theta(b) = atand(V(b)/U(b));
+            else
+                theta(b) = atand(V(b)/U(b))+180;
+            end
         end
     end
 
