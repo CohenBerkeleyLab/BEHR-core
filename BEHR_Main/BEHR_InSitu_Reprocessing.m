@@ -34,8 +34,8 @@ end
 start_date = merge_dates{1};
 end_date = merge_dates{2};
 
-starttime = '10:30';
-endtime = '16:30';
+starttime = '12:00';
+endtime = '15:00';
 
 %Which clouds to use for the AMF calculation; 'CloudFraction' for OMI and
 %'MODISCloud' for MODIS
