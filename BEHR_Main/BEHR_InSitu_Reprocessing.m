@@ -19,15 +19,23 @@ function BEHR_InSitu_Reprocessing
 
 E = JLLErrors;
 
-campaign_name = 'discover-tx';
+campaign_name = 'discover-co';
 
-[Names, merge_dates, merge_dir] = merge_field_names(campaign_name);
+[Names, merge_dates, merge_dir, range_file] = merge_field_names(campaign_name);
 
+if ~isempty(range_file)
+    load(range_file); % Adds the variable "Ranges" into the workspace
+    range_avail_dates = {Ranges(:).Date};
+    profnum_bool = false;
+else
+    profnum_bool = true;
+end
+    
 start_date = merge_dates{1};
 end_date = merge_dates{2};
 
-starttime = '12:00';
-endtime = '15:00';
+starttime = '10:30';
+endtime = '16:30';
 
 %Which clouds to use for the AMF calculation; 'CloudFraction' for OMI and
 %'MODISCloud' for MODIS
@@ -45,7 +53,7 @@ behr_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR/';
 
 %The file prefix and directory to save the resulting files under
 save_prefix = 'OMI_BEHR_InSitu_';
-save_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR_REPROCESSED/';
+save_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR_REPROCESSED/wrf-unscaled';
 
 amf_tools_path = '/Users/Josh/Documents/MATLAB/BEHR/AMF_tools';
 fileTmp = fullfile(amf_tools_path,'nmcTmpYr.txt');
@@ -121,39 +129,94 @@ for d=1:numel(dates)
         if DEBUG_LEVEL > 1; fprintf('NO2 %.2f NaNs, PRESSURE %.2f NaNs, setting warning flag\n', percent_no2_nans, percent_pres_nans); end
     end
     
-    % Load the profile numbers 
-    profnum = remove_merge_fills(Merge, Names.profile_numbers);
-    
-    % Calculate the UTC offset to match flight times to satellite overpass
-    tz = round(nanmean(lon)/15);
-    
-    % Get all unique profile numbers and their start times
-    unique_profnums = unique(profnum(profnum~=0));
-    start_times = zeros(numel(unique_profnums),1);
-    for a=1:numel(unique_profnums)
-        xx = profnum == unique_profnums(a);
-        start_times(a) = min(utc(xx));
-    end
-    
-    % Remove from consideration any profiles with a start time before 10:45
-    % am or after 4:45 pm local standard time
-    yy = start_times >= local2utc(starttime,tz) & start_times <= local2utc(endtime,tz);
-    unique_profnums = unique_profnums(yy); start_times = start_times(yy);
-    
-    % Save each profile's NO2, altitude, radar altitude, latitude, and
-    % longitude as an entry in a cell array
-    s = size(unique_profnums);
-    no2_array = cell(s); utc_array = cell(s);
-    lat_array = cell(s); lon_array = cell(s); 
-    pres_array = cell(s); profnum_array = cell(s);
-    for a=1:numel(unique_profnums)
-        xx = profnum == unique_profnums(a);
-        no2_array{a} = no2(xx);
-        lat_array{a} = lat(xx);
-        lon_array{a} = lon(xx);
-        pres_array{a} = pres(xx);
-        utc_array{a} = utc(xx);
-        profnum_array{a} = unique_profnums(a);
+    % Handle both identifying profiles by number and by UTC range
+    if profnum_bool
+        % Load the profile numbers 
+        profnum = remove_merge_fills(Merge, Names.profile_numbers);
+
+        % Calculate the UTC offset to match flight times to satellite overpass
+        tz = round(nanmean(lon)/15);
+
+        % Get all unique profile numbers and their start times
+        unique_profnums = unique(profnum(profnum~=0));
+        start_times = zeros(numel(unique_profnums),1);
+        for a=1:numel(unique_profnums)
+            xx = profnum == unique_profnums(a);
+            start_times(a) = min(utc(xx));
+        end
+
+        % Remove from consideration any profiles with a start time before 10:45
+        % am or after 4:45 pm local standard time
+        yy = start_times >= local2utc(starttime,tz) & start_times <= local2utc(endtime,tz);
+        unique_profnums = unique_profnums(yy); start_times = start_times(yy);
+
+        % Save each profile's NO2, altitude, radar altitude, latitude, and
+        % longitude as an entry in a cell array
+        s = size(unique_profnums);
+        no2_array = cell(s); utc_array = cell(s);
+        lat_array = cell(s); lon_array = cell(s); 
+        pres_array = cell(s); profnum_array = cell(s);
+        for a=1:numel(unique_profnums)
+            xx = profnum == unique_profnums(a);
+            no2_array{a} = no2(xx);
+            lat_array{a} = lat(xx);
+            lon_array{a} = lon(xx);
+            pres_array{a} = pres(xx);
+            utc_array{a} = utc(xx);
+            profnum_array{a} = unique_profnums(a);
+        end
+    else
+        % Case where a Ranges structure is available. Figure out if any
+        % ranges are defined for this day. If not it'll have to be skipped
+        range_date = datestr(dates(d),'mm/dd/yyyy');
+        rr = ~iscellcontents(regexp(range_avail_dates, range_date),'isempty');
+        if sum(rr) > 1
+            E.callError('non_unique_range','More than one range with the date %s was found',range_date);
+        elseif sum(rr) < 1 || isempty(Ranges(rr).Ranges)
+            if DEBUG_LEVEL > 0; fprintf('No ranges found for %s, skipping\n',range_date); end
+            continue
+        end
+        
+        % Calculate the UTC offset to match flight times to satellite overpass
+        tz = round(lon/15);
+        
+        % Find all the utc start times that are between within the
+        % specified range of local times.  Go through each range, find the
+        % data points that correspond to it, get the most common timezone,
+        % use that to set whether to include that range or not. Also, check
+        % the "user_profnums" variable which will have specific UTC ranges
+        % to allow
+        yy = false(size(Ranges(rr).Ranges,1),1);
+        for a=1:size(Ranges(rr).Ranges,1)
+            tz_ind = utc >= Ranges(rr).Ranges(a,1) & utc <= Ranges(rr).Ranges(a,2);
+            mct = mode(tz(tz_ind));
+            range_start_local = utc2local_sec(Ranges(rr).Ranges(a,1),mct);
+            yy(a) = range_start_local >= local2utc(starttime,0) && range_start_local <= local2utc(endtime,0);
+        end
+        
+        if sum(yy) < 1
+            if DEBUG_LEVEL > 0; fprintf('No ranges fall within the specified window around OMI overpass, skipping\n'); end
+            continue
+        end
+        
+        ranges_in_time = Ranges(rr).Ranges(yy,:);
+        s = [1,sum(yy)];
+        no2_array = cell(s); 
+        lat_array = cell(s); 
+        lon_array = cell(s); 
+        pres_array = cell(s);
+        utc_array = cell(s);
+        profnum_array = cell(s);
+        
+        for a=1:s(2)
+            xx = utc >= ranges_in_time(a,1) & utc <= ranges_in_time(a,2);
+            no2_array{a} = no2(xx);
+            lat_array{a} = lat(xx);
+            lon_array{a} = lon(xx);
+            pres_array{a} = pres(xx);
+            utc_array{a} = utc(xx);
+            profnum_array{a} = ranges_in_time(a,:);
+        end
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -252,10 +315,11 @@ for d=1:numel(dates)
                 % Extrapolate and bin the profile using median extrapolation on
                 % the bottom and by inserting a scaled WRF profile on the top,
                 % if needed.  Only the surface pressure changes for each
-                % pixel.
-                [insitu_profile, insitu_pressures] = extrapolate_profile(no2_array{p}, pres_array{p}, 'surfacePressure', surfPres_p(pix),'top', 'wrf-scaled', 'bottom', 'median',...
-                    'utc',nanmean(utc_array{p}),'sitenum',profnum_array{p}, 'month',month,'lat',lat_array{p},'lon',lon_array{p},'date',curr_date,'shape','exp');
-                
+                % pixel.                 
+
+                [insitu_profile, insitu_pressures] = extrapolate_profile(no2_array{p}, pres_array{p}, 'surfacePressure', surfPres_p(pix),'top', 'wrf', 'bottom', 'median',...
+                    'utc',nanmean(utc_array{p}), 'month',month,'lat',lat_array{p},'lon',lon_array{p},'date',curr_date,'shape','exp');
+
                 % The profiles and pressure must be columns for the AMF calculation to
                 % function correctly
                 if ~iscolumn(insitu_pressures); insitu_pressures = insitu_pressures'; end
