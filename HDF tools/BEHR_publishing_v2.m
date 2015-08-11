@@ -1,4 +1,4 @@
-function [  ] = BEHR_hdf_v2(  )
+function [  ] = BEHR_publishing_v2(  )
 %BEHR_hdf_v2 Create the HDF files for BEHR products
 %   Detailed explanation goes here
 
@@ -10,31 +10,39 @@ DEBUG_LEVEL = 1;
 %%%%% SET OPTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%
 
+% Output type should be 'txt' or 'hdf'.  Text (csv) files are for native
+% resolution only.
+output_type = 'txt';
+
 % Set to 'native' to save the native OMI resolution pixels. Set to
 % 'gridded' to save the 0.05 x 0.05 gridded data
 
-pixel_type = 'gridded';
+pixel_type = 'native';
 
 % Make the list of variables to put in the HDF files. Std. variables will
 % be added by default; see the "set_variables" function for additional
 % options. The pixel type needs to be passed so that it knows whether to
 % keep the pixel specific variables or not.
 
-[vars, savename] = set_variables(pixel_type);
+[vars, savename] = set_variables(pixel_type, output_type);
 attr = add_attributes(vars);
 
 % The dates to process, location of the files, and where to save the files.
 % If you want to process all files in a directory, set the start and end
 % dates to something silly.
 start_date = '2013-08-01';
-end_date = '2013-09-30';
+end_date = '2013-08-01';
 
 mat_file_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014/';
-save_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_HDF_v2-1A/Gridded/';
+save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Test Data/HDF creation test';
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
+
+if strcmpi(output_type,'txt') && strcmpi(pixel_type, 'gridded')
+    E.badinput('Gridded output is only intended for HDF files')
+end
 
 if ~ismember(pixel_type,{'native','gridded'})
     E.badinput('"pixel_type" must be "native" or "gridded"');
@@ -73,9 +81,14 @@ for a=1:numel(FILES)
         end
         
         if DEBUG_LEVEL > 0
-            fprintf('Saving %s HDF for %s\n', pixel_type, date_string);
+            fprintf('Saving %s %s for %s\n', pixel_type, output_type, date_string);
         end
-        ask_to_overwrite = make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
+        
+        if strcmpi(output_type,'hdf')
+            ask_to_overwrite = make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
+        elseif strcmpi(output_type,'txt')
+            ask_to_overwrite = make_txt_file(Data_to_save,vars,date_string,save_dir,savename,ask_to_overwrite);
+        end
     end
 end
 
@@ -126,8 +139,14 @@ end
 
 % Remove pixel specific variables (like AMF, VZA, etc.) if the pixel type
 % is "gridded"
-if ismember('gridded',varargin)
+if ismember('gridded', varargin)
     vars = remove_ungridded_variables(vars);
+end
+
+% Remove variables that cannot be put into a CSV text file because multiple
+% values are required per pixel
+if ismember('txt', varargin)
+    vars = remove_vector_variables(vars);
 end
 
 end
@@ -148,6 +167,18 @@ gridded_vars = {'AMFTrop', 'Areaweight', 'BEHRAMFTrop','BEHRColumnAmountNO2Trop'
 gg = ismember(vars,gridded_vars);
 vars = vars(gg);
 
+end
+
+function vars = remove_vector_variables(vars)
+E=JLLErrors;
+if ~iscell(vars) || ~all(iscellcontents(vars,'ischar'))
+    E.badinput('"vars" must be a cell array of variable names as strings')
+end
+
+% Define what variables cannot be saved in a text file and remove them
+vector_vars = {'BEHRPressureLevels','BEHRScatteringWeights','BEHRAvgKernels','BEHRNO2apriori','BEHRGhostFraction'};
+vv = ismember(vars, vector_vars);
+vars = vars(~vv);
 end
 
 function attr = add_attributes(vars)
@@ -346,3 +377,116 @@ for d=1:numel(Data_in)
     if DEBUG_LEVEL > 2; toc; end
 end
 end
+
+
+
+function ask_to_overwrite = make_txt_file(Data_in, vars, date_string, save_dir, savename, ask_to_overwrite)
+E = JLLErrors;
+
+global DEBUG_LEVEL
+if isempty(DEBUG_LEVEL)
+    DEBUG_LEVEL = 0;
+end
+
+if ~strcmp(savename(end),'_')
+    savename = strcat(savename,'_');
+end
+txt_filename = strcat(savename, date_string, '.txt');
+txt_fullfilename = fullfile(save_dir, txt_filename);
+
+% Check if the file exists. Give the user 3 options if it does: abort,
+% overwrite, overwrite all.
+
+if exist(txt_fullfilename,'file')
+    if ask_to_overwrite
+        user_ans = input(sprintf('File %s exists.\n[O]verwrite, [A]bort, or Overwrite and [d]on''t ask again? ',txt_fullfilename),'s');
+        user_ans = lower(user_ans);
+        switch user_ans
+            case 'o'
+                delete(txt_fullfilename);
+            case 'd'
+                delete(txt_fullfilename);
+                ask_to_overwrite = false;
+            otherwise
+                E.userCancel;
+        end
+    else
+        delete(txt_fullfilename);
+    end
+end
+
+% For text files, we will not break up by swaths, instead all pixels will
+% be in one giant CSV type output.
+
+% First we'll create the format string based on the variables requested.
+% Most variables will have 6 significant digits, using %g (so exponential
+% or standard form will be chosen for compactness). Some will be specified
+% to be integers - either if the class of the value is an integer or it is
+% a flag field. Time will be treated specially because we want very high
+% precision, and the Lat/Loncorn fields will need to be expanded into four
+% individual fields. Next the header - start with lon, lat, and the
+% corners. The order of the rest is less important.
+n_vars = numel(vars);
+header_cell = cell(1,n_vars+6);
+header_cell(1:10) = {'Longitude','Latitude','Loncorn1','Loncorn2','Loncorn3','Loncorn4','Latcorn1','Latcorn2','Latcorn3','Latcorn4'};
+format_spec = cell(1,n_vars+6);
+format_spec(1:10) = repmat({'%.4f'},1,10);
+i=11;
+for a=1:n_vars
+    if ~ismember(vars{a}, {'Longitude','Latitude','Loncorn','Latcorn'});
+        header_cell{i} = vars{a};
+        if strcmpi(vars{a},'Time')
+            format_spec{i} = '%f';
+        elseif isinteger(Data_in(1).(vars{a})(1)) || ~isempty(regexpi(vars{a},'Flag')) || any(strcmpi(vars{a},{'Row','Swath'}))
+            format_spec{i} = '%d';
+        else
+            format_spec{i} = '%.4g';
+        end
+        i=i+1;
+    end
+end
+header_line = strjoin(header_cell,',');
+
+% Open the file and loop through all the swaths and pixels and
+% write the values.
+
+fid = fopen(txt_fullfilename,'w');
+fprintf(fid,'%s\n',header_line);
+
+for s=1:numel(Data_in)
+    for p=1:numel(Data_in(s).Longitude)
+        for a=1:numel(header_cell)
+            switch header_cell{a}
+                case 'Loncorn1'
+                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(1,p));
+                case 'Loncorn2'
+                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(2,p));
+                case 'Loncorn3'
+                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(3,p));
+                case 'Loncorn4'
+                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(4,p));
+                case 'Latcorn1'
+                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(1,p));
+                case 'Latcorn2'
+                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(2,p));
+                case 'Latcorn3'
+                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(3,p));
+                case 'Latcorn4'
+                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(4,p));
+                otherwise
+                    fprintf(fid,format_spec{a},Data_in(s).(header_cell{a})(p));
+            end
+            
+            if a<numel(header_cell)
+                fprintf(fid,',');
+            else
+                fprintf(fid,'\n');
+            end
+        end
+    end
+end
+
+fclose(fid);
+
+end
+

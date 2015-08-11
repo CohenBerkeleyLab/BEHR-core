@@ -18,6 +18,8 @@
 \usepackage[version=3]{mhchem} %Simpler chemistry notation, use \ce{} to typeset chemical formula
 	%e.g. \ce{H2O} for water and \ce{1/2SO4^2-} to set half a mol of sulfate ion.
 
+\usepackage{placeins}
+
 %Set the page to be letter sized with 1" margins
 \usepackage[dvips,letterpaper,margin=1in]{geometry}
 
@@ -31,7 +33,12 @@
 \begin{document}
 \maketitle
 
-\section{References}
+\section{Reading}
+
+	\begin{enumerate}
+		\item \citet{russell11} - description of original BEHR algorithm
+	\end{enumerate}
+
 
 \section{Product overview}
 
@@ -78,7 +85,99 @@ would indicate this sort of minor change.
 	
 	This is not an exclusive list, however these are common scientific software packages that indicate they have the capability to read HDF5 files. Note that our experience is focused on MATLAB and Python, so our ability to offer specific advice for other utilities is limited.
 	
+	
 \section{Variables}
+	Table \ref{tab:productvars} will list the attributes of all variables found in the BEHR files. Most categories are fairly self-explanatory. \emph{Product} indicates whether the variable is directly copied from the NASA OMNO2 product (SP) or calculated from BEHR. \emph{Gridding} indicates whether the variable will be contained in the native OMI pixel resolution files (``Native'') or both the native and gridded files (``both'').
+	
+	For more information on the SP variables, see the links at \url{http://disc.sci.gsfc.nasa.gov/Aura/data-holdings/OMI/omno2_v003.shtml}, especially the Readme and OMNO2 Data Format.  Here we will describe primarily the BEHR variables in detail, although we will describe the presentation of some OMNO2 variables where necessary.
+	
+	\begin{itemize}
+	\item \textbf{BEHRAMFTrop}: the tropospheric AMF calculated by the BEHR algorithm using high resolution albedo, terrain pressure, and \ce{NO2} \emph{a priori} inputs.
+	
+	\item \textbf{BEHRAvgKernels}: a vector of averaging kernels that can be used when comparing model output to the BEHR product. See \S\ref{sec:scweights} for details.
+	
+	\item \textbf{BEHRColumnAmountNO2Trop}: the tropospheric \ce{NO2} column calculated using the BEHR algorithm as $V_{\mathrm{BEHR}} = V_{\mathrm{NASA}} \cdot A_{\text{trop, NASA}} / A_{\text{trop, BEHR}}$, where $V_{\mathrm{BEHR}}$ and $V_{\mathrm{NASA}}$ are the vertical column densities for BEHR and NASA respectively, and $A_{\text{trop, NASA}}$ and $A_{\text{trop, BEHR}}$ are the tropospheric AMFs.
+	
+	\item \textbf{BEHRGhostFraction}: this is a correction factor that can be applied to add back in the ghost column if desired: $V_{\mathrm{total}} = V_{vis} \cdot G$ where $G$ is this factor, $V_{\mathrm{vis}}$ is the column given as BEHRColumnAmountNO2Trop, and $V_{\mathrm{total}}$ is the total column including estimated ghost fraction.
+	
+	\item \textbf{BEHRNO2Apriori}: this is the \ce{NO2} profile used as the \emph{a priori} for the AMF calculations. It is given as unscaled mixing ratios; so multiplying these numbers by the number density of air will directly give the number density of \ce{NO2}. See \S\ref{sec:scweights} for more information.
+	
+	\item \textbf{BEHRPressureLevels}: the pressure level that correspond to the BEHRAvgKernels, BEHRNO2Apriori, and BEHRScatteringWeights vectors. See \S\ref{sec:scweights} for more information.
+	
+	\item \textbf{GLOBETerpress}: The average surface pressure of the pixel calculated from the GLOBE database (\url{http://www.ngdc.noaa.gov/mgg/topo/globe.html}). Currently it is calculated from the GLOBE terrain heights using a simple scale height calculation, with scale height set to 7.4 km.
+	
+	\item \textbf{Latcorn, Loncorn}: corner coordinates of the pixels calculated assuming a 2 second integration period and the sensitivity given as a flat topped Gaussian function, $f(x) = \exp[c(x - x_0)^4]$
+	
+	\item \textbf{MODISAlbedo}: The average albedo of the pixel calculated from Band 3 (459--479 nm) of the MCD43C3 combined MODIS albedo product. Because this product is a 16-day average produced every 8 days, the temporally nearest MCD43C3 file is chosen.
+	
+	\item \textbf{MODISCloud}: The cloud fraction of the pixel averaged from Aqua MODIS MYD06 cloud fraction data.
+	
+	\item \textbf{RelativeAzimuthAngle}: the azimuthal difference between solar and viewing angles, calculated as:
+	\begin{align*}
+		x = |\mathrm{SAA} + 180 - \mathrm{VAA}| \\
+		\mathrm{RAA} = \left\{ 
+				\begin{matrix}
+					360 - x \text{ if } x > 180 \\
+					x	\text{ otherwise}
+				\end{matrix}
+			\right.
+	\end{align*}
+	
+	\item \textbf{XTrackQualityFlags}: directly taken from the OMNO2 product; however, while they should always be considered a bit array (and thus integers) in some version of BEHR these are converted to floating point numbers.  Also, in the gridded product, in any case where more than one pixel contributed to a grid cell, the value given will be the result of a bitwise OR operation applied to the flags from each pixel. Thus, if a flag is set in any contributing pixel, it will be set in the grid cell.
+	
+	\item \textbf{vcdQualityFlags}: same notes as XTrackQualityFlags.
+	
+	\end{itemize}
+
+	\begin{table}
+	\begin{center}
+	
+	\begin{tabular}{lcccc}
+	Variable				&	Gridding		&	Product		&	Range		& 	Unit \\ \hline
+	\rule{0pt}{3ex}AMFStrat	&Native		 &	SP			&	[0, $\infty$)	&	unitless \\
+	AMFTrop				&	Both	 		&	SP			& 	[0, $\infty$)	& unitless \\
+	BEHRAMFTrop			&	Both 		& 	BEHR			&	[0, $\infty$)	& unitless \\
+	BEHRAvgKernels		&	Native 		&	BEHR			&	[0, $\infty$)	& unitless \\
+	BEHRColumnAmountNO2Trop & Both	 	& 	BEHR		&	[0, $\infty$) & molec. cm$^{-2}$ \\
+	BEHRGhostFraction	&	Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRNO2Apriori		&	Native 		&	BEHR			& 	($-\infty$, $\infty$) & parts-per-part \\
+	BEHRPressureLevels	&	Native	 	& 	BEHR			& 	[0, $\infty$) & hPa \\
+	BEHRScatteringWeights & Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
+	CloudFraction		&	Both 		&	SP			&	[0.0, 1.0]	 & unitless \\
+	CloudPressure		&	Native	 	&	SP			& 	[0, $\infty$) & hPa \\
+	CloudRadianceFraction &	Both 		&	SP			&	[0.0, 1.0]	& unitless \\
+	ColumnAmountNO2		&	Native	 	&	SP			&	[0, $\infty$) & molec. cm$^{-2}$ \\
+	ColumnAmountNO2Strat &	Native 		&	SP			& 	[0, $\infty$) & molec. cm$^{-2}$ \\
+	ColumnAmountNO2Trop 	&	Both		 	&	SP			&	[0, $\infty$) & molec. cm$^{-2}$ \\
+	ColumAmountNO2TropStd &	Native 		& 	SP			&	[0, $\infty$) & molec. cm$^{-2}$ \\
+	GLOBETerpres			&	Both		 	&	BEHR			&	[0, $\infty$) & hPa \\
+	Latcorn				&	Native	 	&	BEHR			&	[-90.0, 90.0] & degrees \\
+	Latitude				& 	Both 		&	SP			&	[-90.0, 90.0] & degrees \\
+	Loncorn				&	Native	 	& 	BEHR			&	[-180.0, 180.0] & degrees \\
+	Longitude			& 	Both 		& 	SP			&	[-180.0, 180.0] & degrees \\
+	MODISAlbedo			&	Both		 	&	BEHR			&	[0.0, 1.0]	 & unitless \\
+	MODISCloud			&	Both 		&	BEHR			&	[0.0, 1.0]	 & unitless \\
+	RelativeAzimuthAngle &	Native	 	&	BEHR			&	[0.0, 180.0] & degrees \\
+	Row					&	Both 		&	SP			&   [0.0, 59.0]	& unitless \\
+	SlantColumnAmountNO2 & 	Native	 	&	SP			& 	[0, $\infty$) & molec. cm$^{-2}$ \\
+	SolarAzimuthAngle	&	Native	 	&	SP			&	[-180.0, 180.0] & degrees \\
+	SolarZenithAngle		&	Native	 	&	SP			&	[0.0, 90.0]		& degrees \\
+	Swath				&	Native	 	&	SP			&	[0, $\infty$)	& unitless \\
+	TerrainHeight		&	Native	 	& 	SP			&	[0, $\infty$) 	& hPa \\
+	TerrainReflectivity	&	Native 		&	SP			&	[0.0, 1.0]		& unitless \\
+	Time					&	Native	 	&	SP			&	[0, $\infty$)	& s \\
+	ViewingAzimuthAngle	&	Native	 	&	SP			&	[-180.0, 180.0]	& degrees \\
+	ViewingZenithAngle	&	Native	 	&	SP			&	[0.0, 90.0]		& degrees \\
+	XTrackQualityFlags	&	Both 		&	SP			&	N/A				& bit array flag \\
+	vcdQualityFlags		&	Both 		&	SP			&	N/A				& bit array flag \\
+	\end{tabular}
+
+	\end{center}
+	\caption{Variables found in the BEHR files.}
+	\label{tab:productvars}
+	\end{table}
+
+\FloatBarrier
 
 \section{Considerations when working with BEHR files}
 	\subsection{Pixel filtering}
@@ -99,7 +198,7 @@ XTrackQualityFlags field = 0.
 	\subsection{Weighting temporal averaging}
 	When averaging the gridded product over time, use the \emph{Areaweight} variable to weight each contribution.  This is calculated for each grid cell as the average of the reciprocals of the areas of each pixel included in that grid cell.  Thus, grid cells containing contributions from large pixels are weighted less than those from smaller, more representative pixels.
 	
-	\subsection{Using scattering weights/averaging kernels}
+	\subsection{Using scattering weights/averaging kernels} \label{sec:scweights}
 	\subsubsection{Variable layout}
 	These are for advanced users who might wish to either use their own \emph{a priori} \ce{NO2} profile or to compare modeled \ce{NO2} VCDs correctly with BEHR VCDs.  Note that the averaging kernels for each pixel are simply the scattering weights divided by the BEHR AMF; they are provided separately simply for user convenience.
 	

@@ -66,3 +66,7 @@ swath also has an attribute indicating if it is organized by native pixel or
 they are HDF v. 5 files. I believe this has always been the case (I open them
 with HDFv5 tools in Matlab) but the .hdf extension (at least in the case of
 MODIS files) implies v. 4.
+-- The quantity represented by BEHRColumnAmountNO2Trop will represent only the
+visible NO2 column, and will not include any contribution from the ghost column.
+The field BEHRGhostFraction will provide a multiplicative factor to add back in
+the ghost column (based on WRF-Chem model runs) if desired.
