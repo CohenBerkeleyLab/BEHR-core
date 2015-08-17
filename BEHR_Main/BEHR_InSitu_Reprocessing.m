@@ -47,13 +47,13 @@ cld_field = 'CloudFraction';
 no2field = Names.no2_lif;
 
 %The directory where the original BEHR files are located
-behr_prefix = 'OMI_BEHR_omi*';
+behr_prefix = 'OMI_BEHR_*';
 behr_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR/';
 
 
 %The file prefix and directory to save the resulting files under
 save_prefix = 'OMI_BEHR_InSitu_';
-save_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR_REPROCESSED/wrf-unscaled';
+save_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR_REPROCESSED/';
 
 amf_tools_path = '/Users/Josh/Documents/MATLAB/BEHR/AMF_tools';
 fileTmp = fullfile(amf_tools_path,'nmcTmpYr.txt');
@@ -250,6 +250,9 @@ for d=1:numel(dates)
         % This will be where the amfs due to each profile go to be averaged
         % together to find the average amf for the pixel
         tmp_amfs = nan(numel(behr_no2),numel(no2_array));
+        tmp_pres = nan(30,numel(behr_no2),numel(no2_array));
+        tmp_prof = nan(30,numel(behr_no2),numel(no2_array));
+        tmp_ghost = nan(numel(behr_no2),numel(no2_array));
         tmp_count = zeros(size(behr_no2));
         for p=1:numel(no2_array)
             
@@ -309,6 +312,9 @@ for d=1:numel(dates)
             surfPres_p = surfPres(pix_indices); cloudPres_p = cloudPres(pix_indices);
             cldFrac_p = cldFrac(pix_indices); cldRadFrac_p = cldRadFrac(pix_indices);
             amfs_p = nan(size(omi_lon_p));
+            new_prof_p = nan(30, size(omi_lon_p,1), size(omi_lon_p,2));
+            new_pres_p = nan(30, size(omi_lon_p,1), size(omi_lon_p,2));
+            new_ghost_p = nan(size(omi_lon_p));
             
             if DEBUG_LEVEL > 1; fprintf('\t\tRecalculating AMFs\n'); end
             for pix=1:numel(omi_lon_p)
@@ -340,11 +346,28 @@ for d=1:numel(dates)
                 cloudalbedo=0.8;
                 dAmfCld2 = rDamf2(fileDamf, insitu_pressures, sza_p(pix), vza_p(pix), phi_p(pix), cloudalbedo, cloudPres_p(pix));
                 
-                noGhost = 1; ak = 0;
-                amfs_p(pix) = omiAmfAK2(this_surfPres, cloudPres_p(pix), cldFrac_p(pix), cldRadFrac_p(pix), insitu_pressures, dAmfClr2, dAmfCld2, temperature, insitu_profile, insitu_profile, noGhost, ak);
+                noGhost = 0; ak = 1;
+                [amfs_p(pix), ~, ~, ~, ~, new_prof_pix, new_pres_pix, new_ghost_pix] = omiAmfAK2(this_surfPres, cloudPres_p(pix), cldFrac_p(pix), cldRadFrac_p(pix), insitu_pressures, dAmfClr2, dAmfCld2, temperature, insitu_profile, insitu_profile, noGhost, ak);
+                
+                % Since each in situ profile will be a different length,
+                % force them all to be 30 elements long.
+                if length(new_prof_pix) > 30
+                    E.unknownError('Somehow one of the profile vectors has > 30 elements');
+                end
+                profile_length = 30;
+                nan_pad = nan(profile_length-length(new_prof_pix),1);
+                new_pres_pix = cat(1, new_pres_pix, nan_pad);
+                new_prof_pix = cat(1, new_prof_pix, nan_pad);
+                
+                new_prof_p(:,pix) = new_prof_pix;
+                new_pres_p(:,pix) = new_pres_pix;
+                new_ghost_p(pix) = new_ghost_pix;
             end
             
             tmp_amfs(pix_indices,p) = amfs_p;
+            tmp_prof(:,pix_indices,p) = new_prof_p;
+            tmp_pres(:,pix_indices,p) = new_pres_p;
+            tmp_ghost(pix_indices,p) = new_ghost_p;
             tmp_count(pix_indices) = tmp_count(pix_indices) + 1;
         end
         
@@ -352,8 +375,18 @@ for d=1:numel(dates)
         new_amfs = reshape(new_amfs,size(omi_lat));
         new_columns = Data(s).BEHRColumnAmountNO2Trop .* Data(s).BEHRAMFTrop ./ new_amfs;
         
+        new_profs = nanmean(tmp_prof,3);
+        new_profs = reshape(new_profs, 30, size(omi_lat,1), size(omi_lat,2));
+        new_pres = nanmean(tmp_pres,3);
+        new_pres = reshape(new_pres, 30, size(omi_lat,1), size(omi_lat,2));
+        new_ghost = nanmean(tmp_ghost,2);
+        new_ghost = reshape(new_ghost, size(omi_lat));
+        
         Data(s).InSituAMF = new_amfs;
         Data(s).BEHR_R_ColumnAmountNO2Trop = new_columns;
+        Data(s).InSituProfile = new_profs;
+        Data(s).InSituPressureLevels = new_pres;
+        Data(s).InSituGhostFraction = new_ghost;
         Data(s).ProfileCount = tmp_count;
         Data(s).InSituFlags = flags;
     end

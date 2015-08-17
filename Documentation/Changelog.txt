@@ -56,7 +56,7 @@ together for a particular grid cell will be combined using a bitwise OR)
 ColumnAmountNO2Initial from OMNO2 (sorry!). Dataset names should be the same.
 -- Added scattering weights, averaging kernels, and the pressure levels for
 those quantities.  These are calculated as the average of the clear and cloudy
-scatter weights weighted by the radiance cloud fraction.  Both include the OMI
+scattering weights weighted by the radiance cloud fraction.  Both include the OMI
 temperature correction for the NO2 cross section.
 -- Attributes have been added to the HDF files' variables, including unit, 
 range, fill value, product (standard (SP) or BEHR), and a description. Each

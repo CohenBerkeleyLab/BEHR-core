@@ -12,29 +12,32 @@ DEBUG_LEVEL = 1;
 
 % Output type should be 'txt' or 'hdf'.  Text (csv) files are for native
 % resolution only.
-output_type = 'txt';
+output_type = 'hdf';
 
 % Set to 'native' to save the native OMI resolution pixels. Set to
 % 'gridded' to save the 0.05 x 0.05 gridded data
 
-pixel_type = 'native';
+pixel_type = 'gridded';
+
+% options - add 'reprocessed' here if doing in situ files
+options = {'reprocessed'};
 
 % Make the list of variables to put in the HDF files. Std. variables will
 % be added by default; see the "set_variables" function for additional
 % options. The pixel type needs to be passed so that it knows whether to
 % keep the pixel specific variables or not.
 
-[vars, savename] = set_variables(pixel_type, output_type);
+[vars, savename] = set_variables(pixel_type, output_type, options{:});
 attr = add_attributes(vars);
 
 % The dates to process, location of the files, and where to save the files.
 % If you want to process all files in a directory, set the start and end
 % dates to something silly.
-start_date = '2013-08-01';
-end_date = '2013-08-01';
+start_date = '2011-07-11';
+end_date = '2014-08-15';
 
-mat_file_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014/';
-save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Test Data/HDF creation test';
+mat_file_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR_REPROCESSED';
+save_dir = '/Volumes/share-sat/SAT/BEHR/WEBSITE/webData/discover_behr_regridded_hdf';
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
