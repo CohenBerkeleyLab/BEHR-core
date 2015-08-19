@@ -4,40 +4,55 @@
 # identify MYD06 and MCD43C3 files from the past three months that have not already been downloaded
 # and retrieve them, putting them in the proper directory.  This should be run weekly (using cron).
 #
+# The MODIS root directory on the file server should be defined in the env. variable MODDIR. (This
+# directory should contain subfolders for the various MODIS products.)
+#
 # Josh Laughner <joshlaugh5@gmail.com> 7 Aug 2015
-
-# Get the directory that the actual copy of this script lives in (not a symlink)
 # The automodis.py script must be there as well for this to work
-source=${BASH_SOURCE[0]}
-if [[ $(uname) == "Darwin" ]]; then
-    thisfile=$(readlink $source)
-else
-    thisfile=$(readlink -f $source)
-fi
-thisdir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-scriptdir="${thisdir}/${thisfile}"
 
-# Define root MODIS directory on the file server
-MODDIR="/Volumes/share-sat/SAT/MODIS"
+DEBUG=1
+
+source ~/.bashrc
+
+fsource=${BASH_SOURCE[0]}
+if [[ $(uname) == "Darwin" ]]; then
+    thisfile=$(readlink $fsource)
+    thisdir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    scriptdir="${thisdir}/${thisfile}"
+else
+    thisfile=$(readlink -f $fsource)
+    scriptdir=$(dirname $thisfile)
+fi
+# Define root MODIS directory on the file server from the env. var MODDIR.
+# if empty, error.
+if [[ $MODDIR == '' ]]
+then
+    echo "ERROR - GET_MODIS.SH: Env. variable MODDIR undefined"
+    exit 1
+fi
 
 # Remote directories have the pattern ftp://ladsweb.nascom.nasa.gov/allData/
 # <collection>/<product>/<year>/<day-of-year>/<data-files>. This is the root
 # remote dir
-REMOTEDIR="ftp://ladsweb.nascom.nasa.gov/allData/"
+REMOTEDIR="ftp://ladsweb.nascom.nasa.gov/allData"
 
 ## =============== ##
 ##     MCD43C3     ##
 ## =============== ##
 
-if [[ 0 -gt 1 ]]
-then
 
 # Retrieve the MCD43C3 data. There's only one file produced every 8 days, so we
 # only need to look for the lone .hdf file in each day's folder.
 for offset in `seq -90 -1`
 do
-    y=$(date -v ${offset}d +'%Y')
-    doy=$(date -v ${offset}d +'%j')
+    if [[ $(uname) == "Darwin" ]]
+    then
+        y=$(date -v ${offset}d +'%Y')
+        doy=$(date -v ${offset}d +'%j')
+    else
+        y=$(date -d "${offset} days" +'%Y')
+        doy=$(date -d "${offset} days" +'%j')
+    fi
     fullLocalDir="${MODDIR}/MCD43C3/${y}/"
     fullRemDir="${REMOTEDIR}/5/MCD43C3/${y}/${doy}/"
 
@@ -48,6 +63,7 @@ do
     fi
 
     cd $fullLocalDir
+    if [[ $DEBUG -gt 0 ]]; then echo $(pwd); fi
 
     # This will retrieve a list of files in the remote directory to the .listing
     # file, which we can then parse to see if the remote files are present
@@ -57,22 +73,23 @@ do
     # what days those should be, but this is safe against changes to the
     # processing schedule.
 
+    if [[ $DEBUG -gt 0 ]]; then echo "Getting MCD43C3 file list for $y $doy"; fi
+
     wget -q --spider --no-remove-listing $fullRemDir
     if [[ $? -ne 0 ]]; then continue; fi
 
     fname=$(grep '.hdf' .listing | awk '{print $9'})
-
+    fname=$(echo $fname | tr -d '\r') # remove random carriage returns
+    if [[ $DEBUG -gt 0 ]]; then echo "file = $fname"; fi
     # Only download if the file does not exist locally. If downloading, do not
     # include the header (ftp address) or any directories - just put the file
     # here.
     if [[ ! -f $fname ]]; 
     then 
         echo "Retrieving $fname"
-        echo "wget -q -nH -nd $fullRemDir$fname"
+        wget -nH -nd $fullRemDir$fname
     fi
 done
-
-fi
 
 ## =============== ##
 ##      MYD06      ##
@@ -88,14 +105,22 @@ fi
 # criteria; this will then check if those files have already been downloaded and
 # if not will call wget to retrieve the file in the proper folder.
 
-startdate=$(date -v -90d +'%Y-%m-%d 00:00:00')
-enddate=$(date +'%Y-%m-%d 23:59:59')
+if [[ $(uname) == "Darwin" ]]
+then
+    # Mac OSX implementation of date
+    startdate=$(date -v -90d +'%Y-%m-%d 00:00:00')
+    enddate=$(date +'%Y-%m-%d 23:59:59')
+else
+    # Ubuntu (hopefully standard Linux type) implementation
+    startdate=$(date -d "-90 days" +'%Y-%m-%d 00:00:00')
+    enddate=$(date +'%Y-%m-%d 23:59:59')
+fi
 
 # lon/lat bounds are specified as default values in the Python script
 # only retrieve granules with daytime information
 
 echo "Getting file list..."
-filelist=$(python ${scriptdir}/automodis.py --products MYD06_L2 --startTime $startdate --endTime $enddate --dayNightBoth 'DB')
+filelist=$(python ${scriptdir}/automodis.py --products MYD06_L2 --startTime "$startdate" --endTime "$enddate" --dayNightBoth 'DB')
 echo "Done."
 
 for f in $filelist
@@ -116,6 +141,6 @@ do
     if [[ ! -f $fname ]]
     then
         echo "Retrieving $fname"
-        echo wget -nH -nd $f
+        wget -nH -nd $f
     fi
 done

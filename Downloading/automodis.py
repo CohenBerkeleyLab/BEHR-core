@@ -79,7 +79,6 @@ def print_help(req_args, opt_args):
 
 
 if __name__ == "__main__":
-
     args = parse_args(sys.argv)
 
     url = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
