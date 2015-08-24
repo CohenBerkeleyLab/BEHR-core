@@ -1,0 +1,90 @@
+\documentclass[12pt]{article}
+
+%Bring in the packages I'll need normally
+\usepackage{amsmath} %AMS Math Package
+\usepackage{amsthm} %Theorem formatting
+\usepackage{amssymb} %Math symbols like \mathbb
+\usepackage{cancel} %Allows you to draw diagonal cancelling out lines
+\usepackage{multicol} % Allows for multiple columns
+\usepackage{graphicx} %Allows images to be inserted using \includegraphics
+\usepackage{enumitem} %Allows for fancier lists, use [noitemsep] or [noitemsep, nolistsep] after \begin{}
+\usepackage{braket} %Dirac bra-ket notation
+\usepackage{textcomp}
+\usepackage{hyperref} %Allows the use of web links (\url, \href) and computer paths (\path)
+
+\usepackage{listings} %Way to typeset code; listings respect whitespace. Can be set inline with {\lstinline[breaklines=true]||} or as an environment
+\lstset{basicstyle=\ttfamily} %Causes the code environments to be typeset with a Courier-like font
+
+\usepackage[version=3]{mhchem} %Simpler chemistry notation, use \ce{} to typeset chemical formula
+	%e.g. \ce{H2O} for water and \ce{1/2SO4^2-} to set half a mol of sulfate ion.
+
+%Set the page to be letter sized with 1" margins
+\usepackage[dvips,letterpaper,margin=1in]{geometry}
+
+%title
+\title{BEHR: DISCOVER-AQ \emph{in situ} product}
+\author{Josh Laughner}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+	The \emph{in situ} product for DISCOVER-AQ makes use of observed \ce{NO2} profiles (using the TD-LIF on board the P3B) a \emph{a priori} profiles to recalculate the BEHR AMF for OMI pixels intersecting all or part of a P3B spiral. The resulting AMFs and tropospheric column densities are added to the normal BEHR files as the following new fields:
+    
+    \begin{itemize}
+    
+        \item \texttt{InSituAMF} - the air mass factor (AMF) recalculated using the observed
+P3B NO2 profile. The exact method of calculation will be described below. This
+field will be a fill for any pixel without a corresponding P3B profile.
+
+        \item \texttt{BEHR\_R\_ColumnAmountNO2Trop} - the tropospheric NO2 vertical column
+density calculated using the InSituAMF. Again, this will have a value of NaN for 
+any pixels without a coinciding P3B profile. (The \texttt{"\_R\_"} indicates "reprocessed")
+
+        \item \texttt{ProfileCount} - an integer describing the number of profiles averaged to
+obtain the in situ profile used to calculate the AMF for the pixel. A value of 0
+would coincide with the NaN of the previous two fields.
+
+        \item \texttt{InSituFlags} - a currently unused field that was planned to have quality flags about the profiles used to calculate the AMFs for each pixel.
+
+    \end{itemize}
+
+    The \emph{in situ} product will only be produced for days where the P3B flew (since obviously there's no profile data on other days). Regular BEHR products will be made available for the entire duration of each DISCOVER campaign.
+    
+\section{Calculation of \emph{in situ} values}
+
+ What follows is a description of the steps taken to match P3B NO2 profiles
+to relevant OMI pixels and recalculate the AMFs for those pixels.
+
+\begin{enumerate}
+
+	\item Profiles are filtered by start time: only those between 12:00 and 15:00
+local standard time are used (~1.5 hrs on either side of OMI overpass). These
+are NO2 profiles measured using the TD-LIF instrument.
+
+	\item A preliminary filter is done on all pixels in a swath to remove pixels
+that clearly have no overlap, by comparing boxes with edges aligned with
+latitude/longitude lines around the pixels and profiles.  This is a
+computationally inexpensive test that is refined next.
+
+	\item The lat/lon of the bottom 3 km of the profile tested using the Matlab
+function "inpolygon" to determine how many of those points actually fall inside
+the pixel. There must be at least 20 (similar to Hains et al. JGR 2010 p.
+D05301) for the pixel and profile to be considered "coincident".
+
+	\item For each pixel associated with this profile, the profile is extended to
+the BEHR pixel surface pressure and the tropopause.  If extrapolation downward
+is necessary, the median of the bottom 10 NO2 measurements is taken as the
+surface concentration.  The top of the profile is filled in with the nearest
+WRF-Chem NO2 profile (the same WRF-Chem profiles used in BEHR).
+
+	\item This hybrid WRF-Chem/in situ profile is then used in place of the wholly
+WRF-Chem profile as the a priori in the calculation of the AMF. The scattering
+weights are determined using the same parameters as the normal implementation of
+BEHR (i.e. MODIS albedo and GLOBE-derived surface pressures).
+
+\end{enumerate}
+
+\end{document}

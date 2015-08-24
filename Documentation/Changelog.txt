@@ -56,7 +56,7 @@ together for a particular grid cell will be combined using a bitwise OR)
 ColumnAmountNO2Initial from OMNO2 (sorry!). Dataset names should be the same.
 -- Added scattering weights, averaging kernels, and the pressure levels for
 those quantities.  These are calculated as the average of the clear and cloudy
-scatter weights weighted by the radiance cloud fraction.  Both include the OMI
+scattering weights weighted by the radiance cloud fraction.  Both include the OMI
 temperature correction for the NO2 cross section.
 -- Attributes have been added to the HDF files' variables, including unit, 
 range, fill value, product (standard (SP) or BEHR), and a description. Each
@@ -66,3 +66,7 @@ swath also has an attribute indicating if it is organized by native pixel or
 they are HDF v. 5 files. I believe this has always been the case (I open them
 with HDFv5 tools in Matlab) but the .hdf extension (at least in the case of
 MODIS files) implies v. 4.
+-- The quantity represented by BEHRColumnAmountNO2Trop will represent only the
+visible NO2 column, and will not include any contribution from the ghost column.
+The field BEHRGhostFraction will provide a multiplicative factor to add back in
+the ghost column (based on WRF-Chem model runs) if desired.
