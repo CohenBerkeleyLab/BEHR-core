@@ -144,3 +144,5 @@ do
         wget -nH -nd $f
     fi
 done
+
+exit 0

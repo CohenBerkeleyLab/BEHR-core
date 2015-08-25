@@ -16,6 +16,7 @@ function read_omno2_v_aug2012(date_start, date_end)
 % 3 or less recommended for final products, as 4 will store debugging
 % variables in the output file, increasing its size.
 DEBUG_LEVEL = 1;
+
 %****************************%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -33,6 +34,11 @@ if isempty(onCluster);
     onCluster = false; 
 end
 
+% Cleanup object will safely exit if there's a problem
+if onCluster
+    cleanupobj = onCleanup(@() mycleanup());
+end
+
 % Defined the number of threads to run, this will be used to open a
 % parallel pool. numThreads should be set in the calling run script,
 % otherwise it will default to 1.
@@ -44,11 +50,12 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% DEPENDENCIES %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%
-
+if DEBUG_LEVEL > 1; fprintf('Adding folders\n'); end
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
 addpath(genpath('~/Documents/MATLAB/BEHR/Utils'))
-
+addpath(genpath('~/Documents/MATLAB/Classes'))
+addpath(genpath('~/Documents/MATLAB/Utils'))
 
 % Add the paths needed to run on the cluster
 if onCluster;
@@ -106,6 +113,8 @@ region = 'US';
 % getenv - JLL 15 Jan 2015
 
 if onCluster
+    if DEBUG_LEVEL > 1; fprintf('Setting data paths from global variables\n'); end
+
     global sp_mat_dir;
     global omi_he5_dir;
     global modis_myd06_dir;
@@ -223,6 +232,7 @@ end
 %     last_date=([last_date(1:4),'/',last_date(5:6),'/',last_date(7:8)]);
 % end
 
+if DEBUG_LEVEL > 0; fprintf('Loading GLOBE data\n'); end
 %Go ahead and load the terrain pressure data - only need to do this once
 [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
     %refvec will contain (1) number of cells per degree, (2)
@@ -788,4 +798,16 @@ end
 
 function saveData(filename,Data)
     save(filename,'Data')
+end
+
+function mycleanup()
+err=lasterror;
+if ~isempty(err.message)
+    fprintf('MATLAB exiting due to problem: %s\n', err.message);
+    if ~isempty(gcp('nocreate'))
+        delete(gcp)
+    end
+
+    exit(1)
+end
 end

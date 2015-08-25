@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -i
 # This script will figure out what SP .mat files we need to 
 # keep BEHR up to date. It assumes that the record is continuous up to the last
 # file is continuous, and that it only needs to run forward.  For simplicity, it
@@ -51,7 +51,8 @@ do
     if [[ -f $testfile ]]
     then
         if [[ $DEBUG -gt 0 ]]; then echo "Found $testfile"; fi
-        startdate=$(date -d "$startdate" +'%Y-%m-%d')
+        offset=$((offset+1))
+        startdate=$(date -d "${offset} days" +'%Y-%m-%d')
         break
     else
         offset=$((offset - 1))
@@ -82,10 +83,22 @@ done
 
 echo "Start: $startdate End: $enddate"
 
+# I'm cheating and using the fact that "onCluster" will cause the read_omno2 MATLAB function
+# to read the various directories from global variables, this way I don't have to worry
+# about them being changed when I pull the BEHR git repo.
+
 echo "warning('off', 'all'); global DEBUG_LEVEL; DEBUG_LEVEL=1;" >${MATRUNDIR}/runscript.m 
 echo "addpath(genpath('${HOME}/Documents/MATLAB/BEHR'))" >> ${MATRUNDIR}/runscript.m 
 echo "addpath(genpath('${HOME}/Documents/MATLAB/Classes'))" >> ${MATRUNDIR}/runscript.m 
 echo "addpath(genpath('${HOME}/Documents/MATLAB/Utils'))" >> ${MATRUNDIR}/runscript.m 
+echo "global onCluster; onCluster = true;" >> ${MATRUNDIR}/runscript.m
+echo "global numThreads; numThreads = 1;" >> ${MATRUNDIR}/runscript.m
+echo "global sp_mat_dir; sp_mat_dir = '/mnt/sat/SAT/BEHR/SP_Files_2014'" >> ${MATRUNDIR}/runscript.m
+echo "global omi_he5_dir; omi_he5_dir = '/mnt/sat/SAT/OMI/OMNO2'" >> ${MATRUNDIR}/runscript.m
+echo "global modis_myd06_dir; modis_myd06_dir = '/mnt/sat/SAT/MODIS/MYD06_L2'" >> ${MATRUNDIR}/runscript.m
+echo "global modis_mcd43_dir; modis_mcd43_dir = '/mnt/sat/SAT/MODIS/MCD43C3'" >> ${MATRUNDIR}/runscript.m
+echo "global globe_dir; globe_dir = '/mnt/sat/SAT/BEHR/GLOBE_Database'" >> ${MATRUNDIR}/runscript.m
+
 echo "read_omno2_v_aug2012(${startdate}, ${enddate}); exit(0)" >> ${MATRUNDIR}/runscript.m
 
 startmatlab -r "run('${MATRUNDIR}/runscript.m')" > "${MATRUNDIR}/mat.log"
@@ -97,3 +110,4 @@ then
 else
     automessage.sh "MATLAB: read_omno2_v_aug2012.m succeeded" "OMI SP processing succeeded. Log file appended:\n $(cat $MATRUNDIR/mat.log)"
 fi
+exit 0
