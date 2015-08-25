@@ -26,10 +26,8 @@ function [temperature, tmpSAVE] = rNmcTmp2(fileTmp,  pressure, lon, lat, mon)
 
 lon=lon+180;
 
-np = numel(pressure);
-dp = circshift(pressure,[1,1])-pressure;
-if min(dp(1:np))>=0;
-    disp('Invalid pressure for rDamf!');
+if any(diff(pressure) > 0);
+    E.badinput('pressure must be a monotonically decreasing vector of pressures');
 else
     
     if exist('tmpSAVE','var')==0;

@@ -53,9 +53,10 @@ end
 if DEBUG_LEVEL > 1; fprintf('Adding folders\n'); end
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
-addpath(genpath('~/Documents/MATLAB/BEHR/Utils'))
+addpath(genpath('~/Documents/MATLAB/BEHR'))
 addpath(genpath('~/Documents/MATLAB/Classes'))
 addpath(genpath('~/Documents/MATLAB/Utils'))
+
 
 % Add the paths needed to run on the cluster
 if onCluster;
@@ -92,6 +93,10 @@ if nargin < 2
     date_end='2013/08/06';
 end
 %****************************%
+
+% Set to 1 to overwrite existing files in the time range given,
+% set to 0 to only produce missing files.
+overwrite = 0;
 
 %These will be included in the file name
 %****************************%
@@ -173,66 +178,7 @@ end
 %%%%% MAIN BODY %%%%%
 %%%%%%%%%%%%%%%%%%%%%
 
-%This number will be used
 
-tic %Start the timer
-
-%Initialize matrices to hold the OMI data
-% Latitude=zeros(60,2000);
-% Longitude=zeros(60,300);
-% FoV75CornerLatitude=zeros(300,60,4);
-% FoV75CornerLongitude=zeros(300,60,4);
-% SpacecraftAltitude=zeros(300,1);
-% SpacecraftLatitude=zeros(300,1);
-% SpacecraftLongitude=zeros(300,1);
-% Time=zeros(300,1);
-% ViewingZenithAngle=zeros(60,300);
-% SolarZenithAngle=zeros(60,300);
-% ViewingAzimuthAngle=zeros(60,300);
-% SolarAzimuthAngle=zeros(60,300);
-% AMFStrat=zeros(60,300);
-% AMFTrop=zeros(60,300);
-% CloudFraction=zeros(60,300);
-% CloudRadianceFraction=zeros(60,300);
-% ColumnAmountNO2=zeros(60,300);
-% SlantColumnAmountNO2=zeros(60,300);
-% TerrainHeight=zeros(60,300);
-% TerrainPressure=zeros(60,300);
-% TerrainReflectivity=zeros(60,300);
-% vcdQualityFlags=zeros(60,300);
-% CloudPressure=zeros(60,300);
-% ColumnAmountNO2Trop=zeros(60,300);
-
-%File names will be prefixed with "<satellite>_<retrieval>_", e.g. for OMI
-%satellite SP retrieval, the prefix will be "OMI_SP_" and then the date in
-%year, month, date order.  This section checks to see if the last file in
-%the mat directory has the expected prefix.  If so, that date is taken as
-%the last date completed, otherwise it is assumed that the retrieval will
-%need to start from the specified start date. This allows he5 reading to be
-%stopped and restarted with minimal intervention.
-file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
-last_file=dir(fullfile(sp_mat_dir,[file_prefix,'*.mat']));
-
-if ~isempty(last_file)
-    last_datenum = datenum(last_file(end).name(l+1:l+8),'yyyymmdd')+1;
-else
-    last_datenum = 0;
-end
-
-if last_datenum >= datenum(date_start) && last_datenum <= datenum(date_end)
-    datenums = last_datenum:datenum(date_end);
-else
-    datenums = datenum(date_start):datenum(date_end);
-end
-
-% if isempty(last_file) || ~strcmp(last_file(end).name(1:l),file_prefix);
-%     last_date=datestr(datenum(date_start)-1,26);
-% else
-%     last_date=last_file(end).name((l+1):(l+8));
-%     last_date=([last_date(1:4),'/',last_date(5:6),'/',last_date(7:8)]);
-% end
-
-if DEBUG_LEVEL > 0; fprintf('Loading GLOBE data\n'); end
 %Go ahead and load the terrain pressure data - only need to do this once
 [terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
     %refvec will contain (1) number of cells per degree, (2)
@@ -259,9 +205,11 @@ terpres(isnan(terpres)) = -500;
 % total_days=datenum(date_end)-datenum(last_date)+1;
 % for j=1:total_days;
 
-if onCluster
+if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
+
+datenums = datenum(date_start):datenum(date_end);
 
 parfor j=1:length(datenums)
     %Read the desired year, month, and day
@@ -271,6 +219,14 @@ parfor j=1:length(datenums)
     month=date(6:7);
     day=date(9:10);
     
+    % Check if the file already exists. If it does, and if we're set
+    % to not overwrite, we don't need to process this day.
+    filename=[satellite,'_',retrieval,'_',year,month,day,'.mat'];
+    if exist(fullfile(sp_mat_dir, filename), 'file') && ~overwrite
+        if DEBUG_LEVEL > 0; fprintf('File %s exists, skipping this day\n', filename); end
+        continue
+    end
+
     %Prepare a data structure to receive the final data. 
     % As I understand this currently (15 Jan 2015) "Data" should be a local
     % variable on each worker for parallelization, and this line will reset

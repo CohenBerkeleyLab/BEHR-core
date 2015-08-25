@@ -133,7 +133,7 @@ end
 %These will be included in the file name
 %****************************%
 satellite='OMI';
-retrieval='BEHR_omiCloudAMF';
+retrieval='BEHR';
 %****************************%
 
 %****************************%
@@ -173,7 +173,6 @@ else
     datenums = datenum(date_start):datenum(date_end);
 end
 
-tic
 % Create a parallel pool if one doesn't exist and we are on a cluster
 if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
@@ -360,11 +359,6 @@ parfor j=1:length(datenums)
         savename=[file_prefix,year,month,day];  
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
         saveData(fullfile(behr_mat_dir,savename),Data,OMI)
-        toc
-        t=toc;
-        %if t>1200
-            %error('Time exceeded 20 min. Stopping')
-        %end
     end
 end
 end
