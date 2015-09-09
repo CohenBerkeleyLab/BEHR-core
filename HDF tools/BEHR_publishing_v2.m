@@ -17,10 +17,10 @@ output_type = 'hdf';
 % Set to 'native' to save the native OMI resolution pixels. Set to
 % 'gridded' to save the 0.05 x 0.05 gridded data
 
-pixel_type = 'gridded';
+pixel_type = 'native';
 
 % options - add 'reprocessed' here if doing in situ files
-options = {'reprocessed'};
+options = {};
 
 % Make the list of variables to put in the HDF files. Std. variables will
 % be added by default; see the "set_variables" function for additional
@@ -33,11 +33,11 @@ attr = add_attributes(vars);
 % The dates to process, location of the files, and where to save the files.
 % If you want to process all files in a directory, set the start and end
 % dates to something silly.
-start_date = '2011-07-11';
-end_date = '2014-08-15';
+start_date = '2007-12-19';
+end_date = '2015-01-01';
 
-mat_file_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR_REPROCESSED';
-save_dir = '/Volumes/share-sat/SAT/BEHR/WEBSITE/webData/discover_behr_regridded_hdf';
+mat_file_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014';
+save_dir = '/Volumes/share-sat/SAT/BEHR/WEBSITE/webData/behr_hdf_v2.1A';
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
@@ -72,6 +72,14 @@ end
 FILES = dir(fullfile(mat_file_dir,'OMI_BEHR*.mat'));
 ask_to_overwrite = true;
 for a=1:numel(FILES)
+    % If the file is less than a MB, it likely has no data (possibly
+    % because the OMI swaths needed were not created for that day). If this
+    % is true, skip this file.
+    if FILES(a).bytes < 1e6
+        if DEBUG_LEVEL > 0; fprintf('%s size < 1 MB, skipping due to lack of data\n',FILES(a).name); end
+        continue
+    end
+    
     % Find the date part of the file
     d_ind = regexp(FILES(a).name,'\d\d\d\d\d\d\d\d');
     date_string = FILES(a).name(d_ind:d_ind+7);
@@ -276,7 +284,7 @@ end
 if ~strcmp(savename(end),'_')
     savename = strcat(savename,'_');
 end
-hdf_filename = strcat(savename, date_string, '.h5');
+hdf_filename = strcat(savename, date_string, '.hdf');
 hdf_fullfilename = fullfile(save_dir, hdf_filename);
 
 % Check if the file exists. Give the user 3 options if it does: abort,
