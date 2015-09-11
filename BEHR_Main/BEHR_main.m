@@ -155,29 +155,14 @@ elseif ~exist(no2_profile_path,'dir')
     E.filenotfound(no2_profile_path)
 end
 
-%Find the last file completed and set the start date to the next day.  This
-%will allow the process to be stopped and started with minimum
-%intervention.
-file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
-last_file=dir(fullfile(behr_mat_dir,sprintf('%s*.mat',file_prefix)));
-
-if ~isempty(last_file)
-    last_datenum = datenum(last_file(end).name(l+1:l+8),'yyyymmdd')+1;
-else
-    last_datenum = 0;
-end
-
-if last_datenum >= datenum(date_start) && last_datenum <= datenum(date_end)
-    datenums = last_datenum:datenum(date_end);
-else
-    datenums = datenum(date_start):datenum(date_end);
-end
 
 % Create a parallel pool if one doesn't exist and we are on a cluster
 if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
+file_prefix = [satellite,'_',retrieval,'_'];
+datenums = datenum(date_start):datenum(date_end);
 parfor j=1:length(datenums)
     %Read the desired year, month, and day
   	R=datenums(j);
