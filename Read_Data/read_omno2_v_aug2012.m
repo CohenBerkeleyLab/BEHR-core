@@ -15,7 +15,7 @@ function read_omno2_v_aug2012(date_start, date_end)
 % Choose a higher level to keep track of what the script is doing.
 % 3 or less recommended for final products, as 4 will store debugging
 % variables in the output file, increasing its size.
-DEBUG_LEVEL = 1;
+DEBUG_LEVEL = 4;
 
 %****************************%
 
@@ -89,14 +89,14 @@ end
 %overriding dates are passed into the function.
 %****************************%
 if nargin < 2
-    date_start='2013/08/01';
-    date_end='2013/08/06';
+    date_start='2011/07/01';
+    date_end='2011/07/31';
 end
 %****************************%
 
 % Set to 1 to overwrite existing files in the time range given,
 % set to 0 to only produce missing files.
-overwrite = 0;
+overwrite = 1;
 
 %These will be included in the file name
 %****************************%
@@ -155,7 +155,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
+    sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/AlbedoTest';
     
     %This is the directory where the he5 files are saved.
     omi_he5_dir = '/Volumes/share-sat/SAT/OMI/OMNO2';
@@ -164,7 +164,7 @@ else
     modis_myd06_dir = '/Volumes/share-sat/SAT/MODIS/MYD06_L2';
     
     %This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
-    modis_mcd43_dir = '/Volumes/share-sat/SAT/MODIS/MCD43C3';
+    modis_mcd43_dir = '/Volumes/share-sat/SAT/MODIS/MCD43C1';
     
     %This is the directory where the GLOBE data files and their headers (.hdr files) are saved.
     %Do not include a trailing separator.
@@ -211,7 +211,7 @@ end
 
 datenums = datenum(date_start):datenum(date_end);
 
-parfor j=1:length(datenums)
+for j=1:length(datenums)
     %Read the desired year, month, and day
     R=datenums(j);
     date=datestr(R,26);
@@ -232,7 +232,7 @@ parfor j=1:length(datenums)
     % variable on each worker for parallelization, and this line will reset
     % its value within each loop. Thus we shouldn't need to worry about
     % cross-communication between workers.
-    Data=struct('Date',0,'Longitude',0,'Latitude',0,'LatBdy',[],'LonBdy',[],'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0,'MODIS_Cloud_File','','MODISAlbedo',0,'MODIS_Albedo_File','','GLOBETerpres',0,'XTrackQualityFlags',0);
+    Data=struct('Date',0,'Longitude',0,'Latitude',0,'LatBdy',[],'LonBdy',[],'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0,'MODIS_Cloud_File','','MODISAlbedoBRDF',0,'MODISAlbedoPoly',0,'MODIS_Albedo_File','','GLOBETerpres',0,'XTrackQualityFlags',0);
     
     %Set the file path and name, assuming that the file structure is
     %<he5_directory>/<year>/<month>/...files...  Then figure out how many
@@ -603,7 +603,7 @@ parfor j=1:length(datenums)
                 in=[0 1 -1 2 -2 3 -3 4 -4 5 -5 6 -6 7 -7 8 -8 9 -9 10 -10 11 -11 12 -12 13 -13 14 -14 15 -15 16 -16 17 -17 18 -18 19 -19 20 -20 21 -21];
                 for ii=1:length(in);
                     mcd_date = num2str(str2double(julian_day) + in(ii),'%03g');
-                    alb_filename = fullfile(alb_dir,['MCD43C3.A',year,mcd_date,'*.hdf']);
+                    alb_filename = fullfile(alb_dir,['MCD43C1.A',year,mcd_date,'*.hdf']);
                     alb_files = dir(alb_filename);
                     if DEBUG_LEVEL > 1; fprintf('Looking for %s \n', alb_filename); end
                     %if exist('alb_filename','file') == 2
@@ -616,9 +616,24 @@ parfor j=1:length(datenums)
                 end
                 
                 mcd43_info = hdfinfo(fullfile(alb_dir,alb_files(1).name));
-                band3 = hdfread(hdf_dsetID(mcd43_info,1,1,'Albedo_BSA_Band3'));
-                band3 = double(band3);
-                band3 = flipud(band3); 
+                band3_iso = hdfread(hdf_dsetID(mcd43_info,1,1,'BRDF_Albedo_Parameter1_Band3'));
+                band3_vol = hdfread(hdf_dsetID(mcd43_info,1,1,'BRDF_Albedo_Parameter2_Band3'));
+                band3_geo = hdfread(hdf_dsetID(mcd43_info,1,1,'BRDF_Albedo_Parameter3_Band3'));
+                
+                band3_iso = flipud(double(band3_iso));
+                band3_vol = flipud(double(band3_vol));
+                band3_geo = flipud(double(band3_geo)); 
+                
+                % Remove fill values (as specified in the HDF attributes)
+                band3_iso(band3_iso==32767)=nan;
+                band3_vol(band3_vol==32767)=nan;
+                band3_geo(band3_geo==32767)=nan;
+                
+                % Applied the scale factor (as specified in the HDF
+                % attributes)
+                band3_iso = band3_iso * 1e-3;
+                band3_vol = band3_vol * 1e-3;
+                band3_geo = band3_geo * 1e-3;
                 
                 %MODIS albedo is given in 0.05 degree cells and a single file covers the
                 %full globe, so figure out the lat/lon of the middle of the grid cells as:
@@ -636,16 +651,19 @@ parfor j=1:length(datenums)
                 
                 in_lats = find(band3_lat>=lat_min & band3_lat<=lat_max);
                 in_lons = find(band3_lon>=lon_min & band3_lon<=lon_max);
-                band3=band3(in_lats,in_lons); 
-                band3(band3==32767)=NaN; %JLL 11 Apr 2014: 32767 is the fill value for this data set; we will remove the NaNs further down
-                band3 = band3 * 1e-3; %JLL 11-Apr-2014 Albedo matrix needs to have the scale factor applied 
+                
+                band3_iso = band3_iso(in_lats,in_lons); 
+                band3_vol = band3_vol(in_lats,in_lons);
+                band3_geo = band3_geo(in_lats,in_lons);
+                
                 band3_lats=band3_lats(in_lats,in_lons);
                 band3_lons=band3_lons(in_lats,in_lons);
                 s=size(Data(E).Latitude);
                 c=numel(Data(E).Latitude);
-                MODISAlbedo=zeros(s);
+                MODISAlbedoBRDF=zeros(s);
+                MODISAlbedoPoly=zeros(s);
                 
-                if DEBUG_LEVEL > 3; MODISAlb_Ocn = zeros(s); end %JLL 
+                if DEBUG_LEVEL > 3; MODISAlb_Ocn = false(s); end %JLL 
                 
                 %Now actually average the MODIS albedo for each OMI pixel
                 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
@@ -662,24 +680,32 @@ parfor j=1:length(datenums)
                     
                     xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
                     
-                    band3_vals=band3(xx_alb);  band3_zeros=band3_vals==0;
-                    band3_vals(band3_zeros)=NaN; band3_vals(isnan(band3_vals))=[];
-                    band3_avg=mean(band3_vals);
+                    band3_vals_brdf = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data(E).SolarZenithAngle(k), Data(E).ViewingZenithAngle(k), Data(E).RelativeAzimuthAngle(k));
+                    band3_avg_brdf = nanmean(band3_vals_brdf(band3_vals_brdf>0));
+                    
+                    band3_vals_poly = modis_brdf_alb_poly(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data(E).SolarZenithAngle(k));
+                    band3_avg_poly = nanmean(band3_vals_poly);
                     
                     %put in ocean surface albedo from LUT
-                    if isnan(band3_avg)==1;
-                        sza_vec = [5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 89];
-                        alb_vec = [0.038 0.038 0.039 0.039 0.040 0.042 0.044 0.046 0.051 0.058 0.068 0.082 0.101 0.125 0.149 0.158 0.123 0.073];
-                        alb = interp1(sza_vec,alb_vec,Data(E).SolarZenithAngle(k));
-                        band3_avg = alb;
-                        if DEBUG_LEVEL > 3; MODISAlb_Ocn(k) = 1; end
+                    sza_vec = [5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 89];
+                    alb_vec = [0.038 0.038 0.039 0.039 0.040 0.042 0.044 0.046 0.051 0.058 0.068 0.082 0.101 0.125 0.149 0.158 0.123 0.073];
+                    if any([isnan(band3_avg_brdf), isnan(band3_avg_poly)])
+                        MODISAlb_Ocn(k) = true;
+                    end
+                    if isnan(band3_avg_brdf)
+                        band3_avg_brdf = interp1(sza_vec,alb_vec,Data(E).SolarZenithAngle(k));
+                    end
+                    if isnan(band3_avg_poly)
+                        band3_avg_poly = interp1(sza_vec,alb_vec,Data(E).SolarZenithAngle(k));
                     end
                     
-                    MODISAlbedo(k) = band3_avg;
+                    MODISAlbedoBRDF(k) = band3_avg_brdf;
+                    MODISAlbedoPoly(k) = band3_avg_poly;
                     if DEBUG_LEVEL > 2; telap = toc; fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
                 end
                 
-                Data(E).MODISAlbedo = MODISAlbedo;
+                Data(E).MODISAlbedoBRDF = MODISAlbedoBRDF;
+                Data(E).MODISAlbedoPoly = MODISAlbedoPoly;
                 Data(E).MODIS_Albedo_File = fullfile(alb_dir,alb_files(1).name);
                 if DEBUG_LEVEL > 3; Data(E).MODISAlb_Ocean = MODISAlb_Ocn; end
                 
