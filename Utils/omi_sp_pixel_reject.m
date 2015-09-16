@@ -1,4 +1,4 @@
-function [ omi ] = omi_sp_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_mode )
+function [ omi ] = omi_sp_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_mode, rows )
 %omi_pixel_reject: Set areaweight to 0 for any pixels that will adversely
 %affect the accuracy of OMI SP maps.
 %   There are a number of criteria that need to be evaluated for an OMI
@@ -29,6 +29,14 @@ function [ omi ] = omi_sp_pixel_reject( omi_in, cloud_type, cloud_frac, rowanoma
 %          anomaly flag in the OMNO2 product to reject pixels.  These are
 %          the two recommended methods.
 %
+%       rows: An optional variable that will be used to remove certain rows
+%           from the calculation, for viewing angle dependence tests. If
+%           empty, no rows will be removed. (This allows the user to use
+%           this function even if a Rows field is not present in the OMI
+%           structure). It should be either empty or a two element vector
+%           giving a min and max (inclusive) value for the row numbers,
+%           which are 0 to 59.
+%
 %   The rejection criteria are:
 %       Column amount < 0: Likely a fill value or unphysical result.
 %       VCD Quality Flag is not a even number: the VCD quality flag is a
@@ -44,7 +52,9 @@ function [ omi ] = omi_sp_pixel_reject( omi_in, cloud_type, cloud_frac, rowanoma
 %          0 values, or another mathematical mistake.
 %       Row anomaly: see http://www.knmi.nl/omi/research/product/rowanomaly-background.php
 
-
+if ~exist('rows','var')
+    rows = [];
+end
 omi = omi_in;
 
 omi.Areaweight(omi.ColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
@@ -75,6 +85,12 @@ hh=find(isnan(omi.ColumnAmountNO2Trop)); omi.ColumnAmountNO2Trop(hh)=0; omi.Area
 
 xx = omi_rowanomaly(omi,rowanomaly_mode); %Remove elements affected by the row anomaly.
 omi.Areaweight(xx) = 0;
+
+% Remove elements by row, if the user specifies a row range.
+if ~isempty(rows)
+    rr = omi.Row < min(rows) | omi.Row > max(rows);
+    omi.Areaweight(rr) = 0;
+end
 
 end
 

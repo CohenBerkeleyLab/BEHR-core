@@ -1,4 +1,4 @@
-function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_mode )
+function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_mode, rows )
 %omi_pixel_reject: Set areaweight to 0 for any pixels that will adversely
 %affect the accuracy of the BEHR NO2 map.
 %   There are a number of criteria that need to be evaluated for an OMI
@@ -20,6 +20,13 @@ function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_
 %          after the anomaly reached that row. 'XTrackFlags' uses the row
 %          anomaly flag in the OMNO2 product to reject pixels.  These are
 %          the two recommended methods.
+%       rows: An optional variable that will be used to remove certain rows
+%           from the calculation, for viewing angle dependence tests. If
+%           empty, no rows will be removed. (This allows the user to use
+%           this function even if a Rows field is not present in the OMI
+%           structure). It should be either empty or a two element vector
+%           giving a min and max (inclusive) value for the row numbers,
+%           which are 0 to 59.
 %
 %   The rejection criteria are:
 %       Column amount < 0: Likely a fill value or unphysical result.
@@ -38,6 +45,9 @@ function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_
 
 E = JLLErrors;
 omi = omi_in;
+if ~exist('rows','var')
+    rows = [];
+end
 
 omi.Areaweight(omi.BEHRColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
 
@@ -73,6 +83,13 @@ hh=find(isnan(omi.BEHRColumnAmountNO2Trop)); omi.BEHRColumnAmountNO2Trop(hh)=0; 
 
 xx = omi_rowanomaly(omi,rowanomaly_mode); %Remove elements affected by the row anomaly.
 omi.Areaweight(xx) = 0;
+
+% Remove elements by row, if the user specifies a row range.
+if ~isempty(rows)
+    rr = omi.Row < min(rows) | omi.Row > max(rows);
+    omi.Areaweight(rr) = 0;
+end
+
 
 end
 
