@@ -96,7 +96,7 @@ end
 
 % Set to 1 to overwrite existing files in the time range given,
 % set to 0 to only produce missing files.
-overwrite = 0;
+overwrite = 1;
 
 %These will be included in the file name
 %****************************%
@@ -241,6 +241,7 @@ parfor j=1:length(datenums)
     file_dir = fullfile(omi_he5_dir,year,month); %Used both here to find all he5 files and in the swath for loop to identify each file.
     file=fullfile(file_dir,short_filename);
     sp_files = dir(file);
+    sp_files = remove_duplicate_orbits(sp_files);
     n = length(sp_files);
     E=0;
     if isempty(sp_files);
@@ -766,4 +767,60 @@ if ~isempty(err.message)
 
     exit(1)
 end
+end
+
+function sp_files = remove_duplicate_orbits(sp_files)
+% From Oct 23, 2013 to Nov 4, 2013, several orbits have two files.  Since I
+% could find nothing about this, I'm assuming that the one with the later
+% processing date is the best one to use.  This subfunction will take a
+% structure of OMNO2 files returned from dir() and check for duplicate
+% orbits. If any are found, a warning is issued and only the one with the
+% most recent processing date is kept.
+
+orbits = zeros(size(sp_files));
+for a=1:numel(sp_files)
+    % The orbit is identified in the file name as "-o#####"
+    orbits(a) = str2double(sp_files(a).name(35:39));
+end
+
+uorbits = unique(orbits);
+if numel(uorbits) == numel(orbits)
+    % All orbits only present once, return now.
+    return
+end
+
+% Otherwise we need to identify the doubled orbits
+rm_bool = false(size(sp_files)); % will be set to true for the orbits to be removed
+for a=1:numel(uorbits)
+    % For each orbit that has >1 file, find the one with the most recent
+    % processing time; the rest for that orbit will be removed.
+    xx = find(orbits == uorbits(a));
+    if numel(xx) > 1
+        names = {sp_files(xx).name};
+        latest_proc_ind = 0;
+        latest_proc_datenum = 0;
+        for b = 1:numel(names)
+            proc_time = names{b}([46:49,51:54]);
+            proc_datenum = datenum(proc_time,'yyyymmdd');
+            if proc_datenum > latest_proc_datenum
+                latest_proc_ind = b;
+                latest_proc_datenum = proc_datenum;
+            end
+        end
+        yy = true(size(xx));
+        yy(latest_proc_ind) = false;
+        rm_bool(xx(yy)) = true;
+    end
+end
+
+% Give a warning for the log 
+if any(rm_bool)
+    rm_files = {sp_files(rm_bool).name};
+    fspec = repmat('\t%s\n',1,sum(rm_bool));
+    wmsg = sprintf('Duplicate orbits detected, the following files will not be used:\n%s',fspec);
+    warning(wmsg, rm_files{:});
+end
+
+sp_files(rm_bool) = [];
+
 end
