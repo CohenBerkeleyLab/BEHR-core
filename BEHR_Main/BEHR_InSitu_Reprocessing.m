@@ -48,7 +48,7 @@ no2field = Names.no2_lif;
 
 %The directory where the original BEHR files are located
 behr_prefix = 'OMI_BEHR_*';
-behr_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR/';
+behr_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014/';
 
 
 %The file prefix and directory to save the resulting files under

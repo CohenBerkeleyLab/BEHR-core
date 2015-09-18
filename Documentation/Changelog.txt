@@ -47,7 +47,7 @@ using NEI 2005 emissions.
 -- 400 is no longer a fill value for the GLOBETerpres field. There should be no
 fill values in this field - grid points in the GLOBE database that do not have a
 value are over ocean, and so are assigned a pressure of 1013 hPa.
--- Corrected bug in which the cloud fractions were scaled by 1000 twice before
+-- Corrected bug in which the cloud fractions were scaled twice before
 inclusion in AMF calculation. (This had only a minor effect on NO2 columns.)
 -- Flag fields (vcdQualityFlags, XTrackQualityFlags) will now represent the most
 cautious flag in the gridded product (the flags from all pixels averaged
@@ -62,10 +62,6 @@ temperature correction for the NO2 cross section.
 range, fill value, product (standard (SP) or BEHR), and a description. Each
 swath also has an attribute indicating if it is organized by native pixel or
 0.05 x 0.05 deg grid.
--- HDF files will now end in ".h5" instead of ".hdf" to accurately reflect that
-they are HDF v. 5 files. I believe this has always been the case (I open them
-with HDFv5 tools in Matlab) but the .hdf extension (at least in the case of
-MODIS files) implies v. 4.
 -- The quantity represented by BEHRColumnAmountNO2Trop will represent only the
 visible NO2 column, and will not include any contribution from the ghost column.
 The field BEHRGhostFraction will provide a multiplicative factor to add back in
