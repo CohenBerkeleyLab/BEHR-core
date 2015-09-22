@@ -1,10 +1,21 @@
-function [  ] = BEHR_publishing_v2(  )
-%BEHR_hdf_v2 Create the HDF files for BEHR products
+function [  ] = BEHR_publishing_v2(output_type, pixel_type, options, start_date, end_date)
+%BEHR_publishing_v2 Create the HDF files for BEHR products
 %   Detailed explanation goes here
+%
+%   Non-built in dependencies (updated 22 Sept 2015):
+%       Classes/JLLErrors.m
+%       Utils/bitopmat.m
+%       Utils/iscellcontents.m
+%       Utils/make_empty_struct_from_cell.m
 
 E = JLLErrors;
 global DEBUG_LEVEL
 DEBUG_LEVEL = 1;
+
+global onCluster
+if isempty(onCluster)
+    onCluster = false;
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%%%% SET OPTIONS %%%%%
@@ -12,15 +23,20 @@ DEBUG_LEVEL = 1;
 
 % Output type should be 'txt' or 'hdf'.  Text (csv) files are for native
 % resolution only.
-output_type = 'hdf';
+if ~exist('output_type','var')
+    output_type = 'txt';
+end
 
 % Set to 'native' to save the native OMI resolution pixels. Set to
 % 'gridded' to save the 0.05 x 0.05 gridded data
-
-pixel_type = 'native';
+if ~exist('pixel_type','var')
+    pixel_type = 'native';
+end
 
 % options - add 'reprocessed' here if doing in situ files
-options = {};
+if ~exist('options','var')
+    options = {};
+end
 
 % Make the list of variables to put in the HDF files. Std. variables will
 % be added by default; see the "set_variables" function for additional
@@ -33,12 +49,51 @@ attr = add_attributes(vars);
 % The dates to process, location of the files, and where to save the files.
 % If you want to process all files in a directory, set the start and end
 % dates to something silly.
-start_date = '2007-12-19';
-end_date = '2015-01-01';
+if ~exist('start_date','var') || ~exist('end_date','var')
+    start_date = '2008-02-18';
+    end_date = '2016-01-01';
+end
 
-mat_file_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014';
-save_dir = '/Volumes/share-sat/SAT/BEHR/WEBSITE/webData/behr_hdf_v2.1A';
-
+global mat_file_dir
+global save_dir
+global numThreads
+if ~onCluster
+    mat_file_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014';
+    save_dir = '/Volumes/share-sat/SAT/BEHR/WEBSITE/staging/behr_txt_v2.1A';
+else
+    % Check that all global variables are set
+    global_unset = {};
+    if isempty(mat_file_dir)
+        global_unset{end+1} = 'mat_file_dir';
+    end
+    if isempty(save_dir)
+        global_unset{end+1} = 'save_dir';
+    end
+    if isempty(numThreads)
+        global_unset{end+1} = 'numThreads';
+    end
+    if ~isempty(global_unset)
+        E.runscript_error(global_unset);
+    end
+    
+    % Check that both directories exist and that numThreads is the proper
+    % type
+    if ~isnumeric(numThreads) || ~isscalar(numThreads)
+        E.badinput('numThreads should be a scalar number; this is a global setting, check the calling runscript')
+    end
+    
+    dirs_dne = {};
+    if ~exist('mat_file_dir','dir')
+        dirs_dne{end+1} = 'mat_file_dir';
+    end
+    if ~exist('save_dir','dir')
+        dirs_dne{end+1} = 'save_dir';
+    end
+    if ~isempty(dirs_dne)
+        E.dir_dne(dirs_dne);
+    end
+   
+end
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -69,40 +124,82 @@ end
 %%%%% MAIN LOOP %%%%%
 %%%%%%%%%%%%%%%%%%%%%
 
+% Split into two different loops: if running on a cluster, it will
+% parallelize and assume that you want to overwrite any existing files. If
+% running locally, it will not parallelize, and will ask for your decision
+% on overwriting files.
+
 FILES = dir(fullfile(mat_file_dir,'OMI_BEHR*.mat'));
-ask_to_overwrite = true;
-for a=1:numel(FILES)
-    % If the file is less than a MB, it likely has no data (possibly
-    % because the OMI swaths needed were not created for that day). If this
-    % is true, skip this file.
-    if FILES(a).bytes < 1e6
-        if DEBUG_LEVEL > 0; fprintf('%s size < 1 MB, skipping due to lack of data\n',FILES(a).name); end
-        continue
+if ~onCluster
+    ask_to_overwrite = true;
+    for a=1:numel(FILES)
+        % Find the date part of the file
+        d_ind = regexp(FILES(a).name,'\d\d\d\d\d\d\d\d');
+        date_string = FILES(a).name(d_ind:d_ind+7);
+        if datenum(date_string,'yyyymmdd') >= datenum(start_date) && datenum(date_string,'yyyymmdd') <= datenum(end_date)
+            % If the file is less than a MB, it likely has no data (possibly
+            % because the OMI swaths needed were not created for that day). If this
+            % is true, skip this file.
+            if FILES(a).bytes < 1e6
+                if DEBUG_LEVEL > 0; fprintf('%s size < 1 MB, skipping due to lack of data\n',FILES(a).name); end
+                continue
+            end
+
+            load(fullfile(mat_file_dir,FILES(a).name));
+            if strcmpi(pixel_type,'native')
+                Data_to_save = Data;
+            else
+                Data_to_save = OMI;
+            end
+
+            if DEBUG_LEVEL > 0
+                fprintf('Saving %s %s for %s\n', pixel_type, output_type, date_string);
+            end
+
+            if strcmpi(output_type,'hdf')
+                ask_to_overwrite = make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
+            elseif strcmpi(output_type,'txt')
+                ask_to_overwrite = make_txt_file(Data_to_save,vars,date_string,save_dir,savename,ask_to_overwrite);
+            end
+        end
     end
-    
-    % Find the date part of the file
-    d_ind = regexp(FILES(a).name,'\d\d\d\d\d\d\d\d');
-    date_string = FILES(a).name(d_ind:d_ind+7);
-    if datenum(date_string,'yyyymmdd') >= datenum(start_date) && datenum(date_string,'yyyymmdd') <= datenum(end_date)
-        load(fullfile(mat_file_dir,FILES(a).name));
-        if strcmpi(pixel_type,'native')
-            Data_to_save = Data;
-        else
-            Data_to_save = OMI;
-        end
-        
-        if DEBUG_LEVEL > 0
-            fprintf('Saving %s %s for %s\n', pixel_type, output_type, date_string);
-        end
-        
-        if strcmpi(output_type,'hdf')
-            ask_to_overwrite = make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
-        elseif strcmpi(output_type,'txt')
-            ask_to_overwrite = make_txt_file(Data_to_save,vars,date_string,save_dir,savename,ask_to_overwrite);
+else
+    if onCluster && isempty(gcp('nocreate'))
+        parpool(numThreads);
+    end
+    ask_to_overwrite = false;
+    parfor a=1:numel(FILES)
+        % Find the date part of the file
+        d_ind = regexp(FILES(a).name,'\d\d\d\d\d\d\d\d');
+        date_string = FILES(a).name(d_ind:d_ind+7);
+        if datenum(date_string,'yyyymmdd') >= datenum(start_date) && datenum(date_string,'yyyymmdd') <= datenum(end_date)
+            % If the file is less than a MB, it likely has no data (possibly
+            % because the OMI swaths needed were not created for that day). If this
+            % is true, skip this file.
+            if FILES(a).bytes < 1e6
+                if DEBUG_LEVEL > 0; fprintf('%s size < 1 MB, skipping due to lack of data\n',FILES(a).name); end
+                continue
+            end
+
+            D = load(fullfile(mat_file_dir,FILES(a).name));
+            if strcmpi(pixel_type,'native')
+                Data_to_save = D.Data;
+            else
+                Data_to_save = D.OMI;
+            end
+
+            if DEBUG_LEVEL > 0
+                fprintf('Saving %s %s for %s\n', pixel_type, output_type, date_string);
+            end
+
+            if strcmpi(output_type,'hdf')
+                make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
+            elseif strcmpi(output_type,'txt')
+                make_txt_file(Data_to_save,vars,date_string,save_dir,savename,ask_to_overwrite);
+            end
         end
     end
 end
-
 
 end
 
