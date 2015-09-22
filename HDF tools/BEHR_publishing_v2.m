@@ -17,6 +17,11 @@ if isempty(onCluster)
     onCluster = false;
 end
 
+if onCluster
+    addpath('~/MATLAB/Utils');
+    addpath('~/MATLAB/Classes');
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%
 %%%%% SET OPTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%
