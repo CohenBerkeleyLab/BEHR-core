@@ -96,7 +96,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Original - No clouds';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -123,15 +123,15 @@ fileDamf = fullfile(amf_tools_path,'damf.txt');
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 if nargin < 2
-    date_start='2013/06/10';
-    date_end='2013/06/10';
+    date_start='2013/06/11';
+    date_end='2013/06/30';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
 %****************************%
 
 % Which WRF profiles to use
 %****************************%
-wrf_avg_mode = 'monthly';
+wrf_avg_mode = 'hybrid';
 %****************************%
 
 %These will be included in the file name
