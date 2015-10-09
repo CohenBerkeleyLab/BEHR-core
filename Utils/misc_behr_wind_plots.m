@@ -19,6 +19,8 @@ switch lower(plttype)
     case 'calcwind'
         varargout{1} = calc_wind_mag(varargin{1}, varargin{2});
         varargout{2} = calc_wind_dir(varargin{1}, varargin{2});
+    case 'perdiffvstheta'
+        plot_delamf_vs_delangle(varargin{:});
     otherwise
         fprintf('plttype not recognized\n');
 end
@@ -358,6 +360,97 @@ end
             title(sprintf('Pixel at %.2f W, %.2f N (%s) - %s',DataHourly.Longitude(x,y),DataHourly.Latitude(x,y),mat2str([x,y]), title_sf));
         end
     end
+    function varargout = plot_delamf_vs_delangle(Data_D, Data_M, wind_angle, city_lon, city_lat, wind_speed)
+        % This function will generate a scatter plot of percent difference
+        % in BEHR AMF values between a any two sets of pixels as a function
+        % of position of the pixel relative to the city compared to wind
+        % direction. Arguments:
+        %   Data_D: data structure with the new AMFs. Must contain
+        %   Longitude, Latitude, and BEHRAMFTrop as fields.
+        %
+        %   Data_M: data structure with the old AMFs. Must contain the same
+        %   fields.
+        %
+        %   wind_angle: angle of the wind around the city in degrees CCW
+        %   from east, must be between 0 and 360.
+        %
+        %   city_lon, city_lat: the longitude/latitude coordinates of the
+        %   city, using the convention that longitude west of 0 is
+        %   negative.
+        %
+        %   wind_speed: (optional) a wind speed in km/s, used to normalize
+        %   pixel distanced to wind speed over the city.  More useful in
+        %   conjunction with another function that plots multiple days with
+        %   different wind speed and direction on one plot.
+        
+        % INPUT CHECKING:
+        req_fields = {'Longitude','Latitude','BEHRAMFTrop'};
+        if ~isstruct(Data_D) || any(~isfield(Data_D,req_fields))
+            E.badinput('Data_D must be a structure with fields %s',strjoin(req_fields,', '));
+        elseif ~isstruct(Data_M) || any(~isfield(Data_M, req_fields))
+            E.badinput('Data_M must be a structure with fields %s',strjoin(req_fields,', '));
+        end
+        
+        % Also check that the pixels are the same in both structures
+        if ndims(Data_D.Longitude) ~= ndims(Data_M.Longitude) || any(size(Data_D.Longitude) ~= size(Data_M.Longitude))
+            E.sizeMismatch('Data_D.Longitude','Data_M.Longitude');
+        elseif any(abs(Data_D.Longitude(:) - Data_M.Longitude(:))>0.01) || any(abs(Data_D.Latitude(:) - Data_M.Latitude(:))>0.01)
+            E.badinput('Data_M and Data_D seem to have different pixels (based on lat/lon coordinates');
+        end
+        
+        if ~isscalar(wind_angle) || ~isnumeric(wind_angle) || wind_angle < 0 || wind_angle > 360
+            E.badinput('wind_angle must be a scalar number between 0 and 360');
+        elseif ~isscalar(city_lon) || ~isnumeric(city_lon) || city_lon < -180 || city_lon > 180
+            E.badinput('city_lon must be a scalar number between -180 and 180');
+        elseif ~isscalar(city_lat) || ~isnumeric(city_lat) || city_lat < -90 || city_lat > 90
+            E.badinput('city_lat must be a scalar number between -90 and 90');
+        end
+        
+        % cbtitle will be used later to label the colorbar, whether it is
+        % simply distance to city or is in fact distance normalized by wind
+        % speed (in case of multiple days)
+        if ~exist('wind_speed','var')
+            wind_speed = 1;
+            cbtitle = 'Distance to city (km)';
+        else
+            if ~isscalar(wind_speed) || ~isnumeric(wind_speed) || wind_speed < 0
+                E.badinput('wind_speed should be a positive scalar number');
+            end
+            cbtitle = 'Distance to city normalized by wind speed';
+        end
+        
+        % MAIN FUNCTION:
+        % Calculate 3 quantities: the percent difference in AMF from the
+        % new and old a priori, the angle of each pixel to the city (in deg
+        % CCW from east), and the distance of each pixel to the city
+        
+        % Per. diff. AMF:
+        perdiff = (Data_D.BEHRAMFTrop(:) ./ Data_M.BEHRAMFTrop(:) - 1) * 100;
+        
+        % Difference between angle to pixel and angle of wind
+        city_lon_mat = repmat(city_lon, size(Data_D.Longitude));
+        city_lat_mat = repmat(city_lat, size(Data_D.Latitude));
+        
+        theta_pix = latlon_angle(city_lon_mat, city_lat_mat, Data_D.Longitude, Data_D.Latitude);
+        
+        % Distance from city to pixels.
+        dist_to_city = nan(size(Data_D.Longitude));
+        for a=1:numel(dist_to_city)
+            dist_to_city(a) = m_lldist([city_lon, Data_D.Longitude(a)], [city_lat, Data_D.Latitude(a)]);
+        end
+        
+        % Figure creation. 36 is the default marker size for a scatter plot
+        % in Matlab 2014b.
+        figure; 
+        scatter(theta_pix(:) - wind_angle, perdiff(:), 36, dist_to_city(:) ./ wind_speed);
+        cb = colorbar;
+        set(gca,'fontsize',16)
+        xlabel('\theta_{pix} - \theta_{wind}')
+        ylabel('%\Delta AMF')
+        cb.Label.String = cbtitle;
+        
+    end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% OTHER FUNCTION %%%%%
