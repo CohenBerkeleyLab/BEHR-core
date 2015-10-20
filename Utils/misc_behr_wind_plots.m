@@ -21,6 +21,8 @@ switch lower(plttype)
         varargout{2} = calc_wind_dir(varargin{1}, varargin{2});
     case 'perdiffvstheta'
         plot_delamf_vs_delangle(varargin{:});
+    case 'perrec'
+        plot_perrec_vs_distance(varargin{:});
     otherwise
         fprintf('plttype not recognized\n');
 end
@@ -360,6 +362,7 @@ end
             title(sprintf('Pixel at %.2f W, %.2f N (%s) - %s',DataHourly.Longitude(x,y),DataHourly.Latitude(x,y),mat2str([x,y]), title_sf));
         end
     end
+
     function varargout = plot_delamf_vs_delangle(Data_D, Data_M, wind_angle, city_lon, city_lat, wind_speed)
         % This function will generate a scatter plot of percent difference
         % in BEHR AMF values between a any two sets of pixels as a function
@@ -449,6 +452,126 @@ end
         ylabel('%\Delta AMF')
         cb.Label.String = cbtitle;
         
+    end
+
+    function plot_perrec_vs_distance(zero_lon, zero_lat, Monthly, Daily, Hybrid, plot_mode)
+        % This function will plot the percent change recovered in the
+        % hybrid a priori versus the standard daily a priori, versus
+        % distance from the city center.  This is intended to show that
+        % near a city, the hybrid profile (which only changes near surface
+        % NO2 with the daily profile, and uses the monthly profile for free
+        % troposphere stuff) recoveres a good percent of the change, and
+        % further away the change is more dependent on FT variability.
+        %
+        % Needs 5 required inputs, one optional:
+        %  zero_lon, zero_lat - the lon/lat distance is calculated from
+        %  Monthly, Daily, Hybrid - the respective structures containing
+        %   the Data structure from BEHR output. These can either be the
+        %   Data structures themselves (for one day) or a structure
+        %   containing multiple Data structures for different days, as the
+        %   field Data.  Monthly can be either a single structure that will
+        %   be applied for all Daily & Hybrid structures, or have one
+        %   structure for each Daily or Hybrid structure.
+        %  plot_mode - (optional) determines how multiple days are plotted,
+        %   should be entered as one of the strings here:
+        %       'allinone' or '' - plots all pixels on the same plot
+        %          without any identification by day.
+        %       'colored' - will color the points by day.
+        %       'separate' - will plot each day on its own figure.
+        
+        %%%%% INPUT PARSING %%%%%
+        if ~isnumeric(zero_lon) || ~isscalar(zero_lon)
+            E.badinput('zero_lon must be a numeric scalar')
+        elseif ~isnumeric(zero_lat) || ~isscalar(zero_lat)
+            E.badinput('zero_lon must be a numeric scalar')
+        end
+        
+        if ~isstruct(Monthly) || (~isfield(Monthly,'Data') && ~isfield(Monthly,'BEHRAMFTrop'))
+            E.badinput('Monthly must be a BEHR Data structure, or a structure containing multiple Data structures, as Monthly(1).Data, Monthly(2).Data, etc.')
+        elseif ~isstruct(Daily) || (~isfield(Daily,'Data') && ~isfield(Daily,'BEHRAMFTrop'))
+            E.badinput('Daily must be a BEHR Data structure, or a structure containing multiple Data structures, as Daily(1).Data, Daily(2).Data, etc.')
+        elseif ~isstruct(Hybrid) || (~isfield(Hybrid,'Data') && ~isfield(Hybrid,'BEHRAMFTrop'))
+            E.badinput('Hybrid must be a BEHR Data structure, or a structure containing multiple Data structures, as Hybrid(1).Data, Hybrid(2).Data, etc.')
+        end
+        
+        if isfield(Monthly,'BEHRAMFTrop')
+            Monthly.Data = Monthly;
+        end
+        if isfield(Daily,'BEHRAMFTrop')
+            Daily.Data = Daily;
+        end
+        if isfield(Hybrid,'BEHRAMFTrop')
+            Hybrid.Data = Hybrid;
+        end
+        
+        n = numel(Daily);
+        if numel(Hybrid) ~= n
+            E.badinput('The Daily and Hybrid structures must have the same number of entries')
+        elseif numel(Monthly) ~= 1 && numel(Monthly) ~= n
+            E.badinput('The Monthly structure must have the same number of entries as the Daily and Hybrid structures, or have only one entry');
+        end
+        
+        if numel(Monthly) == 1 && n ~= 1
+            Monthly = repmat(Monthly, size(Daily));
+        end
+        
+        if ~exist('plot_mode','var')
+            plot_mode = 'allinone';
+        else
+            plot_mode = lower(plot_mode);
+            allowed_modes = {'allinone','colored','separate'};
+            if any(~ismember(plot_mode, allowed_modes))
+                E.badinput('%s is not a valid value for plot_mode; it must be one of %s',plot_mode,strjoin(allowed_modes,', '));
+            end
+        end
+        
+        %%%%% MAIN FUNCTION %%%%%
+        perrec = [];
+        distance_to_zero = [];
+        day_index = [];
+        for a=1:n;
+            lon_check = any(Hybrid(a).Data.Longitude(:) ~= Monthly(a).Data.Longitude(:)) || any(Daily(a).Data.Longitude(:) ~= Monthly(a).Data.Longitude(:));
+            lat_check = any(Hybrid(a).Data.Latitude(:) ~= Monthly(a).Data.Latitude(:)) || any(Daily(a).Data.Latitude(:) ~= Monthly(a).Data.Latitude(:));
+            if lon_check || lat_check
+                E.badinput('The lat/lon coordinates do not match among index %d of the three structures', a);
+            end
+                
+            this_perrec = (Hybrid(a).Data.BEHRAMFTrop(:) - Monthly(a).Data.BEHRAMFTrop(:)) ./ (Daily(a).Data.BEHRAMFTrop(:) - Monthly(a).Data.BEHRAMFTrop(:)) * 100;
+            this_distance = nan(numel(Monthly(a).Data.Longitude),1);
+            for b=1:numel(Monthly(a).Data.Longitude)
+                this_distance(b) = m_lldist([Monthly(a).Data.Longitude(b), zero_lon], [Monthly(a).Data.Latitude(b), zero_lat]);
+            end
+            this_day = ones(size(this_perrec)) .* a; % used only for coloring by day
+            
+            if strcmp(plot_mode, 'separate')
+                figure;
+                scatter(this_distance, this_perrec);
+                set(gca,'fontsize',16)
+                xlabel('Distance from city (km)')
+                ylabel('Percent difference recovered');
+                title(sprintf('Day %d',a));
+            else
+                perrec = cat(1, perrec, this_perrec);
+                distance_to_zero = cat(1, distance_to_zero, this_distance);
+                day_index = cat(1, day_index, this_day);
+            end
+        end
+        
+        if ~strcmp(plot_mode, 'separate')
+            figure;
+            if strcmp(plot_mode, 'allinone')
+                scatter(distance_to_zero, perrec);
+            elseif strcmp(plot_mode, 'colored');
+                scatter(distance_to_zero, perrec, 36, day_index);
+                cb = colorbar;
+                cb.Label.String = 'Day index';
+                cb.Label.FontSize = 16;
+            end
+            set(gca,'fontsize',16)
+            xlabel('Distance from city (km)')
+            ylabel('Percent difference recovered');
+        end
+
     end
 
 
