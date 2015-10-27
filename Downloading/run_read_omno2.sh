@@ -99,15 +99,15 @@ echo "global modis_myd06_dir; modis_myd06_dir = '/mnt/sat/SAT/MODIS/MYD06_L2'" >
 echo "global modis_mcd43_dir; modis_mcd43_dir = '/mnt/sat/SAT/MODIS/MCD43C3'" >> ${MATRUNDIR}/runscript.m
 echo "global globe_dir; globe_dir = '/mnt/sat/SAT/BEHR/GLOBE_Database'" >> ${MATRUNDIR}/runscript.m
 
-echo "read_omno2_v_aug2012(${startdate}, ${enddate}); exit(0)" >> ${MATRUNDIR}/runscript.m
+echo "read_omno2_v_aug2012('${startdate}', '${enddate}'); exit(0)" >> ${MATRUNDIR}/runscript.m
 
 startmatlab -r "run('${MATRUNDIR}/runscript.m')" > "${MATRUNDIR}/mat.log"
 
 matexit=$?
 if [[ $matexit -ne 0 ]]
 then
-    automessage.sh "MATLAB: read_omno2_v_aug2012.m failed" "Error in MATLAB. Log file appended:\n $(cat $MATRUNDIR/mat.log)"
+    automessage.sh "MATLAB: read_omno2_v_aug2012.m failed" -f "$MATRUNDIR/mat.log"
 else
-    automessage.sh "MATLAB: read_omno2_v_aug2012.m succeeded" "OMI SP processing succeeded. Log file appended:\n $(cat $MATRUNDIR/mat.log)"
+    automessage.sh "MATLAB: read_omno2_v_aug2012.m succeeded" -f "$MATRUNDIR/mat.log"
 fi
 exit 0
