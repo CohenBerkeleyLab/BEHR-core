@@ -174,7 +174,9 @@ for p=1:num_pix
     yy = inpolygon(tmp_lon, tmp_lat, xall, yall);
     
     if sum(yy) < 1
-        E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
+        %E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
+        no2_bins(:,p) = nan(length(pressures),1);
+        continue
     end
     
     tmp_no2(:,~yy) = [];

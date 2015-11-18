@@ -96,11 +96,11 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - Test';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
-    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta OMI SP Links';
+    sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
     
     %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
     %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
@@ -123,15 +123,16 @@ fileDamf = fullfile(amf_tools_path,'damf.txt');
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 if nargin < 2
-    date_start='2013/06/11';
-    date_end='2013/06/30';
+    date_start='2013/06/10';
+    date_end='2013/06/10';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
 %****************************%
 
-% Which WRF profiles to use
+% Which WRF profiles to use. Can be 'hourly', 'daily', 'monthly', or
+% 'hybrid'
 %****************************%
-wrf_avg_mode = 'hybrid';
+wrf_avg_mode = 'hourly';
 %****************************%
 
 %These will be included in the file name
@@ -335,7 +336,7 @@ for j=1:length(datenums)
         %             'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
         %             'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
         OMI = struct('BEHRColumnAmountNO2Trop', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'AMFTrop', [], 'CloudFraction', [], 'CloudRadianceFraction', [],...
-            'CloudPressure', [], 'ColumnAmountNO2Trop', [], 'RelativeAzimuthAngle', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'BEHRAMFTrop', [], 'OriginalBEHRAMF', [], 'OriginalBEHRColumn', [],...
+            'CloudPressure', [], 'ColumnAmountNO2Trop', [], 'RelativeAzimuthAngle', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'BEHRAMFTrop', [],...% 'OriginalBEHRAMF', [], 'OriginalBEHRColumn', [],...
             'Latitude', [], 'Longitude', [], 'MapData', struct, 'Count', [], 'Area', [], 'Areaweight', [], 'vcdQualityFlags', {{}}, 'XTrackQualityFlags', {{}});
         % Matlab treats structures as matrices, so we can duplicate our
         % structure to have the required number of entries just like a
