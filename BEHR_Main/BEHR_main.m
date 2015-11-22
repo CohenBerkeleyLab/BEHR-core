@@ -96,7 +96,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - 96 km resolution - Interpolated';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -123,15 +123,16 @@ fileDamf = fullfile(amf_tools_path,'damf.txt');
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 if nargin < 2
-    date_start='2013/06/11';
+    date_start='2013/06/10';
     date_end='2013/06/30';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
 %****************************%
 
-% Which WRF profiles to use
+% Which WRF profiles to use and how much to coarsen them
 %****************************%
-wrf_avg_mode = 'hybrid';
+wrf_avg_mode = 'monthly';
+coarse = 8;
 %****************************%
 
 %These will be included in the file name
@@ -230,8 +231,8 @@ for j=1:length(datenums)
                 %to column vectors to work with rNmcTmp2 and rDamf2
                 lon = Data(d).Longitude;
                 lat = Data(d).Latitude;
-                loncorns=Data(d).Loncorn;
-                latcorns=Data(d).Latcorn;
+%                 loncorns=Data(d).Loncorn;
+%                 latcorns=Data(d).Latcorn;
                 
                 sza = Data(d).SolarZenithAngle;
                 vza = Data(d).ViewingZenithAngle;
@@ -265,7 +266,7 @@ for j=1:length(datenums)
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
                 if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
-                no2_bins = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, pTerr, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+                no2_bins = rProfile_WRF(datenums(j), wrf_avg_mode, lon, lat, pTerr, pressure, coarse); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
                 no2Profile1 = no2_bins;
                 no2Profile2 = no2_bins;
                 
