@@ -1,4 +1,4 @@
-function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( start_date_in, end_date_in, lon_bdy, lat_bdy, varargin )
+function [cbhandle, GriddedColumn, longrid, latgrid, GriddedCount] = no2_column_map_2014( start_date_in, end_date_in, lon_bdy, lat_bdy, varargin )
 %NO2 Map Function - Uses the m_map package to draw maps of NO2 column density over the US (primarily). Returns the colorbar handle. Arguments:
 % Returns: colorbar handle, no2 grid, lon grid, lat grid.
 % REQUIRED:
@@ -198,8 +198,9 @@ for period = 1:per %Loop over each temporal period you wish to average
             
             if first_time_through %The first time through, generate the Sum matrices that will hold the total areaweight and weighted column density
                 if DEBUG_LEVEL > 0; fprintf('Initializing SumWeightedColumn and SumWeight matrices\n'); end
-                SumWeightedColumn = zeros(size(eval(sprintf('OMI(1).%s',mapfield))));
-                SumWeight = zeros(size(eval(sprintf('OMI(1).%s',mapfield))));
+                SumWeightedColumn = zeros(size(OMI(1).(mapfield)));
+                SumWeight = zeros(size(OMI(1).(mapfield)));
+                Count = zeros(size(OMI(1).(mapfield)));
                 omilats = OMI(1).Latitude;
                 omilons = OMI(1).Longitude;
                 
@@ -216,9 +217,10 @@ for period = 1:per %Loop over each temporal period you wish to average
                 end
             end
             
-            [this_WeightedColumn, this_Weight] = BEHR_day_no2(OMI,'mapfield', mapfield, 'cloud_prod', cloud_type, 'cloud_frac_max', cloud_frac, 'row_anomaly', parsed_vars.rowanomaly, 'rows', parsed_vars.rows);
+            [this_WeightedColumn, this_Weight, this_Count] = BEHR_day_no2(OMI,'mapfield', mapfield, 'cloud_prod', cloud_type, 'cloud_frac_max', cloud_frac, 'row_anomaly', parsed_vars.rowanomaly, 'rows', parsed_vars.rows);
             SumWeightedColumn = SumWeightedColumn + this_WeightedColumn;
             SumWeight = SumWeight + this_Weight;
+            Count = Count + this_Count;
                
         end %End if statement checking if the BEHR file for the current day exists
     end %End the loop over all days in this time period
@@ -229,8 +231,9 @@ ColumnData = SumWeightedColumn ./ SumWeight;
 
 % Grid the data. 
 nans = find(isnan(ColumnData));
-ColumnData(nans) = []; omilats(nans) = []; omilons(nans) = [];
+ColumnData(nans) = []; omilats(nans) = []; omilons(nans) = []; Count(nans) = [];
 GriddedColumn = griddata(omilons,omilats,ColumnData,longrid,latgrid);
+GriddedCount = griddata(omilons,omilats,Count,longrid,latgrid);
 
 if parsed_vars.makefig
     % Open a new figure.

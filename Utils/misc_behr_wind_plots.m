@@ -24,6 +24,8 @@ switch lower(plttype)
         plot_delamf_vs_delangle(varargin{:});
     case 'perrec'
         plot_perrec_vs_distance(varargin{:});
+    case 'sectors'
+        plot_changes_by_sector(varargin{:});
     case 'dif'
         plot_diff();
     otherwise
@@ -317,13 +319,20 @@ end
                 E.badinput('DataHybrid, if given, must be Data structures output from BEHR_Main (must contain the fields %s)',strjoin(req_fields,', '));
             end
             use_hybrid = true;
+            
+            if nargin < 4
+                shape_factor = 1;
+            elseif (~isnumeric(shape_factor) && ~islogical(shape_factor)) || ~isscalar(shape_factor)
+                E.badinput('shape_factor must be scalar numeric or logical, or be omitted')
+            end
         else
-            if nargin >= 5
-                shape_factor = indicies;
-            end
             if nargin >= 4
-                indicies = DataHybrid;
+                shape_factor = indicies;
+            else
+                shape_factor = 1;
             end
+            indicies = DataHybrid;
+            
             use_hybrid = false;
         end
         
@@ -331,11 +340,7 @@ end
             E.badinput('indicies must be an n-by-2 matrix of subscript indicies')
         end
         
-        if nargin < 4
-            shape_factor = 1;
-        elseif (~isnumeric(shape_factor) && ~islogical(shape_factor)) || ~isscalar(shape_factor)
-            E.badinput('shape_factor must be scalar numeric or logical, or be omitted')
-        end
+        
         
         % Plotting
         for a=1:size(indicies,1)
@@ -396,7 +401,9 @@ end
             else
                 line(apriori_hr/vcd_hr*aesthetic_scale, pres_hr, 'color','r','linewidth',2);
                 line(apriori_mn/vcd_mn*aesthetic_scale, pres_mn, 'color','b','linewidth',2);
-                line(apriori_hy/vcd_hy*aesthetic_scale, pres_hy, 'color',[0 0.5 0],'linewidth',2);
+                if use_hybrid
+                    line(apriori_hy/vcd_hy*aesthetic_scale, pres_hy, 'color',[0 0.5 0],'linewidth',2);
+                end
             end
             set(gca,'ydir','reverse');
             set(gca,'fontsize',14);
@@ -978,6 +985,120 @@ end
         end
     end
 
+    function plot_changes_by_sector(daily_prof_type, d_km)
+        % This function will plot changes in AMF and VCD vs. SCD (trop) for
+        % 8 wind sectors around Atlanta. The idea is to try to understand
+        % if the changes in column density are systematic in terms of a
+        % monthly average.
+        %
+        % Both inputs are optional. The first should be 'regular' or
+        % 'hybrid', referring to which daily profile to use (defaults to
+        % 'regular'). The second represents how far from Atlanta (in
+        % kilometers) to include data for. Defaults to 100 km.
+        
+        homedir = getenv('HOME');
+        if ~exist('daily_prof_type','var')
+            daily_prof_type = 'regular';
+        elseif ~ischar(daily_prof_type)
+            E.badinput('The first input must always be one of the strings "regular" or "hybrid"');
+        end
+        if ~exist('d_km','var')
+            d_km = 100;
+        elseif ~isnumeric(d_km) || ~isscalar(d_km)
+            E.badinput('d_km must be a scalar number, if given');
+        end
+        
+        monthly_path = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed','SE US BEHR Monthly');
+        if strcmpi(daily_prof_type, 'regular')
+            daily_path = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed','SE US BEHR Hourly');
+        elseif strcmpi(daily_prof_type, 'hybrid')
+            daily_path = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed','SE US BEHR Hybrid');
+        else
+            E.badinput('Daily profile type "%s" not recognized. Options are "regular" or "hybrid"', daily_prof_type);
+        end
+        
+        DF = dir(fullfile(daily_path,'OMI_BEHR_*.mat'));
+        MF = dir(fullfile(monthly_path,'OMI_BEHR_*.mat'));
+        
+        directions = {'ne','n','nw','w','sw','s','se','e'};
+        
+        amfs_m = make_empty_struct_from_cell(directions);
+        amfs_d = make_empty_struct_from_cell(directions);
+        vcds_m = make_empty_struct_from_cell(directions);
+        vcds_d = make_empty_struct_from_cell(directions);
+        scds = make_empty_struct_from_cell(directions);
+
+        
+        for a=1:numel(DF)
+            fprintf('Loading file %d\n',a);
+            D_OMI = load(fullfile(daily_path,DF(a).name),'OMI');
+            D_OMI = D_OMI.OMI(2); % both reduce the layers of structures and assume Atlanta is in the second swath
+            M_OMI = load(fullfile(monthly_path,MF(a).name),'OMI');
+            M_OMI = M_OMI.OMI(2);
+            if a == 1
+                % First time through, set up the logical matrices for which
+                % grid cells in the OMI structure to put into each sector.
+                y = D_OMI.Latitude - 33.755;
+                x = D_OMI.Longitude - -84.39;
+                theta = atan2d(y,x);
+                
+                % Calculate the distance between each point and Atlanta.
+                % We'll cut down on the number of calculations by ignoring
+                % a box greater than 1.2x of d_km, assuming 100 km in a
+                % degree.
+                too_far = abs(x) > d_km/100*1.2 | abs(y) > d_km/100*1.2;
+                x(too_far) = nan;
+                y(too_far) = nan;
+                
+                r = inf(size(x));
+                for b=1:numel(r)
+                    if ~isnan(x(b))
+                        r(b) = m_lldist([0, x(b)], [0, y(b)]);
+                    end
+                end
+                
+                rr = r <= d_km;
+                % Now get the 8 sector arrays.
+                xx.ne = rr & theta >= 22.5 & theta < 67.5;
+                xx.n = rr & theta >= 67.5 & theta < 112.5;
+                xx.nw = rr & theta >= 112.5 & theta < 157.5;
+                xx.w = rr & (theta >= 157.5 | theta < -157.5); % slightly different handling for the 180/-180 change
+                xx.sw = rr & theta >= -157.5 & theta < -112.5;
+                xx.s = rr & theta >= -112.5 & theta < -67.5;
+                xx.se = rr & theta >= -67.5 & theta < -22.5;
+                xx.e = rr & theta >= -22.5 & theta < 22.5;
+            end
+            
+            for b=1:numel(directions)
+                amfs_m.(directions{b}) = cat(1,amfs_m.(directions{b}),M_OMI.BEHRAMFTrop(xx.(directions{b})));
+                amfs_d.(directions{b}) = cat(1,amfs_d.(directions{b}),D_OMI.BEHRAMFTrop(xx.(directions{b})));
+                vcds_m.(directions{b}) = cat(1,vcds_m.(directions{b}),M_OMI.BEHRColumnAmountNO2Trop(xx.(directions{b})));
+                vcds_d.(directions{b}) = cat(1,vcds_d.(directions{b}),D_OMI.BEHRColumnAmountNO2Trop(xx.(directions{b})));
+                scds.(directions{b}) = cat(1,scds.(directions{b}),M_OMI.ColumnAmountNO2(xx.(directions{b})) .* M_OMI.AMFTrop(xx.(directions{b})));
+            end
+            
+        end
+        
+        % Make 16 plots (woohoo) - change in AMF and VCD vs. SCD for each
+        % sector
+        
+        for b=1:numel(directions)
+            figure; 
+            scatter(scds.(directions{b}), amfs_d.(directions{b}) - amfs_m.(directions{b}));
+            xlabel('Tropospheric slant column density (molec. cm^{-2})');
+            ylabel('\Delta AMF (daily - monthly)');
+            set(gca,'fontsize',16);
+            title(sprintf('%s sector \\Delta AMF using %s daily profiles',upper(directions{b}),daily_prof_type));
+            
+            figure; 
+            scatter(scds.(directions{b}), vcds_d.(directions{b}) - vcds_m.(directions{b}));
+            xlabel('Tropospheric slant column density (molec. cm^{-2})');
+            ylabel('\Delta VCD (daily - monthly)');
+            set(gca,'fontsize',16);
+            title(sprintf('%s sector \\Delta VCD using %s daily profiles',upper(directions{b}),daily_prof_type));
+        end
+        
+    end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% OTHER FUNCTIONS %%%%%
