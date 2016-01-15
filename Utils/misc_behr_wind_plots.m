@@ -711,6 +711,22 @@ end
             end
         end
         
+        % Follow up only if doing VCDs: which ghost column to use? 
+        if strcmpi(source,'behr') && strcmpi(quantity,'vcd')
+            allowed_ghosts = {'none','new','old'};
+            q_str = sprintf('Which ghost column correction do you want to use? %s: ', strjoin(allowed_ghosts, ', '));
+            while true 
+                ghost = lower(input(q_str, 's'));
+                if ~ismember(ghost, allowed_ghosts)
+                    fprintf('You must select one of the allowed choices. Try again, or press Ctrl+C to cancel\n');
+                else
+                    break
+                end
+            end
+        else
+            ghost = 'old';
+        end
+        
         % Fourth, is this a percent or absolute difference?
         while true
             diff_type = lower(input('Do you want absolute or percent differences? Type p or a: ','s'));
@@ -747,19 +763,44 @@ end
         % needs to match the "allowed_sources" and "allowed_cities"
         % variables.
         
-        daily_path = {  '/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/hourly';...
-                        '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly';...
-                        '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds'};
-        % this will be concatenated in the third dimensions with daily
-        % path, so it needs to be the same size. Fill with NaNs if needed.
-        hybrid_path = { NaN;...
-                        '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid';...
-                        '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds'};
-        daily_path = cat(3, daily_path, hybrid_path);
+        switch ghost
+            case 'old'
+                daily_path = {  '/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/hourly';...
+                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly';...
+                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds'};
+                % this will be concatenated in the third dimensions with daily
+                % path, so it needs to be the same size. Fill with NaNs if needed.
+                hybrid_path = { NaN;...
+                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid';...
+                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds'};
+                
+                monthly_path = {  '/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/monthly';...
+                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly';...
+                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds'};
+            case 'none' 
+                daily_path = {  NaN;...
+                                NaN;...
+                                NaN};
+                hybrid_path = { NaN;...
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';...
+                                NaN};
+                monthly_path = {NaN;...
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';...
+                                NaN};
+            case 'new'
+                daily_path = {  NaN;...
+                                NaN;...
+                                NaN};
+                hybrid_path = { NaN;...
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - New ghost';...
+                                NaN};
+                monthly_path = {NaN;...
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - New ghost';...
+                                NaN};
+        end
+        
                     
-        monthly_path = {  '/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/monthly';...
-                        '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly';...
-                        '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds'};
+        daily_path = cat(3, daily_path, hybrid_path);
                     
         source_index = find(strcmp(source, allowed_sources));
         if isempty(regexp(source,'behr','once'))
@@ -985,7 +1026,7 @@ end
         end
     end
 
-    function plot_changes_by_sector(daily_prof_type, d_km)
+    function plot_changes_by_sector(daily_prof_type, ghost_type, d_km)
         % This function will plot changes in AMF and VCD vs. SCD (trop) for
         % 8 wind sectors around Atlanta. The idea is to try to understand
         % if the changes in column density are systematic in terms of a
@@ -1002,17 +1043,38 @@ end
         elseif ~ischar(daily_prof_type)
             E.badinput('The first input must always be one of the strings "regular" or "hybrid"');
         end
+        
+        if ~exist('ghost_type','var')
+            ghost = '';
+        else
+            if ~strcmpi(ghost_type,'old') && strcmpi(daily_prof_type, 'regular')
+                E.badinput('New ghost products not yet available for regular daily profiles, only hybrid')
+            end
+            switch lower(ghost_type)
+                case 'new'
+                    ghost = ' - New ghost';
+                case 'none'
+                    ghost = ' - No ghost';
+                case 'old'
+                    ghost = '';
+                otherwise
+                    E.badinput('ghost_type must be one of ''new'', ''none'', or ''old''')
+            end
+        end
+        
         if ~exist('d_km','var')
             d_km = 100;
         elseif ~isnumeric(d_km) || ~isscalar(d_km)
             E.badinput('d_km must be a scalar number, if given');
         end
         
-        monthly_path = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed','SE US BEHR Monthly');
+        
+        
+        monthly_path = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed',sprintf('SE US BEHR Monthly%s',ghost));
         if strcmpi(daily_prof_type, 'regular')
-            daily_path = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed','SE US BEHR Hourly');
+            daily_path = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed',sprintf('SE US BEHR Hourly%s',ghost));
         elseif strcmpi(daily_prof_type, 'hybrid')
-            daily_path = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed','SE US BEHR Hybrid');
+            daily_path = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed',sprintf('SE US BEHR Hybrid%s',ghost));
         else
             E.badinput('Daily profile type "%s" not recognized. Options are "regular" or "hybrid"', daily_prof_type);
         end
@@ -1074,7 +1136,8 @@ end
                 amfs_d.(directions{b}) = cat(1,amfs_d.(directions{b}),D_OMI.BEHRAMFTrop(xx.(directions{b})));
                 vcds_m.(directions{b}) = cat(1,vcds_m.(directions{b}),M_OMI.BEHRColumnAmountNO2Trop(xx.(directions{b})));
                 vcds_d.(directions{b}) = cat(1,vcds_d.(directions{b}),D_OMI.BEHRColumnAmountNO2Trop(xx.(directions{b})));
-                scds.(directions{b}) = cat(1,scds.(directions{b}),M_OMI.ColumnAmountNO2(xx.(directions{b})) .* M_OMI.AMFTrop(xx.(directions{b})));
+                scds.(directions{b}) = cat(1,scds.(directions{b}),M_OMI.ColumnAmountNO2Trop(xx.(directions{b})) .* M_OMI.AMFTrop(xx.(directions{b})));
+                scds.(directions{b})(scds.(directions{b})<0) = nan;
             end
             
         end
