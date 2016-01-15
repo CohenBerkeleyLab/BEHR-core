@@ -1095,8 +1095,14 @@ end
             fprintf('Loading file %d\n',a);
             D_OMI = load(fullfile(daily_path,DF(a).name),'OMI');
             D_OMI = D_OMI.OMI(2); % both reduce the layers of structures and assume Atlanta is in the second swath
+            D_OMI = omi_pixel_reject(D_OMI, 'omi', 0.2, 'XTrackFlags');
+            D_OMI.BEHRColumnAmountNO2Trop(D_OMI.Areaweight == 0) = nan;
+            D_OMI.BEHRAMFTrop(D_OMI.Areaweight == 0) = nan;
             M_OMI = load(fullfile(monthly_path,MF(a).name),'OMI');
             M_OMI = M_OMI.OMI(2);
+            M_OMI = omi_pixel_reject(M_OMI, 'omi', 0.2, 'XTrackFlags');
+            M_OMI.BEHRColumnAmountNO2Trop(M_OMI.Areaweight == 0) = nan;
+            M_OMI.BEHRAMFTrop(M_OMI.Areaweight == 0) = nan;
             if a == 1
                 % First time through, set up the logical matrices for which
                 % grid cells in the OMI structure to put into each sector.
