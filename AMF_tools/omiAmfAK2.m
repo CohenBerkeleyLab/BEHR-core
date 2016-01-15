@@ -163,7 +163,7 @@ ghost = vcdGnd ./ (vcdCld .* cldFrac + vcdGnd .* (1.-cldFrac));
 
 if numel(noGhost) == 1;
     if noGhost > 0;
-        amf  = amf .* ghost;
+        amf  = amf ./ ghost;
     end
 end
 
