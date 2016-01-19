@@ -96,7 +96,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - New ghost';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -123,7 +123,7 @@ fileDamf = fullfile(amf_tools_path,'damf.txt');
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 if nargin < 2
-    date_start='2013/06/11';
+    date_start='2013/06/10';
     date_end='2013/06/30';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
@@ -270,7 +270,7 @@ for j=1:length(datenums)
                 no2Profile2 = no2_bins;
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
-                noGhost=1; ak=1;
+                noGhost=0; ak=1;
                 [amf, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels, ghost_fraction] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
                 
                 sz = size(Data(d).Longitude);
