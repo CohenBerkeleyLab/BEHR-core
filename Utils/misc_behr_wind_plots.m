@@ -729,8 +729,8 @@ end
         
         % Fourth, is this a percent or absolute difference?
         while true
-            diff_type = lower(input('Do you want absolute or percent differences? Type p or a: ','s'));
-            if ~ismember(diff_type,{'a','p'});
+            diff_type = lower(input('Do you want absolute or percent differences, or just the daily or monthly values? Type p, a, d, or m: ','s'));
+            if ~ismember(diff_type,{'a','p','d','m'});
                 fprintf('You must select one of the allowed choices. Try again, or press Ctrl+C to cancel\n');
             else 
                 break
@@ -864,9 +864,11 @@ end
         % City lon and lat center. Obviously only varies by city.
         all_city_lons = [-84.39];
         all_city_lats = [33.775];
+        all_city_names = {'Atlanta'};
         
         city_lon = all_city_lons(city_index);
         city_lat = all_city_lats(city_index);
+        city_name = all_city_names{city_index};
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% LOAD DATA, CALCULATE QUANTITIES, AND PLOT %%%%%
@@ -920,10 +922,15 @@ end
             
             monthly_no2_columns = nansum2(monthly_no2 .* (monthly_zlev*100), 3);
             
-            if strcmp(diff_type,'a')
-                del = daily_no2_columns - monthly_no2_columns;
-            else
-                del = (daily_no2_columns ./ monthly_no2_columns - 1)*100;
+            switch diff_type
+                case 'a'
+                    del = daily_no2_columns - monthly_no2_columns;
+                case 'p'
+                    del = (daily_no2_columns ./ monthly_no2_columns - 1)*100;
+                case 'd'
+                    del = daily_no2_columns;
+                case 'm'
+                    del = monthly_no2_columns;
             end
             
             figure; pcolor(xlon, xlat, del);
@@ -931,23 +938,29 @@ end
             set(gca,'fontsize',16);
             xlim(xl);
             ylim(yl);
-            colormap(C.blue_red_cmap);
-            if strcmp(diff_type,'a')
-                cb.Label.String = '\Delta VCD_{NO_2} (molec. cm^{-2})';
-            else
-                cb.Label.String = '%\Delta VCD_{NO_2}';
-            end
-            line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color','k','linewidth',2);
-            if strcmp(diff_type,'a')
-                cm = max(abs(del(:)));
-                p10 = (10^floor(log10(cm)));
-                cm = round(cm/p10)*p10;
-                caxis([-cm cm]);
-            else
-                cm = max(abs(del(:)));
-                cm = round(cm/10)*10;
-                caxis([-cm cm]);
-            end
+            colormap('jet');
+%             if strcmp(diff_type,'a')
+%                 cb.Label.String = '\Delta VCD_{NO_2} (molec. cm^{-2})';
+%             else
+%                 cb.Label.String = '%\Delta VCD_{NO_2}';
+%             end
+%             l=line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color','k','linewidth',2);
+%             legend(l, city_name);
+%             if strcmp(diff_type,'a')
+%                 cm = max(abs(del(:)));
+%                 p10 = (10^floor(log10(cm)));
+%                 cm = round(cm/p10)*p10;
+%                 caxis([-cm cm]);
+%             elseif strcmp(diff_type,'p')
+%                 cm = max(abs(del(:)));
+%                 cm = round(cm/10)*10;
+%                 caxis([-cm cm]);
+%             else
+%                 cm = max(abs(del(:)));
+%                 p10 = (10^floor(log10(cm)));
+%                 cm = round(cm/p10)*p10;
+%                 caxis([0 cm]);
+%             end
             
         elseif ~isempty(regexp(source, 'behr', 'once'))
             if strcmp(source,'behr')
@@ -990,37 +1003,63 @@ end
                 E.notimplemented('The source %s is not understood',source);
             end
             
-            if strcmp(diff_type, 'a')
-                del = daily_value - monthly_value;
-            else
-                del = (daily_value ./ monthly_value - 1) * 100;
+            switch diff_type
+                case 'a'
+                    del = daily_value - monthly_value;
+                case 'p'
+                    del = (daily_value ./ monthly_value - 1) * 100;
+                case 'd'
+                    del = daily_value;
+                case 'm'
+                    del = monthly_value;
             end
             
             figure; pcolor(lon, lat, del);
+            shading flat
             cb=colorbar;
             set(gca,'fontsize',16);
             xlim(xl);
             ylim(yl);
-            colormap(C.blue_red_cmap);
-            if strcmp(diff_type,'a') && strcmp(quantity,'vcd')
-                cb.Label.String = '\Delta VCD_{NO_2} (molec. cm^{-2})';
-            elseif strcmp(diff_type,'a') && strcmp(quantity,'amf')
-                cb.Label.String = '\Delta AMF';
-            elseif strcmp(diff_type,'p') && strcmp(quantity,'vcd')
-                cb.Label.String = '%\Delta VCD_{NO_2}';
-            elseif strcmp(diff_type, 'p') && strcmp(quantity, 'amf')
-                cb.Label.String = '%\Delta AMF';
-            end
-            line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color','k','linewidth',2);
-            cm = max(abs(del(:)));
-            if ~isnan(cm)
+            colormap('jet');
+            
+        end
+        
+        switch quantity
+            case 'vcd'
+                label_pt2 = 'VCD_{NO_2}';
+                label_unit = '(molec. cm^{-2})';
+            case 'amf'
+                label_pt2 = 'AMF';
+                label_unit = '';
+        end
+        switch diff_type
+            case 'a'
+                label_pt1 = '\Delta';
+            case 'p'
+                label_pt1 = '%\Delta';
+                label_unit = ''; % remove the unit if doing a percent difference
+            case 'd'
+                label_pt1 = 'Daily';
+            case 'm'
+                label_pt1 = 'Monthly';
+        end
+        
+        cb.Label.String = strjoin({label_pt1, label_pt2, label_unit}, ' ');
+        
+        l=line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color','k','linewidth',2);
+        legend(l,city_name);
+        cm = max(abs(del(:)));
+        if ~isnan(cm)
+            if strcmp(diff_type,'p')
+                cm = round(cm/10)*10;
+                caxis([-cm cm]);
+            else
+                p10 = (10^floor(log10(cm)));
+                cm = round(cm/p10)*p10;
                 if strcmp(diff_type,'a')
-                    p10 = (10^floor(log10(cm)));
-                    cm = round(cm/p10)*p10;
                     caxis([-cm cm]);
                 else
-                    cm = round(cm/10)*10;
-                    caxis([-cm cm]);
+                    caxis([0 cm]);
                 end
             end
         end
