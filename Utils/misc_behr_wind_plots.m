@@ -712,7 +712,7 @@ end
         end
         
         % Follow up only if doing VCDs: which ghost column to use? 
-        if strcmpi(source,'behr') && strcmpi(quantity,'vcd')
+        if ~isempty(regexpi(source,'behr'))
             allowed_ghosts = {'none','new','old'};
             q_str = sprintf('Which ghost column correction do you want to use? %s: ', strjoin(allowed_ghosts, ', '));
             while true 
@@ -780,23 +780,23 @@ end
             case 'none' 
                 daily_path = {  NaN;...
                                 NaN;...
-                                NaN};
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost'};
                 hybrid_path = { NaN;...
                                 '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';...
-                                NaN};
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost'};
                 monthly_path = {NaN;...
                                 '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';...
-                                NaN};
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost'};
             case 'new'
                 daily_path = {  NaN;...
                                 NaN;...
-                                NaN};
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - New ghost'};
                 hybrid_path = { NaN;...
                                 '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - New ghost';...
-                                NaN};
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - New ghost'};
                 monthly_path = {NaN;...
                                 '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - New ghost';...
-                                NaN};
+                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - New ghost'};
         end
         
                     
@@ -1015,12 +1015,16 @@ end
             end
             
             figure; pcolor(lon, lat, del);
-            shading flat
             cb=colorbar;
             set(gca,'fontsize',16);
             xlim(xl);
             ylim(yl);
-            colormap('jet');
+            if ~isempty(regexpi(source,'pseudo'))
+                colormap(C.blue_red_cmap);
+            else
+                colormap('jet');
+                shading flat
+            end
             
         end
         
