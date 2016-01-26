@@ -183,6 +183,8 @@ if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
+utchrs = 13:22;
+
 for j=1:length(datenums)
     %Read the desired year, month, and day
     R=datenums(j);
@@ -202,6 +204,8 @@ for j=1:length(datenums)
         if DEBUG_LEVEL > 1; fprintf('\t ...Found.\n'); end
         S=load(fullfile(sp_mat_dir,filename)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
         Data=S.Data;
+        % For the TEMPO simulation, I'll be using a fixed set of OMI pixels
+        % (over Atlanta, first) so the Data structure will only have
         
         if exist('profile_file','file')==1 && strcmp(profile_file(2:3),month)==1; %JLL 20 Mar 2014:
         else
