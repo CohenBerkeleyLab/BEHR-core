@@ -28,6 +28,8 @@ switch lower(plttype)
         plot_changes_by_sector(varargin{:});
     case 'dif'
         plot_diff();
+    case 'res'
+        plot_diff_resolutions();
     otherwise
         fprintf('plttype not recognized\n');
 end
@@ -1210,6 +1212,137 @@ end
             title(sprintf('%s sector \\Delta VCD using %s daily profiles',upper(directions{b}),daily_prof_type));
         end
         
+    end
+
+    function plot_diff_resolutions
+        % First we must find out what difference to plot. Need to know both
+        % what profile type and what resolution, as well as whether or not
+        % to use interpolation and what date to do this for.
+        try
+            allowed_plot_types = {'d','v'};
+            plot_type = ask_multichoice('Do you want to plot a difference, or just the AMF values for one case?', allowed_plot_types);
+            
+            allowed_prof_types = {'monthly','hourly','hybrid'};
+            prof_type_base = ask_multichoice('What profile type to use for the base case?', allowed_prof_types);
+            prof_type_base(1) = upper(prof_type_base(1));
+
+            allowed_resolutions = {'12','24','96','288'};
+            res_base = ask_multichoice('What resolution to use for the base case? ', allowed_resolutions, 'default', '12');
+            
+            if ~strcmpi(res_base, '12')
+                allowed_interps = {'y','n'};
+                interp_base = ask_multichoice('Do you want to use interpolation for the base case?', allowed_interps);
+            else
+                % The 12-km runs do not have interpolation
+                interp_base = 'n';
+            end
+            
+            if strcmp(plot_type,'d')
+                prof_type_new = ask_multichoice('What profile type to use for the new case?', allowed_prof_types, 'default', lower(prof_type_base));
+                res_new = ask_multichoice('What resolution to use for the new case?', allowed_resolutions);
+                if ~strcmpi(res_new, '12')
+                    allowed_interps = {'y','n'};
+                    interp_new = ask_multichoice('Do you want to use interpolation for the new case?', allowed_interps, 'default', interp_base);
+                else
+                    % The 12-km runs do not have interpolation
+                    interp_new = 'n';
+                end
+            end
+        catch err
+            % This lets us exit gracefully if requested without having to
+            % check every time that the function returned a 0.
+            if strcmpi(err.identifier, 'ask_multichoice:user_cancel')
+                return
+            else
+                rethrow(err)
+            end
+        end
+        
+        date_to_comp = input('Enter the date to compare using a format datestr can recognize: ','s');
+        try
+            date_to_comp = datestr(date_to_comp, 'yyyymmdd');
+        catch err
+            if strcmpi(err.identifier,'MATLAB:datestr:ConvertToDateNumber')
+                E.badinput('Format for date not recognized. Try yyyy-mm-dd.');
+            else
+                rethrow(err);
+            end
+        end
+        
+        
+        % Now we start actually comparing. First we need to get the files
+        % to load.
+        if strcmpi(res_base, '12')
+            res_str = '';
+        else
+            res_str = sprintf(' - %s km resolution', res_base);
+        end
+        if strcmpi(interp_base,'y')
+            base_interp_str = ' - Interpolated';
+        else
+            base_interp_str = '';
+        end
+        homedir = getenv('HOME');
+        base_filedir = sprintf('Atlanta BEHR %s - No clouds%s%s', prof_type_base, res_str, base_interp_str);
+        base_filename = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed',base_filedir,sprintf('OMI_BEHR_%s.mat', date_to_comp));
+        Base = load(base_filename);
+        
+        if strcmp(plot_type,'d')
+            if strcmpi(res_new, '12')
+                res_str = '';
+            else
+                res_str = sprintf(' - %s km resolution', res_new);
+            end
+            if strcmpi(interp_new,'y')
+                new_interp_str = ' - Interpolated';
+            else
+                new_interp_str = '';
+            end
+            homedir = getenv('HOME');
+            new_filedir = sprintf('Atlanta BEHR %s - No clouds%s%s', prof_type_new, res_str, new_interp_str);
+            new_filename = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed',new_filedir,sprintf('OMI_BEHR_%s.mat', date_to_comp));
+            New = load(new_filename);
+        end
+        % Now load and plot. Since there's only the AMFs available, these
+        % will be pretty simple.
+        
+        
+        
+        lonxy = squeeze(Base.Data.Loncorn(1,:,:));
+        latxy = squeeze(Base.Data.Latcorn(1,:,:));
+        if strcmp(plot_type,'d')
+            perdiff = (New.Data.BEHRAMFTrop ./ Base.Data.BEHRAMFTrop - 1)*100;
+        else
+            perdiff = Base.Data.BEHRAMFTrop;
+        end
+        
+        figure; 
+        pcolor(lonxy, latxy, perdiff);
+        cb = colorbar;
+        xlim([-87.1 -82]);
+        ylim([32, 35.6]);
+        
+        l = line(-84.39, 33.755, 'linestyle','none', 'marker','p','markersize',18,'color','k','linewidth',2);
+        legend(l,{'Atlanta'});
+        
+        set(gca,'fontsize',16);
+        
+        if strcmp(plot_type,'d')
+            title(sprintf('%s: %s km %s vs %s km %s', date_to_comp, res_new, new_interp_str, res_base, base_interp_str));
+            % ensure colorbar limits are a multiple of 10 and equal positive
+            % and negative if doing a difference
+            maxval = max(abs(get(gca,'clim')));
+            maxval = ceil(maxval/10)*10;
+            caxis([-maxval maxval]);
+            
+            C = load('blue_red_cmap.mat');
+            colormap(C.blue_red_cmap);
+            
+            cb.Label.String = '%\Delta AMF';
+        else
+            title(sprintf('%s: %s km %s', date_to_comp, res_base, base_interp_str));
+            cb.Label.String = 'AMF';
+        end
     end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
