@@ -15,7 +15,7 @@ function read_tempo_simulator(date_start, date_end)
 % Choose a higher level to keep track of what the script is doing.
 % 3 or less recommended for final products, as 4 will store debugging
 % variables in the output file, increasing its size.
-DEBUG_LEVEL = 1;
+DEBUG_LEVEL = 2;
 %****************************%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -89,7 +89,7 @@ end
 %These will be included in the file name
 %****************************%
 satellite='TEMPO';
-retrieval='SIM';
+retrieval='SIM_US';
 %****************************%
 
 
@@ -208,16 +208,35 @@ end
 
 datenums = datenum(date_start):datenum(date_end);
 
+local_tempo_file = tempo_base_file;
+local_modis_mcd34_dir = modis_mcd43_dir;
+local_sp_dir = sp_mat_dir;
+
 for j=1:length(datenums)
     %Read the desired year, month, and day
     R=datenums(j);
-    date=datestr(R,26);
-    year=date(1:4);
-    month=date(6:7);
-    day=date(9:10);
+    this_date=datestr(R,26);
+    year=this_date(1:4);
+    month=this_date(6:7);
+    day=this_date(9:10);
     
-    D = load(tempo_base_file);
+    D = load(local_tempo_file);
     Data = D.Data;
+    
+    % Cut down to just the area we want to deal with b/c seriously this
+    % takes way too long otherwise.
+    xx = any(Data.Longitude > lonmin, 1) & any(Data.Longitude < lonmax, 1);
+    yy = any(Data.Latitude > latmin, 2) & any(Data.Latitude < latmax, 2);
+    % Sometimes there only a few points in a column or row that aren't nans
+    % that get removed by one of the criteria
+    xx2 = any(~isnan(Data.Longitude(yy,:)), 1);
+    yy2 = any(~isnan(Data.Latitude(:,xx)), 2);
+    
+    Data.Longitude = Data.Longitude(yy&yy2, xx&xx2);
+    Data.Latitude = Data.Latitude(yy&yy2, xx&xx2);
+    Data.Loncorn = Data.Loncorn(:, yy&yy2, xx&xx2);
+    Data.Latcorn = Data.Latcorn(:, yy&yy2, xx&xx2);
+    
     sz = size(Data.Longitude);
     Data.SolarZenithAngle = nan(sz);
     Data.ViewingZenithAngle = nan(sz);
@@ -247,7 +266,7 @@ for j=1:length(datenums)
         [Data(e).SolarZenithAngle, Data(e).ViewingZenithAngle, Data(e).RelativeAzimuthAngle] = sat_angles(Data(e).Longitude, Data(e).Latitude, Data(e).GLOBETerpres, tempo_lon, tempo_lat, tempo_alt, time);
         
         if e == 1
-            Data(e) = addMODISAlbedo(Data(e), datenums(j), DEBUG_LEVEL);
+            Data(e) = addMODISAlbedo(Data(e), datenums(j), local_modis_mcd34_dir, DEBUG_LEVEL);
         else
             % Similarly, since we don't use a BRDF product, albedo
             % shouldn't change with SZA. (That may be something to think
@@ -261,34 +280,38 @@ for j=1:length(datenums)
         % without radiative transfer as best as I can tell.
     end
     
+    savename=[satellite,'_',retrieval,'_',year,month,day];
+    if DEBUG_LEVEL > 0; fprintf('Saving %s\n',fullfile(local_sp_dir,savename)); end
+    saveData(fullfile(local_sp_dir,savename), Data); % Saving must be handled as a separate function in a parfor loop because passing a variable name as a string upsets the parallelization monkey (it's not transparent).
+
 end
 
-savename=[satellite,'_',retrieval,'_',year,month,day];
-if DEBUG_LEVEL > 0; fprintf('Saving %s\n',fullfile(sp_mat_dir,savename)); end
-saveData(fullfile(sp_mat_dir,savename), Data); % Saving must be handled as a separate function in a parfor loop because passing a variable name as a string upsets the parallelization monkey (it's not transparent).
 
 end
 
 
 
 function saveData(filename,Data)
-save(filename,'Data')
+save(filename,'Data','-v7.3')
 end
 
-function Data = addMODISAlbedo(Data, this_date, DEBUG_LEVEL)
+function Data = addMODISAlbedo(Data, this_date, modis_mcd43_dir, DEBUG_LEVEL)
+E = JLLErrors;
+
 %Convert the OMI date to a Julian calendar day
 julian_day = modis_date_to_day(this_date);
+yr = num2str(year(this_date));
 
 %Add MODIS albedo info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if DEBUG_LEVEL>0; fprintf('\n Adding MODIS albedo information \n'); end
-alb_dir = fullfile(modis_mcd43_dir,year);
+alb_dir = fullfile(modis_mcd43_dir,yr);
 
 %Find the closest MCD file
 in=[0 1 -1 2 -2 3 -3 4 -4 5 -5 6 -6 7 -7 8 -8 9 -9 10 -10 11 -11 12 -12 13 -13 14 -14 15 -15 16 -16 17 -17 18 -18 19 -19 20 -20 21 -21];
 for ii=1:length(in);
-    mcd_date = num2str(str2double(julian_day) + in(ii),'%03g');
-    alb_filename = fullfile(alb_dir,['MCD43C3.A',year,mcd_date,'*.hdf']);
+    mcd_date = num2str(julian_day + in(ii),'%03g');
+    alb_filename = fullfile(alb_dir,['MCD43C3.A',yr,mcd_date,'*.hdf']);
     alb_files = dir(alb_filename);
     if DEBUG_LEVEL > 1; fprintf('Looking for %s \n', alb_filename); end
     %if exist('alb_filename','file') == 2
@@ -334,7 +357,8 @@ if DEBUG_LEVEL > 3; MODISAlb_Ocn = zeros(s); end %JLL
 
 %Now actually average the MODIS albedo for each OMI pixel
 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
-for k=1:c;
+parfor k=1:c;
+    if DEBUG_LEVEL > 1 && mod(k,10000)==1; fprintf('Adding albedo data to pixel %d of %d\n',k,c); end
     if DEBUG_LEVEL > 2; tic; end
     x1 = Data.Loncorn(1,k);   y1 = Data.Latcorn(1,k);
     x2 = Data.Loncorn(2,k);   y2 = Data.Latcorn(2,k);
@@ -381,9 +405,9 @@ GLOBETerpres = zeros(size(Data.Latitude));
 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
 %corner and terpres(end, end) is in the NE corner.
 
-for k=1:numel(Data.Longitude)
+parfor k=1:numel(Data.Longitude)
     
-    if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of %u \n',k,c); end
+    if DEBUG_LEVEL > 1 && mod(k,10000)==1; fprintf('Averaging GLOBE data to pixel %u of %u \n',k,numel(Data.Longitude)); end
     if DEBUG_LEVEL > 2; tic; end
     x1 = Data.Loncorn(1,k);   y1 = Data.Latcorn(1,k);
     x2 = Data.Loncorn(2,k);   y2 = Data.Latcorn(2,k);
