@@ -8,10 +8,6 @@ function [  ] = BEHR_publishing_v2(output_type, pixel_type, options, start_date,
 %       Utils/iscellcontents.m
 %       Utils/make_empty_struct_from_cell.m
 
-E = JLLErrors;
-global DEBUG_LEVEL
-DEBUG_LEVEL = 1;
-
 global onCluster
 if isempty(onCluster)
     onCluster = false;
@@ -21,6 +17,11 @@ if onCluster
     addpath('~/MATLAB/Utils');
     addpath('~/MATLAB/Classes');
 end
+
+E = JLLErrors;
+global DEBUG_LEVEL
+DEBUG_LEVEL = 1;
+
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%%%% SET OPTIONS %%%%%
@@ -88,10 +89,10 @@ else
     end
     
     dirs_dne = {};
-    if ~exist('mat_file_dir','dir')
+    if ~exist(mat_file_dir,'dir')
         dirs_dne{end+1} = 'mat_file_dir';
     end
-    if ~exist('save_dir','dir')
+    if ~exist(save_dir,'dir')
         dirs_dne{end+1} = 'save_dir';
     end
     if ~isempty(dirs_dne)
@@ -251,9 +252,11 @@ if ismember('reprocessed',varargin)
 end
 
 % Remove pixel specific variables (like AMF, VZA, etc.) if the pixel type
-% is "gridded"
+% is "gridded". Also add in some variables that are only included in the
+% gridded product.
 if ismember('gridded', varargin)
     vars = remove_ungridded_variables(vars);
+    vars{end+1} = 'Areaweight';
 end
 
 % Remove variables that cannot be put into a CSV text file because multiple
@@ -313,6 +316,7 @@ nofill = NaN;
 
 attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric AMF';...
                 'AMFTrop', 'unitless', [0, Inf], nofill, 'SP', 'Tropospheric AMF (standard product)';...
+                'Areaweight', 'unitless', [0, Inf], behrfill, 'BEHR', 'Reciprocal of pixel area; use to weight a temporal average of grids to account for pixel representativeness';...
                 'BEHRAMFTrop', 'unitless', [0, Inf], shortfill, 'BEHR', 'Tropospheric AMF (BEHR) calculated with MODIS Albedo, GLOBE Terr. Pres., and 12 km NO2 profiles';...
                 'BEHRColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], longfill, 'BEHR', 'Tropospheric NO2 VCD (BEHR) calculated as SCD_trop / AMF_BEHR';...
                 'BEHRScatteringWeights', 'unitless', [0, Inf], behrfill, 'BEHR', 'Scattering weights derived from the MODIS albedo and GLOBE surface pressure. Includes NO2 cross section temperature correction.';...
@@ -407,6 +411,8 @@ if exist(hdf_fullfilename,'file')
         end
     else
         delete(hdf_fullfilename);
+        %fprintf('%s exists, skipping\n', hdf_fullfilename);
+        %return
     end
 end
 
