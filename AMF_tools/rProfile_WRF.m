@@ -1,4 +1,4 @@
-function [ no2_bins ] = rProfile_WRF( date_in, avg_mode, loncorns, latcorns, surfPres, pressures )
+function [ no2_bins ] = rProfile_WRF( date_in, hour_in, avg_mode, loncorns, latcorns, surfPres, pressures )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -68,20 +68,22 @@ E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %
 % The main folder for the WRF output, should contain subfolders 'monthly',
 % 'daily', and 'hourly'. This will need modified esp. if trying to run on a
 % PC.
-wrf_output_path = fullfile('/Volumes','share2','USERS','LaughnerJ','WRF','SE_US_BEHR','NEI11Emis');
+wrf_output_path = fullfile('/Volumes','share2','USERS','LaughnerJ','WRF','SE_US_TEMPO','NEI11Emis');
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
-allowed_avg_modes = {'hourly','daily','monthly','hybrid'};
+allowed_avg_modes = {'hourly','monthly','hybrid'};
 avg_mode = lower(avg_mode);
 if ~ischar(avg_mode) || ~ismember(avg_mode, allowed_avg_modes);
     E.badinput('avg_mode must be one of %s',strjoin(allowed_avg_modes,', '));
 end
 
-
+if ~isscalar(hour_in) || ~isnumeric(hour_in)
+    E.badinput('hour_in must be a numeric scalar')
+end
 
 if size(loncorns,1) ~= 4 || size(latcorns,1) ~= 4
     E.badinput('loncorns and latcorns must have the corners along the first dimension (i.e. size(loncorns,1) == 4')
@@ -215,9 +217,9 @@ end
         month_in = month(date_num_in);
         day_in = day(date_num_in);
         if strcmp(avg_mode,'monthly');
-            file_pat = sprintf('WRF_BEHR_%s_%04d-%02d-*.nc', avg_mode, year_in, month_in);
+            file_pat = sprintf('WRF_TEMPO_%s_%04d-%02d.nc', avg_mode, year_in, month_in);
         else
-            file_pat = sprintf('WRF_BEHR_%s_%04d-%02d-%02d.nc', avg_mode, year_in, month_in, day_in);
+            file_pat = sprintf('WRF_TEMPO_%s_%04d-%02d-%02d.nc', avg_mode, year_in, month_in, day_in);
         end
         
         F = dir(fullfile(wrf_output_mode_path,file_pat));
@@ -271,32 +273,41 @@ end
             end
         end
         
-        % Finally, if the mode is "hourly" we need to take the correct WRF output
-        % time. We can use the utchr variable to do that.
-        
-        if strcmp(avg_mode,'hourly')
-            try
-                utchr = ncread(wrf_info.Filename, 'utchr');
-            catch err
-                if strcmp(err.identifier, 'MATLAB:imagesci:netcdf:unknownLocation')
-                    E.callCustomError('ncvar_not_found','utchr',F(1).name);
-                else
-                    rethrow(err)
-                end
+        % Finally, with either the monthly or hourly files (daily makes no
+        % sense for TEMPO, why would we average over the course of a day
+        % when the satellite takes repeated measurements?) we need to cut
+        % down to the proper hour for this scan, but the way the averaging
+        % occurs puts the hour along a different dimension in the two
+        % files.
+        try
+            utchr = ncread(wrf_info.Filename, 'utchr');
+        catch err
+            if strcmp(err.identifier, 'MATLAB:imagesci:netcdf:unknownLocation')
+                E.callCustomError('ncvar_not_found','utchr',F(1).name);
+            else
+                rethrow(err)
             end
+        end
+        
+        uu = utchr == hour_in;
+        if sum(uu) < 1
+            E.callError('hour_not_avail','The hour %d is not available in the WRF chem output file %s.', hour_in, F(1).name);
+        end
             
-            utc_offset = round(nanmean(loncorns(:))/15);
-            % 14 - utc_offset will give 1400 local std. time in UTC, finding the
-            % minimum between that and utchr indicates which WRF profile is closest
-            % to overpass
-            [~,uu] = min(abs(14 - utc_offset - utchr));
+        if strcmp(avg_mode,'hourly')
             % These two variables should have dimensions west_east, south_north,
-            % bottom_top, Time
-            wrf_no2 = wrf_no2(:,:,:,uu);
-            wrf_pres = wrf_pres(:,:,:,uu);
+            % bottom_top, Time (i.e. day), and hour_index
+            wrf_no2 = squeeze(wrf_no2(:,:,:,:,uu));
+            wrf_pres = squeeze(wrf_pres(:,:,:,:,uu));
             % These should have west_east, south_north, Time
-            wrf_lon = wrf_lon(:,:,uu);
-            wrf_lat = wrf_lat(:,:,uu);
+            wrf_lon = wrf_lon(:,:,1);
+            wrf_lat = wrf_lat(:,:,1);
+        elseif strcmp(avg_mode,'monthly')
+            % In the monthly files these will not have the Time dimension
+            wrf_no2 = squeeze(wrf_no2(:,:,:,uu));
+            wrf_pres = squeeze(wrf_pres(:,:,:,uu));
+            % the lon/lat coordinates are already cut down to the right
+            % number of dimensions.
         end
     end
 end

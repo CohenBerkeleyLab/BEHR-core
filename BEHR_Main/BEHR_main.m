@@ -3,6 +3,8 @@ function BEHR_main(date_start, date_end)
 %Based on BEHR_nwus by Ashley Russell (02/09/2012)
 %Takes "OMI_SP_yyyymmdd.m" files produced by read_omno2_v_aug2012.m as it's
 %main input.
+%
+% This version has been adapted for the TEMPO simulator.
 
 %****************************%
 % CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
@@ -96,11 +98,11 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - New ghost';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR-TEMPO Hybrid';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
-    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta OMI SP Links';
+    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta TEMPO SIM Links';
     
     %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
     %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
@@ -136,8 +138,8 @@ wrf_avg_mode = 'hybrid';
 
 %These will be included in the file name
 %****************************%
-satellite='OMI';
-retrieval='BEHR';
+satellite='TEMPO';
+retrieval='BEHR-SIM_ATLANTA';
 %****************************%
 
 %****************************%
@@ -181,10 +183,14 @@ tic
 % Create a parallel pool if one doesn't exist and we are on a cluster
 if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
+    n_workers = Inf;
+else
+    n_workers = 0;
 end
 
 utchrs = 13:22;
 
+%parfor (j=1:length(datenums), n_workers)
 for j=1:length(datenums)
     %Read the desired year, month, and day
     R=datenums(j);
@@ -194,7 +200,7 @@ for j=1:length(datenums)
     day=date(9:10);
     if DEBUG_LEVEL > 0; disp(['Processing data for ', date]); end
     
-    filename = ['OMI_SP_',year,month,day,'.mat'];
+    filename = ['TEMPO_SIM_ATLANTA_',year,month,day,'.mat'];
     
     if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(sp_mat_dir,filename),'...']); end %#ok<PFGV> % The concern with using global variables in a parfor is that changes aren't synchronized.  Since I'm not changing them, it doesn't matter.
     if isequal(exist(fullfile(sp_mat_dir,filename),'file'),0)
@@ -219,6 +225,11 @@ for j=1:length(datenums)
             % in the Longitude field.  Since points outside the lat/lons of
             % interest are removed completely, we should also check if all
             % points are gone.
+            %
+            % For TEMPO, there will be one element of data for each hour
+            % retrieved (all daylight hours). This may change with season,
+            % but for the simulator it is fixed, and defined by the utchrs
+            % vector defined above.
             if numel(Data(d).Longitude)==1 || isempty(Data(d).Longitude);
                 if DEBUG_LEVEL > 1; fprintf('  Note: Data(%u) is empty\n',d); end
                 continue %JLL 17 Mar 2014: Skip doing anything if there's really no information in this data
@@ -260,16 +271,11 @@ for j=1:length(datenums)
                 
                 pTerr = surfPres;
                 pCld = cldPres;
-                if strcmpi(cloud_amf,'omi')
-                    cldFrac = Data(d).CloudFraction;
-                else
-                    cldFrac = Data(d).MODISCloud;
-                end
-                
+                cldFrac = Data(d).CloudFraction;
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
                 if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
-                no2_bins = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, pTerr, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+                no2_bins = rProfile_WRF(datenums(j), utchrs(d), wrf_avg_mode, loncorns, latcorns, pTerr, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
                 no2Profile1 = no2_bins;
                 no2Profile2 = no2_bins;
                 
@@ -290,81 +296,9 @@ for j=1:length(datenums)
             end
         end
         
-        b=length(Data);
-        for z=1:b;
-            if isfield(Data,'BEHRAMFTrop')==0 || isempty(Data(z).BEHRAMFTrop)==1;
-                continue
-            else
-                Data(z).BEHRColumnAmountNO2Trop=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTrop;
-                if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
-            end
-        end
-        
-        
-        addpath('/Users/Josh/Documents/MATLAB/BEHR/Utils/m_map'); %JLL 18 Mar 2014: Adds the path to the m_map toolkit, needed for hdf_quadrangle_5km_new
-        
-        %*********************************%
-        %JLL 19 Mar 2014: These will be used to define the quadrangles -
-        %the quads will be smaller than the OMI pixel, and multiple quads
-        %will take on the value for the same (closest) OMI pixel.  By
-        %keeping the quads' centers the same over all retrievals you wish
-        %to average, this will allow easier averaging over multiple OMI
-        %swaths. This is a form of oversampling.
-        %*********************************%
-        lonmin = -125;  lonmax = -65;
-        latmin = 25;   latmax = 50;
-        resolution = 0.05; resolution2 = 0.05;
-        %*********************************%
-        %
-        if lonmin > lonmax %Just in case I enter something backwards...
-            error(E.badinput('Lonmin is greater than lonmax'))
-        elseif latmin > latmax
-            error(E.badinput('Latmin is greater than latmax'))
-        end
-        
-        %*********************************%
-        %JLL 19 Mar 2014: Save all relevant values produced by add2grid to
-        %a new structure called 'OMI'
-        %*********************************%
-        
-        if DEBUG_LEVEL > 0; disp('  Preparing OMI structure'); end
-        s=numel(Data);
-        
-        % Prepare the OMI data structure which will receive the gridded
-        % data - this will be passed to the gridding functions to keep the
-        % field names in the right order.
-        %         OMI=struct('Date','','Longitude', [], 'Latitude', [], 'Time', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'ViewingAzimuthAngle', [], 'SolarAzimuthAngle', [],...
-        %             'RelativeAzimuthAngle', [], 'AMFStrat', [], 'AMFTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
-        %             'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'ColumnAmountNO2TropStd',[],'ColumnAmountNO2Strat',[],'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'vcdQualityFlags',{{}},...
-        %             'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
-        %             'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
-        OMI = struct('BEHRColumnAmountNO2Trop', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'AMFTrop', [], 'CloudFraction', [], 'CloudRadianceFraction', [],...
-            'CloudPressure', [], 'ColumnAmountNO2Trop', [], 'RelativeAzimuthAngle', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'BEHRAMFTrop', [], 'OriginalBEHRAMF', [], 'OriginalBEHRColumn', [],...
-            'Latitude', [], 'Longitude', [], 'MapData', struct, 'Count', [], 'Area', [], 'Areaweight', [], 'vcdQualityFlags', {{}}, 'XTrackQualityFlags', {{}});
-        % Matlab treats structures as matrices, so we can duplicate our
-        % structure to have the required number of entries just like a
-        % matrix.
-        OMI = repmat(OMI,1,s);
-        hh=0;
-        for d=1:s;
-            if Data(d).ViewingZenithAngle==0;
-            elseif numel(Data(d).ViewingZenithAngle)==1;
-                continue
-            else
-                if DEBUG_LEVEL > 1; fprintf('   Gridding data for swath %u\n',d); end
-                hh=hh+1;
-                % JLL 23 Jul 2015: temporary change to study wind effects.
-                % Return to add2grid_BEHR when done.
-                OMI(hh) = add2grid_BEHR_winds(Data(d),OMI(hh),resolution,resolution2,[lonmin, lonmax],[latmin, latmax]); %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
-            end
-        end
-        
-        % Clean up any unused elements in OMI
-        OMI(hh+1:end) = [];
-        
         savename=[file_prefix,year,month,day];
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
-        saveData(fullfile(behr_mat_dir,savename),Data,OMI)
+        saveData(fullfile(behr_mat_dir,savename),Data)
         toc
         t=toc;
         %if t>1200
@@ -374,6 +308,6 @@ for j=1:length(datenums)
 end
 end
 
-function saveData(filename,Data,OMI)
-save(filename,'OMI','Data')
+function saveData(filename,Data)
+save(filename,'Data')
 end
