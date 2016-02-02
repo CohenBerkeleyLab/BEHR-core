@@ -30,6 +30,10 @@ function [ pix_sza, pix_vza, pix_raa, pix_saa, pix_vaa ] = sat_angles( pix_lon, 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
 E = JLLErrors;
+global onCluster
+if isempty(onCluster)
+    onCluster = false;
+end
 
 sz = size(pix_lon);
 nd = ndims(pix_lon);
@@ -91,7 +95,16 @@ pix_vaa = nan(sz);
 
 ellip_E = wgs84Ellipsoid('km');
 
-for a=1:numel(pix_lon)
+if onCluster
+    fprintf('sat_angles: detected on cluster, allowing parallel execution\n');
+    n_workers = Inf;
+else
+    fprintf('sat_angles: onCluster is false, executing parfor in serial mode\n');
+    n_workers = 0;
+end
+
+parfor( a=1:numel(pix_lon), n_workers )
+    location=struct(); % necessary for this to work in parfor loop.
     location.longitude = pix_lon(a);
     location.latitude = pix_lat(a);
     location.altitude = -log(pix_surfpres(a)./1013)*7400;
@@ -108,14 +121,18 @@ for a=1:numel(pix_lon)
     % angle between p_vec and d_vec.
     
     % Zenith first
+    s=struct();
     s.r = r_E + sat_alt(a);
     s.theta = deg2rad(sat_lon(a));
     s.phi = deg2rad(sat_lat(a));
     
+    p=struct();
     p.r = r_E + location.altitude/1000;
     p.theta = deg2rad(pix_lon(a));
     p.phi = deg2rad(pix_lat(a));
     
+    s_vec = nan(1,3); % also necessary for parallelization
+    p_vec = nan(1,3);
     [s_vec(1), s_vec(2), s_vec(3)] = sph2cart(s.theta, s.phi, s.r);
     [p_vec(1), p_vec(2), p_vec(3)] = sph2cart(p.theta, p.phi, p.r);
     d_vec = s_vec - p_vec;

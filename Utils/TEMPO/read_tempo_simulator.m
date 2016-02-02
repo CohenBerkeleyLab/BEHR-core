@@ -245,6 +245,7 @@ for j=1:length(datenums)
     Data.CloudPressure = 1013*ones(sz);
     Data.RadianceCloudFraction = zeros(sz);
     Data.MODISAlbedo = nan(sz);
+    Data.MODIS_Albedo_File = '';
     Data.GLOBETerpres = nan(sz);
     
     
@@ -272,6 +273,7 @@ for j=1:length(datenums)
             % shouldn't change with SZA. (That may be something to think
             % about too though.)
             Data(e).MODISAlbedo = Data(1).MODISAlbedo;
+            Data(e).MODIS_Albedo_File = Data(1).MODIS_Albedo_File;
         end
         
         % For now, we're just going to leave the cloud fractions as 0. We
