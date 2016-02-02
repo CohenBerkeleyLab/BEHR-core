@@ -129,83 +129,99 @@ else
     [wrf_no2, wrf_pres, wrf_lon, wrf_lat] = load_wrf_vars(avg_mode);
 end
     
+% Grid to coarser resolution if requested
+if coarse > 1
+    if ndims(wrf_no2) > 3
+        E.notimplemented('coarse regridding if NO2 matrix has >1 time coordinate')
+    end
+    coarse_size = ceil(size(wrf_lon)/coarse);
+    wrf_no2_c = nan([coarse_size, size(wrf_no2,3)]);
+    wrf_pres_c = nan([coarse_size, size(wrf_pres,3)]);
+    wrf_lon_c = nan(coarse_size);
+    wrf_lat_c = nan(coarse_size);
+    
+    for a=1:size(wrf_lon_c,1)
+        for b=1:size(wrf_lon_c,2)
+            a1 = (a-1)*coarse + 1;
+            b1 = (b-1)*coarse + 1;
+            a2 = min(a1+coarse-1, size(wrf_lon,1));
+            b2 = min(b1+coarse-1, size(wrf_lon,2));
+            
+            num_profs = (a2-a1+1)*(b2-b1+1);
+            
+            no2_tmp = reshape(wrf_no2(a1:a2,b1:b2,:),num_profs,[]);
+            wrf_no2_c(a,b,:) = nanmean(no2_tmp,1);
+            pres_tmp = reshape(wrf_pres(a1:a2,b1:b2,:),num_profs,[]);
+            wrf_pres_c(a,b,:) = nanmean(pres_tmp,1);
+            wrf_lon_c(a,b) = nanmean(reshape(wrf_lon(a1:a2,b1:b2),num_profs,[]));
+            wrf_lat_c(a,b) = nanmean(reshape(wrf_lat(a1:a2,b1:b2),num_profs,[]));
+        end
+    end
+end
 
+wrf_no2 = wrf_no2_c;
+wrf_pres = wrf_pres_c;
+wrf_lon = wrf_lon_c;
+wrf_lat = wrf_lat_c;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% BIN PROFILES TO PIXELS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Calculate corner points for the WRF grid cells.
+%[wrf_loncorn, wrf_latcorn] = wrf_corners(wrf_lon, wrf_lat);
 
 % Reshape the NO2 profiles and pressures such that the profiles are along
 % the first dimension
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
 
-% Reorder dimensions. This will make the perm_vec be [3, 1, 2, (4:end)]
-perm_vec = 1:ndims(wrf_no2);
-perm_vec(3) = [];
-perm_vec = [3, perm_vec];
 
-wrf_no2 = permute(wrf_no2, perm_vec);
-wrf_pres = permute(wrf_pres, perm_vec);
+if interp_bool
+    wrf_lon = repmat(wrf_lon,1,1,prof_length);
+    wrf_lat = repmat(wrf_lat,1,1,prof_length);
+    wrf_z = repmat(permute(1:prof_length,[1 3 2]),size(wrf_lon,1),size(wrf_lon,2),1);
+    wrf_no2_F = scatteredInterpolant(wrf_lon(:), wrf_lat(:), wrf_z(:), wrf_no2(:));
+    wrf_pres_F = scatteredInterpolant(wrf_lon(:), wrf_lat(:), wrf_z(:), wrf_pres(:));
+else
+    % Reorder dimensions. This will make the perm_vec be [3, 1, 2, (4:end)]
+    perm_vec = 1:ndims(wrf_no2);
+    perm_vec(3) = [];
+    perm_vec = [3, perm_vec];
+    
+    wrf_no2 = permute(wrf_no2, perm_vec);
+    wrf_pres = permute(wrf_pres, perm_vec);
 
-wrf_no2 = reshape(wrf_no2, prof_length, num_profs);
-wrf_pres = reshape(wrf_pres, prof_length, num_profs);
-wrf_lon = reshape(wrf_lon, 1, num_profs);
-wrf_lat = reshape(wrf_lat, 1, num_profs);
+    wrf_no2 = reshape(wrf_no2, prof_length, num_profs);
+    wrf_pres = reshape(wrf_pres, prof_length, num_profs);
+    wrf_lon = reshape(wrf_lon, num_profs, 1);
+    wrf_lat = reshape(wrf_lat, num_profs, 1);
+end
+
+    no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
 
 
-num_pix = numel(surfPres);
-no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
-for p=1:num_pix
-    xall = loncorns(:,p);
-    xall(5) = xall(1);
-    
-    yall = latcorns(:,p);
-    yall(5) = yall(1);
-    
-    % Try to speed this up by removing profiles outside a rectangle around
-    % the pixel first, then deal with the fact that the pixel is angled
-    % relative to lat/lon.
-    
-    xx = wrf_lon < max(xall) & wrf_lon > min(xall) & wrf_lat < max(yall) & wrf_lat > min(yall);
-    tmp_no2 = wrf_no2(:,xx);
-    tmp_pres = wrf_pres(:,xx);
-    tmp_lon = wrf_lon(xx);
-    tmp_lat = wrf_lat(xx);
-    
-    yy = inpolygon(tmp_lon, tmp_lat, xall, yall);
-    
-    if sum(yy) < 1
-        E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
+% For each pixel, just find the closest WRF profile. Error if the distance
+% to the profile is greater than about the pixel resolution. Will also
+% implement interpolation to compare results.
+for x = 1:size(lons,1)
+    for y = 1:size(lons,2)
+        if ~interp_bool
+            [~,I] = min(sqrt((lons(x,y)-wrf_lon).^2 + (lats(x,y)-wrf_lat).^2));
+            interp_no2 = exp(interp1(log(wrf_pres(:,I)), log(wrf_no2(:,I)), log(pressures),'linear','extrap'));
+        else
+            interp_no2 = nan(prof_length,1);
+            interp_pres = nan(prof_length,1);
+            for i=1:prof_length
+                interp_no2(i) = wrf_no2_F(lons(x,y), lats(x,y),i);
+                interp_pres(i) = wrf_pres_F(lons(x,y), lats(x,y),i);   
+            end
+            interp_no2 = exp(interp1(log(interp_pres), log(interp_no2), log(pressures),'linear','extrap'));
+        end
+
+        last_below_surf = find(pressures > surfPres(x,y),1,'last');
+        no2_bins(last_below_surf:end,x,y) = interp_no2(last_below_surf:end);
     end
-    
-    tmp_no2(:,~yy) = [];
-    tmp_pres(:,~yy) = [];
-    
-    % Interpolate all the NO2 profiles to the input pressures, then average
-    % them together. Extrapolate so that later we can be sure to have one
-    % bin below the surface pressure for omiAmfAK2 and integPr2.
-    % Interpolate in log-log space to account for the exponential
-    % dependence of pressure on altitude and the often exponential decrease
-    % of concentration with altitude.
-    
-    interp_no2 = nan(length(pressures), size(tmp_no2,2));
-    
-    if ~iscolumn(pressures); pressures = pressures'; end
-    
-    for a=1:size(tmp_no2,2)
-        interp_no2(:,a) = interp1(log(tmp_pres(:,a)), log(tmp_no2(:,a)), log(pressures), 'linear', 'extrap');
-    end
-    
-    interp_no2 = exp(interp_no2);
-    
-    last_below_surf = find(pressures > surfPres(p),1,'last')-1;
-    interp_no2(1:last_below_surf,:) = nan;
-    
-    no2_bins(:,p) = nanmean(interp_no2,2);
-    
-    
-    
 end
 
     function [wrf_no2, wrf_pres, wrf_lon, wrf_lat] = load_wrf_vars(avg_mode)
