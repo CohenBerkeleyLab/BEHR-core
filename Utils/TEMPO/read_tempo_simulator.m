@@ -202,7 +202,7 @@ terpres(isnan(terpres)) = -500;
 % total_days=datenum(date_end)-datenum(last_date)+1;
 % for j=1:total_days;
 
-if onCluster
+if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
