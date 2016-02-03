@@ -1071,16 +1071,20 @@ end
         end
     end
 
-    function plot_changes_by_sector(daily_prof_type, ghost_type, d_km)
+    function plot_changes_by_sector(daily_prof_type, ghost_type, colorbydate, d_km)
         % This function will plot changes in AMF and VCD vs. SCD (trop) for
         % 8 wind sectors around Atlanta. The idea is to try to understand
         % if the changes in column density are systematic in terms of a
         % monthly average.
         %
-        % Both inputs are optional. The first should be 'regular' or
+        % All inputs are optional. The first should be 'regular' or
         % 'hybrid', referring to which daily profile to use (defaults to
-        % 'regular'). The second represents how far from Atlanta (in
-        % kilometers) to include data for. Defaults to 100 km.
+        % 'regular'). The second is whether to use "new," "old," or "none"
+        % ghost column correction. It defaults to "none." The third should
+        % be true or false and indicate whether to color the scatter plots
+        % by the dates of the observations. It defaults to false. The
+        % last represents how far from Atlanta (in kilometers) to include
+        % data for. Defaults to 100 km.
         
         homedir = getenv('HOME');
         if ~exist('daily_prof_type','var')
@@ -1090,7 +1094,7 @@ end
         end
         
         if ~exist('ghost_type','var')
-            ghost = '';
+            ghost = ' - No ghost';
         else
             if ~strcmpi(ghost_type,'old') && strcmpi(daily_prof_type, 'regular')
                 E.badinput('New ghost products not yet available for regular daily profiles, only hybrid')
@@ -1104,6 +1108,14 @@ end
                     ghost = '';
                 otherwise
                     E.badinput('ghost_type must be one of ''new'', ''none'', or ''old''')
+            end
+        end
+        
+        if ~exist('colorbydate','var')
+            colorbydate = false;
+        else
+            if ~isscalar(colorbydate) || ~islogical(colorbydate)
+                E.badinput('colorbydate (if given) must be a scalar logical')
             end
         end
         
@@ -1134,11 +1146,14 @@ end
         vcds_m = make_empty_struct_from_cell(directions);
         vcds_d = make_empty_struct_from_cell(directions);
         scds = make_empty_struct_from_cell(directions);
+        dnums = make_empty_struct_from_cell(directions);
 
         
         for a=1:numel(DF)
             fprintf('Loading file %d\n',a);
             D_OMI = load(fullfile(daily_path,DF(a).name),'OMI');
+            [ds,de] = regexp(DF(a).name,'\d\d\d\d\d\d\d\d');
+            this_datenum = datenum(DF(a).name(ds:de),'yyyymmdd');
             D_OMI = D_OMI.OMI(2); % both reduce the layers of structures and assume Atlanta is in the second swath
             D_OMI = omi_pixel_reject(D_OMI, 'omi', 0.2, 'XTrackFlags');
             D_OMI.BEHRColumnAmountNO2Trop(D_OMI.Areaweight == 0) = nan;
@@ -1183,12 +1198,14 @@ end
             end
             
             for b=1:numel(directions)
+                sz = size(M_OMI.BEHRAMFTrop(xx.(directions{b})));
                 amfs_m.(directions{b}) = cat(1,amfs_m.(directions{b}),M_OMI.BEHRAMFTrop(xx.(directions{b})));
                 amfs_d.(directions{b}) = cat(1,amfs_d.(directions{b}),D_OMI.BEHRAMFTrop(xx.(directions{b})));
                 vcds_m.(directions{b}) = cat(1,vcds_m.(directions{b}),M_OMI.BEHRColumnAmountNO2Trop(xx.(directions{b})));
                 vcds_d.(directions{b}) = cat(1,vcds_d.(directions{b}),D_OMI.BEHRColumnAmountNO2Trop(xx.(directions{b})));
                 scds.(directions{b}) = cat(1,scds.(directions{b}),M_OMI.ColumnAmountNO2Trop(xx.(directions{b})) .* M_OMI.AMFTrop(xx.(directions{b})));
                 scds.(directions{b})(scds.(directions{b})<0) = nan;
+                dnums.(directions{b}) = cat(1, dnums.(directions{b}), repmat(this_datenum, sz));
             end
             
         end
@@ -1198,14 +1215,22 @@ end
         
         for b=1:numel(directions)
             figure; 
-            scatter(scds.(directions{b}), amfs_d.(directions{b}) - amfs_m.(directions{b}));
+            if colorbydate
+                scatter(scds.(directions{b}), amfs_d.(directions{b}) - amfs_m.(directions{b}), 16, dnums.(directions{b}));
+            else
+                scatter(scds.(directions{b}), amfs_d.(directions{b}) - amfs_m.(directions{b}));
+            end
             xlabel('Tropospheric slant column density (molec. cm^{-2})');
             ylabel('\Delta AMF (daily - monthly)');
             set(gca,'fontsize',16);
             title(sprintf('%s sector \\Delta AMF using %s daily profiles',upper(directions{b}),daily_prof_type));
             
             figure; 
-            scatter(scds.(directions{b}), vcds_d.(directions{b}) - vcds_m.(directions{b}));
+            if colorbydate
+                scatter(scds.(directions{b}), vcds_d.(directions{b}) - vcds_m.(directions{b}), 16, dnums.(directions{b}));
+            else
+                scatter(scds.(directions{b}), vcds_d.(directions{b}) - vcds_m.(directions{b}));
+            end
             xlabel('Tropospheric slant column density (molec. cm^{-2})');
             ylabel('\Delta VCD (daily - monthly)');
             set(gca,'fontsize',16);
