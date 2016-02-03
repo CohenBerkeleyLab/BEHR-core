@@ -133,7 +133,7 @@ end
 
 % Which WRF profiles to use
 %****************************%
-wrf_avg_mode = 'hybrid';
+wrf_avg_mode = 'hourly';
 %****************************%
 
 %These will be included in the file name
@@ -210,16 +210,6 @@ for j=1:length(datenums)
         if DEBUG_LEVEL > 1; fprintf('\t ...Found.\n'); end
         S=load(fullfile(sp_mat_dir,filename)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
         Data=S.Data;
-        % For the TEMPO simulation, I'll be using a fixed set of OMI pixels
-        % (over Atlanta, first) so the Data structure will only have
-        
-        if exist('profile_file','file')==1 && strcmp(profile_file(2:3),month)==1; %JLL 20 Mar 2014:
-        else
-            profile_file=['m',month,'_NO2_profile'];
-            if DEBUG_LEVEL > 1; disp(['Loading ',fullfile(no2_profile_path,profile_file)]); end
-            S=load(fullfile(no2_profile_path,profile_file));
-            PROFILE = S.PROFILE;
-        end
         for d=1:length(Data);
             % Data is initialized in read_omno2_v_aug2012 with a single 0
             % in the Longitude field.  Since points outside the lat/lons of
@@ -275,7 +265,7 @@ for j=1:length(datenums)
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
                 if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
-                no2_bins = rProfile_WRF(datenums(j), utchrs(d), wrf_avg_mode, loncorns, latcorns, pTerr, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+                no2_bins = rProfile_WRF(datenums(j), utchrs(d), wrf_avg_mode, lon, lat, pTerr, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
                 no2Profile1 = no2_bins;
                 no2Profile2 = no2_bins;
                 
