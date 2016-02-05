@@ -87,8 +87,8 @@ end
         stag_V(2) = 1;
         
         if ndims(lon) < 3 || size(lon,3) == 1 
-            lon = repmat(lon,1,1,sz_U(3));
-            lat = repmat(lat,1,1,sz_U(3));
+            lon = repmat(lon,1,1,size(U,3));
+            lat = repmat(lat,1,1,size(U,3));
         end
         sz_lonlat = size(lon);
         
