@@ -158,11 +158,14 @@ end
 %%%%% MAIN FUNCTION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
+% Constants
+nox_no2_scale = 1.32; % c.f. supporting info for Beirle et al. 2011 (Science)
+
 for d=1:numel(fnames_struct)
     D = load(fullfile(fpath,fnames_struct(d).name),'Data');
     
     if windvel_set && ~eval(sprintf('windvel(d) %s windcrit',windop))
-        if DEBUG_LEVEL > 0; disp('Wind too slow, skipping'); end
+        if DEBUG_LEVEL > 0; fprintf('Wind too slow, skipping %s\n',fnames_struct(d).name); end
         continue
     end
     
@@ -173,13 +176,14 @@ for d=1:numel(fnames_struct)
         OMI = rotate_plume(D.Data(data_ind), center_lon, center_lat, theta(d));
     end
     if isempty(OMI.Longitude)
+        if DEBUG_LEVEL > 0; fprintf('No grid cells in %s\n',fnames_struct(d).name); end 
         continue
     end
     OMI = omi_pixel_reject(OMI,'omi',0.2,'XTrackFlags');
     xx = OMI.Areaweight > 0;
     
     if d == 1
-        no2 = nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct));
+        nox = nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct));
     end
     
     % This criterion accounts for how many neighbors are empty, giving more
@@ -188,7 +192,7 @@ for d=1:numel(fnames_struct)
     % cutoff.
     mfrac = badpix_metric(~xx);
     if mfrac > .5 && ~force_calc
-        if DEBUG_LEVEL > 0; disp('Too many clumped missing pixels, skipping'); end
+        if DEBUG_LEVEL > 0; fprintf('Too many clumped missing pixels, skipping %s\n',fnames_struct(d).name); end
         continue
     end
     
@@ -198,13 +202,13 @@ for d=1:numel(fnames_struct)
     if DEBUG_LEVEL > 0; disp('Interpolating to fill in gaps in NO2 matrix'); end
     F = scatteredInterpolant(OMI.Longitude(xx), OMI.Latitude(xx), OMI.BEHRColumnAmountNO2Trop(xx));
     
-    no2(:,:,d) = F(OMI.Longitude, OMI.Latitude);
+    nox(:,:,d) = F(OMI.Longitude, OMI.Latitude)*nox_no2_scale;
 
 end
 
 lon = OMI.Longitude;
 lat = OMI.Latitude;
-no2_mean = nanmean(no2,3);
+no2_mean = nanmean(nox,3);
 
 % Calculate the line density. See de Foy et al., Atmos. Environ. (2014) p.
 % 66. Basically an integration along the line perpendicular to the plume.
