@@ -94,11 +94,13 @@ end
 % be set as the five elements of the vector f, necessary for inserting them
 % into the fmincon routine.
 
-% Set up the EMG function
-emgfxn = @(f) f(1)/2 .* exp( (f(4)^2 / (2 * f(2)^2)) - (no2_x - f(3)) ./ f(2) )...
-    .* ( 1 - erf( (f(4)^2 - f(2).*(no2_x - f(3)))./(sqrt(2) * f(4) * f(2)) ) ) + f(5);
-
-fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2);
+    function e = emgfxn(f,x)
+%emgfxn = @(f,x) 
+        e = f(1)/2 .* exp( (f(4)^2 / (2 * f(2)^2)) - (x - f(3)) ./ f(2) )...
+        .* ( 1 - erf( (f(4)^2 - f(2).*(x - f(3)))./(sqrt(2) * f(4) * f(2)) ) ) + f(5);
+        e(isnan(e)) = Inf;
+    end
+fitfxn = @(f) nansum((emgfxn(f,no2_x) - no2_ld).^2);
 
 history.x = [];
 opts = optimoptions('fmincon','Display',fmincon_output,'OutputFcn',@outfun);
@@ -153,7 +155,10 @@ f_lb(1) = 0; f_ub(1) = Inf; %f_ub(1) = max(no2_ld)*1.5;
 
 % x0 (length scale of chemical decay) must be > 0 to be physically
 % meaningful. This term tends to cause problems in the fit when the
-% algorithm thinks it sees a minimum where x0 gets very small.
+% algorithm thinks it sees a minimum where x0 gets very small, so I chose
+% 0.5 km as the lower bound because it is ~1/10th of the resolution of the
+% gridded data. This basically says that the decay must be observable at
+% the resolution of the data.
 f_lb(2) = 0.5; f_ub(2) = Inf;
 
 % mu_x should be close to the position of the source, but what we can say
@@ -162,11 +167,13 @@ f_lb(2) = 0.5; f_ub(2) = Inf;
 % density, that may be useful if fitting continues to be foolish.
 f_lb(3) = min(no2_x); f_ub(3) = max(no2_x);
 
-% sigma_x describes the width of the Gaussian; it must be positive and
-% should really be less than the full width of it. We will assume that the
-% buildup on the left hand side represents this full width.
+% sigma_x describes the width of the Gaussian; it must be positive (and not
+% just technically positive - it should have at least some width, so 0.5 km
+% was chosen as ~1/10th the resolution of the gridded data) and should
+% really be less than the full width of it. We will assume that the buildup
+% on the left hand side represents this full width.
 [~,m] = max(no2_ld);
-f_lb(4) = 0; f_ub(4) = no2_x(m) - min(no2_x);
+f_lb(4) = 0.5; f_ub(4) = no2_x(m) - min(no2_x);
 
 % B is the background value. It must be > 0 to be physically meaningful,
 % and should really not exceed the maximum line density.
