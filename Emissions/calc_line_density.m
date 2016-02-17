@@ -66,6 +66,7 @@ function [ no2_x, no2_linedens ] = calc_line_density( fpath, fnames, data_ind, c
 E = JLLErrors;
 
 p=inputParser;
+p.addOptional('nox_or_no2','no2',@(x) ismember(lower(x),{'nox','no2'}));
 p.addParameter('windvel',[]);
 p.addParameter('windcrit',[]);
 p.addParameter('windop','');
@@ -76,6 +77,7 @@ p.addParameter('DEBUG_LEVEL',1);
 p.parse(varargin{:});
 
 pout=p.Results;
+nox_or_no2 = pout.nox_or_no2;
 windvel = pout.windvel;
 windcrit = pout.windcrit;
 windop = pout.windop;
@@ -159,7 +161,11 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Constants
-nox_no2_scale = 1.32; % c.f. supporting info for Beirle et al. 2011 (Science)
+if strcmpi(nox_or_no2,'nox')
+    nox_no2_scale = 1.32; % scales NO2 to NOx columns, c.f. supporting info for Beirle et al. 2011 (Science)
+else
+    nox_no2_scale = 1;
+end
 
 for d=1:numel(fnames_struct)
     D = load(fullfile(fpath,fnames_struct(d).name),'Data');
