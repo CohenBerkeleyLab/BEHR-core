@@ -263,7 +263,9 @@ ffit.B = ffinal(5);
 emgfit = emgfxn_fix(fitparams, no2_x);
 
 try
+    opts = statset('derivstep',eps^(1/4).* f0);
     [N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,f0);
+    %[N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,fitparams);
     N.emg = emgfxn_fix(N.beta,no2_x);
 catch err
     if strcmp(err.identifier,'stats:nlinfit:NonFiniteFunOutput')
@@ -291,7 +293,7 @@ end
         % is purely to force fmincon to behave, the only possible physical
         % justification is that the a term should control the amount of
         % mass in the plume and not the exponetial itself.
-        c = (f(4)^2 / (2 * f(2)^2)) - (no2_x - f(3)) ./ f(2) - log(20);
+        c = max((f(4)^2 / (2 * f(2)^2)) - (no2_x - f(3)) ./ f(2) - log(20));
         ceq = [];
     end
 end
