@@ -1,4 +1,4 @@
-function [ SumWeightedColumn, SumWeight ] = BEHR_day_no2( OMI, varargin )
+function [ SumWeightedColumn, SumWeight, Count ] = BEHR_day_no2( OMI, varargin )
 %BEHR_DAY_NO2 - handles the weighting of a day's worth of BEHR data
 
 E = JLLErrors;
@@ -47,6 +47,7 @@ end
 
 SumWeightedColumn = zeros(size(OMI(1).(mapfield)));
 SumWeight = zeros(size(OMI(1).(mapfield)));
+Count = zeros(size(OMI(1).(mapfield)));
 
 for a=1:numel(OMI)
     omi = OMI(a);
@@ -58,7 +59,12 @@ for a=1:numel(OMI)
     end
     
     SumWeightedColumn = nansum2(cat(3,SumWeightedColumn, omi.(mapfield) .* omi.Areaweight),3);
-    SumWeight = nansum2(cat(3, SumWeight + omi.Areaweight),3);
+    SumWeight = nansum2(cat(3, SumWeight, omi.Areaweight),3);
+    if isfield(omi,'Count')
+        this_count = omi.Count;
+        this_count(omi.Areaweight <= 0) = 0;
+        Count = nansum2(cat(3, Count, this_count),3);
+    end
 end
 
 end
