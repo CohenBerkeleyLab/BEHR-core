@@ -1,4 +1,4 @@
-function BEHR_main(date_start, date_end)
+function BEHR_main(date_start, date_end, prof_mode)
 %Josh Laughner <joshlaugh5@gmail.com>
 %Based on BEHR_nwus by Ashley Russell (02/09/2012)
 %Takes "OMI_SP_yyyymmdd.m" files produced by read_omno2_v_aug2012.m as it's
@@ -129,11 +129,23 @@ if nargin < 2
     date_end='2013/06/30';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
+
+% restart from last file produced (true) or run entire time period (false)
+restart = false;
 %****************************%
 
 % Which WRF profiles to use
 %****************************%
-wrf_avg_mode = 'hourly';
+if exist('prof_mode','var')
+    allowed_modes = {'hourly','monthly','hybrid'};
+    if ~ismember(prof_mode,allowed_modes)
+        error('BEHR_main:bad_input','prof_mode (if given) must be one of %s',allowed_modes);
+    end
+    wrf_avg_mode = prof_mode;
+else
+    wrf_avg_mode = 'hourly';
+    fprintf('BEHR_main: Used hard-coded wrf_avg_mode = %s\n',wrf_avg_mode);
+end
 %****************************%
 
 %These will be included in the file name
@@ -167,7 +179,7 @@ end
 file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
 last_file=dir(fullfile(behr_mat_dir,sprintf('%s*.mat',file_prefix)));
 
-if ~isempty(last_file)
+if ~isempty(last_file) && restart
     last_datenum = datenum(last_file(end).name(l+1:l+8),'yyyymmdd')+1;
 else
     last_datenum = 0;
@@ -181,8 +193,10 @@ end
 
 tic
 % Create a parallel pool if one doesn't exist and we are on a cluster
-if onCluster && isempty(gcp('nocreate'))
-    parpool(numThreads);
+if onCluster    
+    if isempty(gcp('nocreate'))
+        parpool(numThreads);
+    end    
     n_workers = Inf;
 else
     n_workers = 0;
@@ -190,8 +204,8 @@ end
 
 utchrs = 13:22;
 
-%parfor (j=1:length(datenums), n_workers)
-for j=1:length(datenums)
+parfor (j=1:length(datenums), n_workers)
+%for j=1:length(datenums)
     %Read the desired year, month, and day
     R=datenums(j);
     date=datestr(R,26);
@@ -200,7 +214,7 @@ for j=1:length(datenums)
     day=date(9:10);
     if DEBUG_LEVEL > 0; disp(['Processing data for ', date]); end
     
-    filename = ['TEMPO_SIM_ATLANTA_',year,month,day,'.mat'];
+    filename = ['TEMPO_SIM_POLYALB_ALTANTA_',year,month,day,'.mat'];
     
     if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(sp_mat_dir,filename),'...']); end %#ok<PFGV> % The concern with using global variables in a parfor is that changes aren't synchronized.  Since I'm not changing them, it doesn't matter.
     if isequal(exist(fullfile(sp_mat_dir,filename),'file'),0)
@@ -265,7 +279,7 @@ for j=1:length(datenums)
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
                 if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
-                no2_bins = rProfile_WRF(datenums(j), utchrs(d), wrf_avg_mode, lon, lat, pTerr, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+                no2_bins = rProfile_WRF(datenums(j), utchrs(d), wrf_avg_mode, lon, lat, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
                 no2Profile1 = no2_bins;
                 no2Profile2 = no2_bins;
                 
@@ -289,8 +303,8 @@ for j=1:length(datenums)
         savename=[file_prefix,year,month,day];
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
         saveData(fullfile(behr_mat_dir,savename),Data)
-        toc
-        t=toc;
+        %toc
+        %t=toc;
         %if t>1200
         %error('Time exceeded 20 min. Stopping')
         %end

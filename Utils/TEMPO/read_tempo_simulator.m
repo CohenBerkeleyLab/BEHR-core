@@ -342,6 +342,18 @@ for ii=1:length(in);
     end
 end
 
+% I think it causes a problem for parallel loops if a variable that *may*
+% be used in the loop never gets defined before the loop starts, causing
+% MATLAB to crash because it tries to send the variable just in case and 
+% can't. That happens when which variable is used it selected by an if 
+% statement like the versions of band3 here. Get around that by initializing
+% them as empty variables.
+
+band3 = [];
+band3_iso = [];
+band3_vol = [];
+band3_geo = [];
+
 mcd43_info = hdfinfo(fullfile(alb_dir,alb_files(1).name));
 if strcmpi(alb_type,'black-sky')
     band3 = hdfread(hdf_dsetID(mcd43_info,1,1,'Albedo_BSA_Band3'));
@@ -404,6 +416,8 @@ if DEBUG_LEVEL > 3; MODISAlb_Ocn = zeros(s); end %JLL
 %Now actually average the MODIS albedo for each OMI pixel
 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
 parfor k=1:c;
+    t = getCurrentTask();
+%    t.ID = 0;
     if DEBUG_LEVEL > 1 && mod(k,10000)==1; fprintf('Adding albedo data to pixel %d of %d\n',k,c); end
     if DEBUG_LEVEL > 2; tic; end
     x1 = Data.Loncorn(1,k);   y1 = Data.Latcorn(1,k);
@@ -418,14 +432,17 @@ parfor k=1:c;
     xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
     
     if strcmpi(alb_type,'black-sky')
+        if DEBUG_LEVEL>1 && mod(k,10000)==1; fprintf('W%d: Calculating average black-sky albedo\n',t.ID); end
         band3_vals=band3(xx_alb);  band3_zeros=band3_vals==0;
         band3_vals(band3_zeros)=NaN; band3_vals(isnan(band3_vals))=[];
         band3_avg=mean(band3_vals);
     elseif strcmpi(alb_type,'brdf')
-        band3_vals = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data.SolarZenithAngle(k), Data.ViewingZenithAngle, Data.RelativeAzimuthAngle(k));
+        if DEBUG_LEVEL>1 && mod(k,10000)==1; fprintf('W%d: Calculating average BRDF albedo\n',t.ID); end
+        band3_vals_brdf = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data.SolarZenithAngle(k), Data.ViewingZenithAngle, Data.RelativeAzimuthAngle(k));
         band3_avg = nanmean(band3_vals_brdf(band3_vals_brdf>0));
     elseif strcmpi(alb_type,'poly')    
-        band3_vals = modis_brdf_alb_poly(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data.SolarZenithAngle(k));
+        if DEBUG_LEVEL>1 && mod(k,10000)==1; fprintf('W%d: Calculating average polynomial albedo\n',t.ID); end
+        band3_vals_poly = modis_brdf_alb_poly(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data.SolarZenithAngle(k));
         band3_avg = nanmean(band3_vals_poly);
     end
     %put in ocean surface albedo from LUT
