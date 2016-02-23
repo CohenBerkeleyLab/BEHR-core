@@ -2,7 +2,7 @@ function [ tp_lev ] = find_wrf_tropopause( wrf_info, assume_top )
 %FIND_WRF_TROPOPAUSE Find the model level where the tropopause is
 %   The WRF preprocessor determines the tropopause level in the model as
 %   being where the average lapse rate over 3 model layers is < 2 K/km.
-%   This replicates that calculation. 
+%   This replicates that calculation.
 %
 %   The only required input is a structure obtained from ncinfo that points
 %   to a netCDF file of WRF output that contains the calculated quantities
@@ -65,11 +65,21 @@ sz_sn = wrf_info.Dimensions(dd).Length;
 dd = strcmp('Time',dims);
 if sum(dd) == 0
     sz_time = 1;
+    no_time = true;
 else
     sz_time = wrf_info.Dimensions(dd).Length;
+    no_time = false;
 end
-    
-tp_lev = zeros(sz_we, sz_sn, sz_time);
+dd = strcmp('hour_index',dims);
+if sum(dd) == 0
+    sz_hr = 1;
+    no_hour = true;
+else
+    sz_hr = wrf_info.Dimensions(dd).Length;
+    no_hour = false;
+end
+
+tp_lev = zeros(sz_we, sz_sn, sz_time, sz_hr);
 
 % The WRF pre-processor defines the tropopause as the first level where the
 % average lapse rate over 3 layers is < 2 K/km. So we calculate the lapse
@@ -77,63 +87,73 @@ tp_lev = zeros(sz_we, sz_sn, sz_time);
 % criteria.
 
 T = ncread(wrf_info.Filename, 'TT'); % temperature of each level in K
-z_lev = ncread(wrf_info.Filename, 'z'); % layer thickness in meters  
+z_lev = ncread(wrf_info.Filename, 'z'); % layer thickness in meters
 pres = ncread(wrf_info.Filename, 'pres'); % model box center pressure in hPa
+
+% If the input variables have an hour_index dimension, but not a Time
+% dimension, rearrange them to pretend that they do have a Time dimension.
+if no_time && ~no_hour
+    T = permute(T,[1 2 3 5 4]);
+    z_lev = permute(z_lev, [1 2 3 5 4]);
+    pres = permute(pres, [1 2 3 5 4]);
+end
 
 % Since T is defined at the layer center and z the edges (staggered
 % coordinates) let's convert z to non-staggered coordinates
-z_lev = (z_lev(:,:,2:end,:)+z_lev(:,:,1:end-1,:))/2;
+z_lev = (z_lev(:,:,2:end,:,:)+z_lev(:,:,1:end-1,:,:))/2;
 
 for x = 1:sz_we
     for y = 1:sz_sn
         for t = 1:sz_time
-            lt_2Kkm = false;
-            for z = (sz_bt-1):(-1):1
-                % Go from the top down. Once we find 1 case where the lapse
-                % rate is < 2 K/km, search until we hit one > 2 K/km
-                
-                % Include the top two lapse rates, but they'll need
-                % calculated specially (since there's not 3 layers to
-                % average)
-                if sz_bt - z == 1 || sz_bt - z == 2
-                    end_ind = sz_bt;
-                else
-                    end_ind = z + 3;
-                end
-                
-                % Calculate the lapse rate in three layer chunks. z is in meters, so
-                % convert it to km so the lapse rate is K/km. Also take the negative since
-                % lapse rate is defined as -dT/dz.
-                lapse = -(T(x,y,end_ind,t) - T(x,y,z,t))/((z_lev(x,y,end_ind,t)-z_lev(x,y,z,t))/1000);
-                if ~lt_2Kkm
-                    if lapse < 2
-                        lt_2Kkm = true;
+            for h = 1:sz_hr
+                lt_2Kkm = false;
+                for z = (sz_bt-1):(-1):1
+                    % Go from the top down. Once we find 1 case where the lapse
+                    % rate is < 2 K/km, search until we hit one > 2 K/km
+                    
+                    % Include the top two lapse rates, but they'll need
+                    % calculated specially (since there's not 3 layers to
+                    % average)
+                    if sz_bt - z == 1 || sz_bt - z == 2
+                        end_ind = sz_bt;
+                    else
+                        end_ind = z + 3;
                     end
-                else
-                    if lapse > 2
-                        tp_lev(x,y,t) = z;
+                    
+                    % Calculate the lapse rate in three layer chunks. z is in meters, so
+                    % convert it to km so the lapse rate is K/km. Also take the negative since
+                    % lapse rate is defined as -dT/dz.
+                    lapse = -(T(x,y,end_ind,t,h) - T(x,y,z,t,h))/((z_lev(x,y,end_ind,t,h)-z_lev(x,y,z,t,h))/1000);
+                    if ~lt_2Kkm
+                        if lapse < 2
+                            lt_2Kkm = true;
+                        end
+                    else
+                        if lapse > 2
+                            tp_lev(x,y,t,h) = z;
+                            break
+                        end
+                    end
+                    
+                    % Reject if the pressure is >500 hPa (i.e. below the 500
+                    % hPa altitude). This is part of the WMO definition of
+                    % tropopause, which rejects any lapse rates < 2 K/km below
+                    % this unless it is the only one.  We are likewise going to
+                    % always reject these because surface temperature
+                    % inversions will confuse the algorithm.
+                    if pres(x,y,z,t,h) > 500;
+                        % If we never found any point with a lapse rate < 2
+                        % K/km at all and the assume_top parameter is set,
+                        % assume that we didn't see a tropopause b/c it was
+                        % above the top box.  Otherwise, set the level as -1 as
+                        % a cue to the user that the conditions were never met.
+                        if assume_top && ~lt_2Kkm
+                            tp_lev(x,y,t,h) = sz_bt;
+                        else
+                            tp_lev(x,y,t,h) = -1;
+                        end
                         break
                     end
-                end
-                
-                % Reject if the pressure is >500 hPa (i.e. below the 500
-                % hPa altitude). This is part of the WMO definition of
-                % tropopause, which rejects any lapse rates < 2 K/km below
-                % this unless it is the only one.  We are likewise going to
-                % always reject these because surface temperature
-                % inversions will confuse the algorithm.
-                if pres(x,y,z,t) > 500;
-                    % If we never found any point with a lapse rate < 2
-                    % K/km at all and the assume_top parameter is set,
-                    % assume that we didn't see a tropopause b/c it was
-                    % above the top box.  Otherwise, set the level as -1 as
-                    % a cue to the user that the conditions were never met.
-                    if assume_top && ~lt_2Kkm
-                        tp_lev(x,y,t) = sz_bt;
-                    else
-                        tp_lev(x,y,t) = -1;
-                    end
-                    break
                 end
             end
         end
