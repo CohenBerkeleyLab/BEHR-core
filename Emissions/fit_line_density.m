@@ -36,6 +36,8 @@ p.addOptional('fmincon_output','iter',@(x) ismember(x,{'none','iter','final'}));
 p.addParameter('fixed_param','',@ischar);
 p.addParameter('fixed_val',[]);
 p.addParameter('f0',[]);
+p.addParameter('lb',[]);
+p.addParameter('ub',[]);
 p.parse(varargin{:});
 pout=p.Results;
 
@@ -43,29 +45,8 @@ fmincon_output = pout.fmincon_output;
 fixed_param = pout.fixed_param;
 fixed_val = pout.fixed_val;
 f0in = pout.f0;
-
-% Default values
-% fmincon_output = 'iter';
-% fixed_param = '';
-% fixed_val = [];
-% 
-% 
-% v=1;
-% while v <= numel(varargin)
-%     if strcmp('fixed_param',varargin{v})
-%         fixed_param = varargin{v+1};
-%         v=v+2;
-%     elseif strcmp('fixed_val',varargin{v})
-%         fixed_val = varargin{v+1};
-%         v=v+2;
-%     elseif strcmp('f0',varargin{v})
-%         f0in = varargin{v+1};
-%         v=v+2;
-%     else
-%         fmincon_output = varargin{v};
-%         v=v+1;
-%     end
-% end
+ubin = pout.ub;
+lbin = pout.lb;
 
 E = JLLErrors;
 if ~isvector(no2_x) || ~isnumeric(no2_x)
@@ -85,6 +66,12 @@ if xor(isempty(fixed_param),isempty(fixed_val))
 end
 if ~isempty(f0in) && numel(f0in) ~= 5
     E.badinput('If an f0 is specified as input, it must have five elements')
+end
+if ~isempty(ubin) && numel(ubin) ~= 5
+    E.badinput('If an ub is specified as input, it must have five elements')
+end
+if ~isempty(lbin) && numel(lbin) ~= 5
+    E.badinput('If an lb is specified as input, it must have five elements')
 end
 
 % Define the fit function, which although is physically a function of x, is
@@ -184,6 +171,17 @@ f_lb(5) = 0; f_ub(5) = max(no2_ld);
 A = [0 1 1 0 0];
 b = max(no2_x);
 
+% Overwrite the upper and lower bounds with user input if given. Doing it
+% here just lets me keep the section defining the limits organized how it
+% is, which is much easier to read, and allow the user to only specify
+% upper or lower limits (instead of both) if they desire.
+if ~isempty(ubin)
+    f_ub = ubin;
+end
+if ~isempty(lbin)
+    f_lb = lbin;
+end
+
 if ischar(fixed_val) && strcmpi(fixed_val, 'f0')
     switch fixed_param
         case 'a'
@@ -262,17 +260,19 @@ ffit.sigma_x = ffinal(4);
 ffit.B = ffinal(5);
 emgfit = emgfxn_fix(fitparams, no2_x);
 
-try
-    opts = statset('derivstep',eps^(1/4).* f0);
-    [N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,f0);
-    %[N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,fitparams);
-    N.emg = emgfxn_fix(N.beta,no2_x);
-catch err
-    if strcmp(err.identifier,'stats:nlinfit:NonFiniteFunOutput')
-        N = struct;
-        fprintf('nlinfit found NaNs or Inf in the function for inputs: \n\tfixed_param = %s \n\tfixed_val = %.3g \n\tf0in = %s \n\tf0 = %s\n', fixed_param, fixed_val, mat2str(f0in), mat2str(f0));
-    else
-        rethrow(err)
+if nargout >= 6
+    try
+        opts = statset('derivstep',eps^(1/4).* abs(f0));
+        [N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,f0);
+        %[N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,fitparams);
+        N.emg = emgfxn_fix(N.beta,no2_x);
+    catch err
+        if strcmp(err.identifier,'stats:nlinfit:NonFiniteFunOutput')
+            N = struct;
+            fprintf('nlinfit found NaNs or Inf in the function for inputs: \n\tfixed_param = %s \n\tfixed_val = %.3g \n\tf0in = %s \n\tf0 = %s\n', fixed_param, fixed_val, mat2str(f0in), mat2str(f0));
+        else
+            rethrow(err)
+        end
     end
 end
 
