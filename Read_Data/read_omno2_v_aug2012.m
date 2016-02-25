@@ -232,7 +232,7 @@ parfor j=1:length(datenums)
     % variable on each worker for parallelization, and this line will reset
     % its value within each loop. Thus we shouldn't need to worry about
     % cross-communication between workers.
-    Data=struct('Date',0,'Longitude',0,'Latitude',0,'LatBdy',[],'LonBdy',[],'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0,'MODIS_Cloud_File','','MODISAlbedo',0,'MODIS_Albedo_File','','GLOBETerpres',0,'XTrackQualityFlags',0);
+    Data=struct('Date',0,'Longitude',0,'Latitude',0,'LatBdy',[],'LonBdy',[],'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0,'MODIS_Cloud_File','','MODISAlbedo',0,'MODIS_Albedo_File','','GLOBETerpres',0,'XTrackQualityFlags',0,'ScatteringWeight',0,'ScatteringWtPressure',0);
     
     %Set the file path and name, assuming that the file structure is
     %<he5_directory>/<year>/<month>/...files...  Then figure out how many
@@ -385,7 +385,15 @@ parfor j=1:length(datenums)
                         rethrow(err);
                     end
                 end
-                    
+                
+                % Now grab the scattering weights. The only difference is they have 35 elements per pixel instead of 4.
+                % We'll also get the s. weight pressures, but since this is just a single vector
+                % for all pixels, we can import it quite simply.
+                slabsize = [length(cut_y),60,35];
+                memspaceID = H5S.create_simple(length(slabsize),slabsize,slabsize);
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'ScatteringWeight')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); ScatteringWeight = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); ScatteringWeight = double(ScatteringWeight); ScatteringWeight = permute(ScatteringWeight, [1 3 2]);
+                swpres = h5read(hinfo.Filename, h5dsetname(hinfo,1,2,1,1,'ScatteringWtPressure'));
+                
                 %Import all remaining pieces of information from the standard
                 %product.
                 offset = [(min(i_i)-1),0];
@@ -466,7 +474,9 @@ parfor j=1:length(datenums)
                 ColumnAmountNO2TropStd(~rows_to_keep,:) = [];
                 Row(~rows_to_keep,:)=[];                         
                 Pixel(~rows_to_keep,:)=[];
-                Swath(~rows_to_keep,:)=[];                       
+                Swath(~rows_to_keep,:)=[];
+                ScatteringWeight(:,~rows_to_keep,:)=[];
+
                 
                 if DEBUG_LEVEL > 0; disp(' Saving imported OMI fields to "Data"'); end
                 %Save the imported items to the structure 'Data'.  Changed
@@ -489,7 +499,7 @@ parfor j=1:length(datenums)
                 Data(E).Row = Row;                                       Data(E).XTrackQualityFlags = XTrackQualityFlags;
                 Data(E).Swath = Swath;                                   Data(E).Date=date;
                 Data(E).TropopausePressure = TropopausePressure;         Data(E).Pixel=Pixel;
-                
+                Data(E).ScatteringWeight = ScatteringWeight;             Data(E).ScatteringWtPressure = swpres;                
                 %Add MODIS cloud info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
                 
