@@ -370,6 +370,7 @@ parfor j=1:length(datenums)
                 memspaceID = H5S.create_simple(length(slabsize),slabsize,slabsize);
                 offset = [(min(i_i)-1),0,0];
                 
+
                 %Occasionally there are problems where the corner lat/lon
                 %fields in the OMI files don't have 4 points.  If that is
                 %the case, fill those fields with NaNs.  If some other
@@ -439,7 +440,7 @@ parfor j=1:length(datenums)
                 
                 H5F.close(fileID); %close omi file to free up space
                 
-                RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle);
+                RelativeAzimuthAngle=abs(SolarAzimuthAngle-ViewingAzimuthAngle);
                 RelativeAzimuthAngle(RelativeAzimuthAngle > 180)=360-RelativeAzimuthAngle(RelativeAzimuthAngle > 180);
                 
                 % We already identified what rows to keep, so we'll reuse
