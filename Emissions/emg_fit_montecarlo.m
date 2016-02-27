@@ -1,4 +1,4 @@
-function [ x, f0, nacc ] = emg_fit_montecarlo(no2_x, no2_ld)
+function [ x, f0, nacc ] = emg_fit_montecarlo(no2_x, no2_ld, emgtype)
 %EMG_FIT_MONTECARLO(NO2_X, NO2_LD) Uses Monte Carlo sampling to examine distribution of fitting parameters.
 %   One way to calculate the relationships between the fitting parameters
 %   in the EMG fit would be to use Monte Carlo sampling to see how
@@ -21,6 +21,11 @@ function [ x, f0, nacc ] = emg_fit_montecarlo(no2_x, no2_ld)
 %
 %       nacc = the fraction of times a step is accepted.
 %
+%   [X, F0, NACC] = EMG_FIT_MONTECARLO(NO2_X, NO2_LD, EMGTYPE) - allows you
+%   to select either 'lu' (default) or 'defoy' as the EMG function.  These
+%   differ only in the definition of the prefactor, a. 'lu' explicitly
+%   includes x0 in the prefactor, while 'defoy' includes it in a.
+%
 %   MHSAMPLE is set here to get 50,000 points with a burn-in of 1000 points
 %   and a thinning of 10 points. The step size was set by trial and error
 %   to give a fraction of accepted steps < 0.5, which is recommended to
@@ -29,10 +34,14 @@ function [ x, f0, nacc ] = emg_fit_montecarlo(no2_x, no2_ld)
 %
 %   Josh Laughner <joshlaugh5@gmail.com> Feb 2016
 
-    lb = [0, 0.5, min(no2_x), 0.5, 0];
+if ~exist('emgtype','var')
+    emgtype = 'lu';
+end
+
+    lb = [0, 1.6, min(no2_x), 2.5, 0];
     [~,m] = max(no2_ld);
     ub = [Inf, Inf, max(no2_x), no2_x(m) - min(no2_x), max(no2_ld)];
-    function emg = emgfxn(f)
+    function emg = emgfxn_defoy(f)
         % Reject bounds
         if any(f < lb) || any(f > ub) || f(2) + f(3) >= max(no2_x) || nonlin_constr(f) > 0
             emg = Inf(size(no2_x));
@@ -42,6 +51,27 @@ function [ x, f0, nacc ] = emg_fit_montecarlo(no2_x, no2_ld)
             .* ( 1 - erf( (f(4)^2 - f(2).*(no2_x - f(3)))./(sqrt(2) * f(4) * f(2)) ) ) + f(5);
         emg(isnan(emg)) = Inf;
     end
+
+    function emg = emgfxn_lu(f)
+        % Reject bounds
+        if any(f < lb) || any(f > ub) || f(2) + f(3) >= max(no2_x) || nonlin_constr(f) > 0
+            emg = Inf(size(no2_x));
+            return
+        end
+        emg = f(1)/(2 * f(2)) .* exp( f(3) / f(2) + f(4).^2 / (2*f(2).^2) - no2_x/f(2) )...
+        .* erfc( -1/sqrt(2) * ((no2_x-f(3))/f(4) - f(4)/f(2)) ) + f(5);
+        emg(isnan(emg)) = Inf;
+    end
+
+switch lower(emgtype)
+    case 'lu'
+        emgfxn = @emgfxn_lu;
+    case 'defoy'
+        emgfxn = @emgfxn_defoy;
+    otherwise
+        E.badinput('EMGTYPE must be ''lu'' or ''defoy''')
+end
+
 fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2) / nansum(no2_ld.^2);
 
 P = @(f) exp(-fitfxn(f));

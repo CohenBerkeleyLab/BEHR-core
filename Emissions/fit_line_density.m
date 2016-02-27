@@ -25,6 +25,29 @@ function [ ffit, emgfit, f0, history, fitresults, N ] = fit_line_density( no2_x,
 %   the fitting parameters were iterated during the minimization. The ninth
 %   output contains additional information returned from fmincon.
 %
+%   There are several parameters available: 
+%
+%       'fixed_param' - a string that sets which fitting parameter should be
+%       fixed. Must be used with 'fixed_val' to set the value. String must be
+%       one of 'a', 'x0', 'mux', 'sx', or 'B'.
+%
+%       'fixed_val' - sets the value of the parameter fixed by fixed_param.
+%
+%       'f0' - allows you to define the initial point for the fit minimization.
+%       A 5-element vector with the values in the order of a, x0, mu_x, sigma_x, B.
+%       If not set, the function will make a best guess as to a reasonable initial point.
+%
+%       'lb' and 'ub' - allow you to specify the lower and upper bounds of each of
+%       the five fitting parameters again as 5 element vectors in the same order as
+%       f0. If not given, these will be set within this function to physically realistic
+%       values.
+%
+%       'emgtype' - allows you to vary which one of 3 EMG functions are used. There were
+%       slight differences between de Foy 2014 and Lu 2015 regarding the form of the 
+%       function; 'defoy' and 'lu' respectively select each paper's respective function.
+%       The only practical difference is in the definition of a: a_defoy =
+%       a_lu / x0. Defaults to 'lu.'
+%
 %   Josh Laughner <joshlaugh5@gmail.com> 5 Feb 2016
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -38,6 +61,7 @@ p.addParameter('fixed_val',[]);
 p.addParameter('f0',[]);
 p.addParameter('lb',[]);
 p.addParameter('ub',[]);
+p.addParameter('emgtype','lu');
 p.parse(varargin{:});
 pout=p.Results;
 
@@ -47,6 +71,7 @@ fixed_val = pout.fixed_val;
 f0in = pout.f0;
 ubin = pout.ub;
 lbin = pout.lb;
+emgtype = lower(pout.emgtype);
 
 E = JLLErrors;
 if ~isvector(no2_x) || ~isnumeric(no2_x)
@@ -73,6 +98,9 @@ end
 if ~isempty(lbin) && numel(lbin) ~= 5
     E.badinput('If an lb is specified as input, it must have five elements')
 end
+if ~ismember(emgtype,{'defoy','lu'})
+    E.badinput('The parameter ''emgtype'' must be one of defoy, lu, me, conv')
+end
 
 % Define the fit function, which although is physically a function of x, is
 % to be minimized by the variation of five parameters: a, x_0, sigma_x,
@@ -81,12 +109,26 @@ end
 % be set as the five elements of the vector f, necessary for inserting them
 % into the fmincon routine.
 
-    function e = emgfxn(f,x)
+    function e = emgfxn_defoy(f,x)
 %emgfxn = @(f,x) 
         e = f(1)/2 .* exp( (f(4)^2 / (2 * f(2)^2)) - (x - f(3)) ./ f(2) )...
         .* ( 1 - erf( (f(4)^2 - f(2).*(x - f(3)))./(sqrt(2) * f(4) * f(2)) ) ) + f(5);
         e(isnan(e)) = Inf;
     end
+
+    function e = emgfxn_lu(f,x)
+        e = f(1)/(2 * f(2)) .* exp( f(3) / f(2) + f(4).^2 / (2*f(2).^2) - x/f(2) )...
+        .* erfc( -1/sqrt(2) * ((x-f(3))/f(4) - f(4)/f(2)) ) + f(5);
+        e(isnan(e)) = Inf;
+    end
+
+switch emgtype
+    case 'defoy'
+        emgfxn = @emgfxn_defoy;
+    case 'lu'
+        emgfxn = @emgfxn_lu;
+end
+
 fitfxn = @(f) nansum((emgfxn(f,no2_x) - no2_ld).^2);
 
 history.x = [];
@@ -143,10 +185,17 @@ f_lb(1) = 0; f_ub(1) = Inf; %f_ub(1) = max(no2_ld)*1.5;
 % x0 (length scale of chemical decay) must be > 0 to be physically
 % meaningful. This term tends to cause problems in the fit when the
 % algorithm thinks it sees a minimum where x0 gets very small, so I chose
-% 0.5 km as the lower bound because it is ~1/10th of the resolution of the
-% gridded data. This basically says that the decay must be observable at
-% the resolution of the data.
-f_lb(2) = 0.5; f_ub(2) = Inf;
+% one-third of the grid size as the minimum. This assumes that after 3
+% lifetimes the line density would be within 5% of background, so if we
+% consider that to be essentially equal to background, the smallest
+% lifetime distance distinguishable would be 1/3rd of the distance between
+% grid cells, as any shorter lifetime would also result in complete decay
+% to background at smaller distances that the resolution of the data. This
+% basically says that the decay must be observable at the resolution of the
+% data. Realistically, the lifetime distances should never even be this
+% short, or if they are this short, then then wind is so slow that the
+% Gaussian character should take over.
+f_lb(2) = 1.6; f_ub(2) = Inf;
 
 % mu_x should be close to the position of the source, but what we can say
 % for certain is that it must lie somewhere on no2_x. A stronger condition
@@ -155,12 +204,17 @@ f_lb(2) = 0.5; f_ub(2) = Inf;
 f_lb(3) = min(no2_x); f_ub(3) = max(no2_x);
 
 % sigma_x describes the width of the Gaussian; it must be positive (and not
-% just technically positive - it should have at least some width, so 0.5 km
-% was chosen as ~1/10th the resolution of the gridded data) and should
-% really be less than the full width of it. We will assume that the buildup
-% on the left hand side represents this full width.
+% just technically positive - it should have at least some width. Therefore
+% similarly to x0, we will say that the narrowest observable Gaussian is
+% one that consists of only 3 data points, i.e. the half width at the base
+% is equal to the grid resolution of 0.05 deg ~ 5 km. The standard
+% deviation is half that width (4 sd = full width at base) so we will
+% require the value of sigma to be greater than half the grid resolution.
+% We will also assume that the Gaussian build up is wholly contained in the
+% domain, and so its maximum width is the distance from the left side of
+% the domain to the point of maximum NO2.
 [~,m] = max(no2_ld);
-f_lb(4) = 0.5; f_ub(4) = no2_x(m) - min(no2_x);
+f_lb(4) = 2.5; f_ub(4) = no2_x(m) - min(no2_x);
 
 % B is the background value. It must be > 0 to be physically meaningful,
 % and should really not exceed the maximum line density.
@@ -263,8 +317,8 @@ emgfit = emgfxn_fix(fitparams, no2_x);
 if nargout >= 6
     try
         opts = statset('derivstep',eps^(1/4).* abs(f0));
-        [N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,f0);
-        %[N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,fitparams);
+        %[N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,f0);
+        [N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,fitparams);
         N.emg = emgfxn_fix(N.beta,no2_x);
     catch err
         if strcmp(err.identifier,'stats:nlinfit:NonFiniteFunOutput')

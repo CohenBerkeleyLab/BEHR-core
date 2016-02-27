@@ -1,4 +1,4 @@
-function [ Ffixed, F, Nfixed, N ] = fit_line_density_variation( no2_x, no2_ld, n_var )
+function [ Ffixed, F, Nfixed, N ] = fit_line_density_variation( no2_x, no2_ld, n_var, varargin )
 %FIT_LINE_DENSITY_VARIATION(NO2_X, NO2_LD, N_VAR) Test the effect on an EMG fit if the fit parameters change by +/- 1 sigma.
 %   [Ffixed, F, Nfixed, N] = FIT_LINE_DENSITY_VARIATION(NO2_X, NO2_LD, N_VAR) 
 %   takes as input the x-coordinates and line density values (NO2_X and
@@ -23,34 +23,65 @@ function [ Ffixed, F, Nfixed, N ] = fit_line_density_variation( no2_x, no2_ld, n
 %       Nfixed, N - like Ffixed and F but using nlinfit instead of fmincon
 %       to optimize the parameters.
 %
+%   Parameter arguments:
+%
+%   'emgtype' - sets which EMG function to use. It defaults to 'lu' which
+%   includes x0 in the prefactor while the option 'defoy' does not.
+%
+%   'sd' - allows you to pass in a 1x5 vector of standard deviations
+%   corresponding to the five fitting parameters. This can be used to take
+%   in standard deviations derived from a Monte Carlo sampling if nlinfit
+%   fails for the fit.
+%
 %   Josh Laughner <joshlaugh5@gmail.com> Feb 2016
+
+p = inputParser;
+p.addParameter('emgtype','lu');
+p.addParameter('sd',[]);
+p.parse(varargin{:});
+pout = p.Results;
+
+emgtype = pout.emgtype;
+sd = pout.sd;
+
+E = JLLErrors;
+
+if ~ismember(emgtype,{'lu','defoy'})
+    E.badinput('The parameter ''emgtype'' must be ''lu'' or ''defoy''')
+elseif ~isnumeric(sd) || numel(sd) ~= 5
+    E.badinput('If giving standard deviations, they must be given as a 5-element vector')
+end
 
 params = {'a','x0','mux','sx','B'};
 fns_params = {'a','x_0','mu_x','sigma_x','B'};
 
-[F.ffit, F.emgfit, F.f0, ~, ~, N] = fit_line_density(no2_x, no2_ld,'none');
-F.ssresid = nansum2((F.emgfit - no2_ld).^2);
-F.no2x = no2_x;
-F.no2ld = no2_ld;
 
-% These will let us use N in the same plotting function as F
-for a=1:numel(fns_params)
-    N.ffit.(fns_params{a}) = N.beta(a);
-end
-N.ssresid = nansum2((N.emg - no2_ld).^2);
-N.no2x = no2_x;
-N.no2ld = no2_ld;
-N.emgfit = N.emg;
+    [F.ffit, F.emgfit, F.f0, ~, ~, N] = fit_line_density(no2_x, no2_ld,'none','emgtype',emgtype);
+    F.ssresid = nansum2((F.emgfit - no2_ld).^2);
+    F.no2x = no2_x;
+    F.no2ld = no2_ld;
 
-% Calculate the std. deviations from the covariance matrix
-sd = nan(1,size(N.CovB,1));
-for a=1:size(N.CovB,1)
-    sd(a) = sqrt(N.CovB(a,a));
-    if abs(sd(a)) < 1e-4
-        fprintf('Standard deviation is near 0; assuming a 10%% variation from initial fit for %s\n', fns_params{a});
-        sd(a) = 0.1*F.ffit.(fns_params{a});
+    % These will let us use N in the same plotting function as F
+    for a=1:numel(fns_params)
+        N.ffit.(fns_params{a}) = N.beta(a);
+    end
+    N.ssresid = nansum2((N.emg - no2_ld).^2);
+    N.no2x = no2_x;
+    N.no2ld = no2_ld;
+    N.emgfit = N.emg;
+    
+if isempty(sd)
+    % Calculate the std. deviations from the covariance matrix
+    sd = nan(1,size(N.CovB,1));
+    for a=1:size(N.CovB,1)
+        sd(a) = sqrt(N.CovB(a,a));
+        if abs(sd(a)) < 1e-4
+            fprintf('Standard deviation is near 0; assuming a 10%% variation from initial fit for %s\n', fns_params{a});
+            sd(a) = 0.1*F.ffit.(fns_params{a});
+        end
     end
 end
+
 
 % Create the structures that will define both which parameters are fixed
 % and take the output from fit_line_density.
@@ -59,12 +90,12 @@ Ffixed = struct('fixed_par',params,'fixed_val',[],'ffit',[],'emgfit',[],'f0',[],
 Ffixed = repmat(Ffixed,n_var,1);
 Nfixed = struct('fixed_par',params,'fixed_val',[],'ffit',struct('a',[],'x_0',[],'mu_x',[],'sigma_x',[],'B',[]),'MSE',[],'emgfit',[],'ssresid',[],'no2x',no2_x,'no2ld',no2_ld);
 Nfixed = repmat(Nfixed,n_var,1);
-for a=1:size(N.CovB,1)
+for a=1:numel(sd)
     vals = linspace(F.ffit.(fns_params{a})-sd(a),F.ffit.(fns_params{a})+sd(a),n_var);
     for b=1:n_var
         Ffixed(b,a).fixed_val = vals(b);
         Nfixed(b,a).fixed_val = vals(b);
-        [Ffixed(b,a).ffit, Ffixed(b,a).emgfit, Ffixed(b,a).f0, ~, ~, Ntmp] = fit_line_density(no2_x, no2_ld, 'none', 'fixed_param',Ffixed(b,a).fixed_par,'fixed_val',Ffixed(b,a).fixed_val);
+        [Ffixed(b,a).ffit, Ffixed(b,a).emgfit, Ffixed(b,a).f0, ~, ~, Ntmp] = fit_line_density(no2_x, no2_ld, 'none', 'fixed_param',Ffixed(b,a).fixed_par,'fixed_val',Ffixed(b,a).fixed_val, 'emgtype', emgtype);
         Ffixed(b,a).ssresid = nansum2((Ffixed(b,a).emgfit - no2_ld).^2);
         
         inds = 1:5;
