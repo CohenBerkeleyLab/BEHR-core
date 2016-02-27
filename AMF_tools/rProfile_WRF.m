@@ -74,7 +74,7 @@ E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %
 % PC.
 wrf_output_path = fullfile('/Volumes','share2','USERS','LaughnerJ','WRF','SE_US_BEHR','NEI11Emis');
 
-interp_bool = true;
+interp_bool = false;
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
