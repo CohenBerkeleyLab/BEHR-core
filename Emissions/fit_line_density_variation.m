@@ -62,13 +62,15 @@ fns_params = {'a','x_0','mu_x','sigma_x','B'};
     F.no2ld = no2_ld;
 
     % These will let us use N in the same plotting function as F
-    for a=1:numel(fns_params)
-        N.ffit.(fns_params{a}) = N.beta(a);
+    if numel(fieldnames(N)) > 0
+        for a=1:numel(fns_params)
+            N.ffit.(fns_params{a}) = N.beta(a);
+        end
+        N.ssresid = nansum2((N.emg - no2_ld).^2);
+        N.no2x = no2_x;
+        N.no2ld = no2_ld;
+        N.emgfit = N.emg;
     end
-    N.ssresid = nansum2((N.emg - no2_ld).^2);
-    N.no2x = no2_x;
-    N.no2ld = no2_ld;
-    N.emgfit = N.emg;
     
 if isempty(sd)
     % Calculate the std. deviations from the covariance matrix
