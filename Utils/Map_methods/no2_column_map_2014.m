@@ -47,13 +47,14 @@ function [cbhandle, GriddedColumn, longrid, latgrid, GriddedCount] = no2_column_
 %       duplicate Luke's check where he averaged a month's worth of data
 %       from each side of the detector and found a significant difference
 %       in the average, indicating that there was a bias in the viewing
-%       angle dependence. Input should be a vector of row numbers to use,
-%       e.g. 0:29.
+%       angle dependence. Input should be a 1x2 vector that gives the min
+%       and max row. Remember row indicies are 0 based, and go from 0 to
+%       59.
 %   makefig = true or false; whether to make a figure or not. Defaults to
 %       true. Errors if set to false but only 1 output requested, as this
 %       means that the NO2 column data would not be saved.
 %
-%Josh Laughner <joshlaugh5@gmail.com> 25 Apr 2014
+%   Josh Laughner <joshlaugh5@gmail.com> 25 Apr 2014
 
 p = inputParser;
 p.addParameter('mapfield','BEHRColumnAmountNO2Trop',@isstr)
