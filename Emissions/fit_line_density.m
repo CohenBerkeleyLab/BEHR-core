@@ -74,6 +74,8 @@ lbin = pout.lb;
 emgtype = lower(pout.emgtype);
 
 E = JLLErrors;
+E.addCustomError('fixed_val_out_of_range','The fixed value given is outside the upper and lower bounds allowed for that value.');
+
 if ~isvector(no2_x) || ~isnumeric(no2_x)
     E.badinput('no2_x must be a vector of numeric inputs')
 end
@@ -132,7 +134,7 @@ end
 fitfxn = @(f) nansum((emgfxn(f,no2_x) - no2_ld).^2);
 
 history.x = [];
-opts = optimoptions('fmincon','Display',fmincon_output,'OutputFcn',@outfun);
+opts = optimoptions('fmincon','Display',fmincon_output,'OutputFcn',@outfun);%,'MaxFunEvals',10000,'MaxIter',5000);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Best guess of initial conditions %
@@ -255,26 +257,41 @@ end
 
 switch fixed_param
     case 'a'
+        if fixed_val < f_lb(1) || fixed_val > f_ub(1)
+            E.callCustomError('fixed_val_out_of_range');
+        end
         inds=2:5;
         nlcon = @(f) nonlin_constr([fixed_val, f]);
         fitfxn_fix = @(f) fitfxn([fixed_val, f]);
         emgfxn_fix = @(f,x) emgfxn([fixed_val, f],x);
     case 'x0'
+        if fixed_val < f_lb(2) || fixed_val > f_ub(2)
+            E.callCustomError('fixed_val_out_of_range');
+        end
         inds=[1,3,4,5];
         nlcon = @(f) nonlin_constr([f(1), fixed_val, f(2:4)]);
         fitfxn_fix = @(f) fitfxn([f(1), fixed_val, f(2:4)]);
         emgfxn_fix = @(f,x) emgfxn([f(1), fixed_val, f(2:4)],x);
     case 'mux'
+        if fixed_val < f_lb(3) || fixed_val > f_ub(3)
+            E.callCustomError('fixed_val_out_of_range');
+        end
         inds=[1,2,4,5];
         nlcon = @(f) nonlin_constr([f(1:2), fixed_val, f(3:4)]);
         fitfxn_fix = @(f) fitfxn([f(1:2), fixed_val, f(3:4)]);
         emgfxn_fix = @(f,x) emgfxn([f(1:2), fixed_val, f(3:4)],x);
     case 'sx'
+        if fixed_val < f_lb(4) || fixed_val > f_ub(4)
+            E.callCustomError('fixed_val_out_of_range');
+        end
         inds=[1,2,3,5];
         nlcon = @(f) nonlin_constr([f(1:3), fixed_val, f(4)]);
         fitfxn_fix = @(f) fitfxn([f(1:3), fixed_val, f(4)]);
         emgfxn_fix = @(f,x) emgfxn([f(1:3), fixed_val, f(4)],x);
     case 'B'
+        if fixed_val < f_lb(5) || fixed_val > f_ub(5)
+            E.callCustomError('fixed_val_out_of_range');
+        end
         inds=1:4;
         nlcon = @(f) nonlin_constr([f, fixed_val]);
         fitfxn_fix = @(f) fitfxn([f, fixed_val]);
@@ -290,9 +307,26 @@ f_lb = f_lb(inds);
 f_ub = f_ub(inds);
 A = A(inds);
 
-[fitparams, fitresults.fval, fitresults.exitFlag, fitresults.output, fitresults.lambda, fitresults.grad, fitresults.Hessian]...
-    = fmincon(fitfxn_fix, f0, A, b, [], [], f_lb, f_ub, nlcon, opts);
-
+attempts = 0;
+while true
+    try
+        [fitparams, fitresults.fval, fitresults.exitFlag, fitresults.output, fitresults.lambda, fitresults.grad, fitresults.Hessian]...
+            = fmincon(fitfxn_fix, f0, A, b, [], [], f_lb, f_ub, nlcon, opts);
+        break
+    catch err
+        if strcmp(err.identifier,'optim:barrier:UsrObjUndefAtX0')
+            if attempts < 10
+                f0 = f0*rand*1.5;
+                fprintf('fmincon input function undefined at f0; randomizing f0 (%s) to try again\n',mat2str(f0))
+                attempts = attempts+1;
+            else
+                E.callError('fmincon_failure','After 10 attempts no valid f0 was found for fmincon using fixed parameter = %s, fixed value = %.3g',fixed_param,fixed_val)
+            end
+        else
+            rethrow(err);
+        end
+    end
+end
 switch fixed_param
     case 'a'
         ffinal = [fixed_val, fitparams];

@@ -23,6 +23,13 @@ function [ Ffixed, F, Nfixed, N ] = fit_line_density_variation( no2_x, no2_ld, n
 %       Nfixed, N - like Ffixed and F but using nlinfit instead of fmincon
 %       to optimize the parameters.
 %
+%   Note that it is possible to set the fixed parameter to a value outside
+%   those allowed by the upper and lower bounds set in fit_line_density.
+%   When this happens, that value is essentially discarded, and most values
+%   in the Fffixed and Nfixed output structures will be NaNs. The
+%   exceptions are those like the fixed value itself that do not need to be
+%   returned from fmincon.
+%
 %   Parameter arguments:
 %
 %   'emgtype' - sets which EMG function to use. It defaults to 'lu' which
@@ -88,17 +95,26 @@ end
 % Create the structures that will define both which parameters are fixed
 % and take the output from fit_line_density.
 
-Ffixed = struct('fixed_par',params,'fixed_val',[],'ffit',[],'emgfit',[],'f0',[],'ssresid',[],'no2x',no2_x,'no2ld',no2_ld);
+Ffixed = struct('fixed_par',params,'fixed_val',[],'ffit',struct('a',nan,'x_0',nan,'mu_x',nan,'sigma_x',nan,'B',nan),'emgfit',nan(size(no2_x)),'f0',nan,'ssresid',nan,'no2x',no2_x,'no2ld',no2_ld);
 Ffixed = repmat(Ffixed,n_var,1);
-Nfixed = struct('fixed_par',params,'fixed_val',[],'ffit',struct('a',[],'x_0',[],'mu_x',[],'sigma_x',[],'B',[]),'MSE',[],'emgfit',[],'ssresid',[],'no2x',no2_x,'no2ld',no2_ld);
+Nfixed = struct('fixed_par',params,'fixed_val',[],'ffit',struct('a',nan,'x_0',nan,'mu_x',nan,'sigma_x',nan,'B',nan),'MSE',nan,'emgfit',nan(size(no2_x)),'ssresid',nan,'no2x',no2_x,'no2ld',no2_ld);
 Nfixed = repmat(Nfixed,n_var,1);
 for a=1:numel(sd)
     vals = linspace(F.ffit.(fns_params{a})-sd(a),F.ffit.(fns_params{a})+sd(a),n_var);
     for b=1:n_var
         Ffixed(b,a).fixed_val = vals(b);
         Nfixed(b,a).fixed_val = vals(b);
-        [Ffixed(b,a).ffit, Ffixed(b,a).emgfit, Ffixed(b,a).f0, ~, ~, Ntmp] = fit_line_density(no2_x, no2_ld, 'none', 'fixed_param',Ffixed(b,a).fixed_par,'fixed_val',Ffixed(b,a).fixed_val, 'emgtype', emgtype);
-        Ffixed(b,a).ssresid = nansum2((Ffixed(b,a).emgfit - no2_ld).^2);
+        
+        try
+            [Ffixed(b,a).ffit, Ffixed(b,a).emgfit, Ffixed(b,a).f0, ~, ~, Ntmp] = fit_line_density(no2_x, no2_ld, 'none', 'fixed_param',Ffixed(b,a).fixed_par,'fixed_val',Ffixed(b,a).fixed_val, 'emgtype', emgtype);
+            Ffixed(b,a).ssresid = nansum2((Ffixed(b,a).emgfit - no2_ld).^2);
+        catch err
+            if strcmp(err.identifier,'fit_line_density:fixed_val_out_of_range')
+                continue
+            else
+                rethrow(err);
+            end
+        end
         
         inds = 1:5;
         inds(inds>a) = inds(inds>a) - 1;

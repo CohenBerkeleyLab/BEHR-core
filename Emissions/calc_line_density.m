@@ -1,4 +1,4 @@
-function [ no2_x, no2_linedens ] = calc_line_density( fpath, fnames, data_ind, center_lon, center_lat, theta, varargin )
+function [ no2_x, no2_linedens, lon, lat, no2_mean ] = calc_line_density( fpath, fnames, data_ind, center_lon, center_lat, theta, varargin )
 %CALC_LINE_DENSITY Calculate a wind-aligned line density for a given time period
 %   Calculates a line density of NO2 up and downwind of a city by aligning
 %   each day's plume to the x-axis as described in Valin 2013.  By fitting
@@ -167,6 +167,7 @@ else
     nox_no2_scale = 1;
 end
 
+create_array = true;
 for d=1:numel(fnames_struct)
     D = load(fullfile(fpath,fnames_struct(d).name),'Data');
     
@@ -188,8 +189,9 @@ for d=1:numel(fnames_struct)
     OMI = omi_pixel_reject(OMI,'omi',0.2,'XTrackFlags');
     xx = OMI.Areaweight > 0;
     
-    if d == 1
+    if create_array
         nox = nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct));
+        create_array = false;
     end
     
     % This criterion accounts for how many neighbors are empty, giving more
