@@ -1244,12 +1244,15 @@ end
         % what profile type and what resolution, as well as whether or not
         % to use interpolation and what date to do this for.
         try
-            allowed_plot_types = {'d','v'};
-            plot_type = ask_multichoice('Do you want to plot a difference, or just the AMF values for one case?', allowed_plot_types);
+            allowed_plot_types = {'a','p','v'};
+            plot_type = ask_multichoice('Do you want to plot an absolute difference, percent difference, or just the values for one case?', allowed_plot_types);
             
             allowed_prof_types = {'monthly','hourly','hybrid'};
             prof_type_base = ask_multichoice('What profile type to use for the base case?', allowed_prof_types);
             prof_type_base(1) = upper(prof_type_base(1));
+            
+            allowed_quantities = {'amf','vcd'};
+            quantity = ask_multichoice('Which quantity do you want to compare?', allowed_quantities);
 
             allowed_resolutions = {'12','24','96','288'};
             res_base = ask_multichoice('What resolution to use for the base case? ', allowed_resolutions, 'default', '12');
@@ -1262,7 +1265,7 @@ end
                 interp_base = 'n';
             end
             
-            if strcmp(plot_type,'d')
+            if ismember(plot_type,{'a','p'})
                 prof_type_new = ask_multichoice('What profile type to use for the new case?', allowed_prof_types, 'default', lower(prof_type_base));
                 res_new = ask_multichoice('What resolution to use for the new case?', allowed_resolutions);
                 if ~strcmpi(res_new, '12')
@@ -1308,11 +1311,19 @@ end
             base_interp_str = '';
         end
         homedir = getenv('HOME');
-        base_filedir = sprintf('Atlanta BEHR %s - No clouds%s%s', prof_type_base, res_str, base_interp_str);
+        if strcmp(quantity,'amf')
+            base_filedir = sprintf('Atlanta BEHR %s - No clouds%s%s', prof_type_base, res_str, base_interp_str);
+        else
+            base_filedir = sprintf('SE US BEHR %s - No ghost%s', prof_type_base, res_str);
+        end
         base_filename = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed',base_filedir,sprintf('OMI_BEHR_%s.mat', date_to_comp));
+        if ~exist(base_filename,'file') && strcmp(quantity,'vcd')
+            fprintf('Only a limited subset of options for comparing VCDs are available.\n')
+            return
+        end
         Base = load(base_filename);
         
-        if strcmp(plot_type,'d')
+        if ismember(plot_type,{'a','p'})
             if strcmpi(res_new, '12')
                 res_str = '';
             else
@@ -1324,21 +1335,44 @@ end
                 new_interp_str = '';
             end
             homedir = getenv('HOME');
-            new_filedir = sprintf('Atlanta BEHR %s - No clouds%s%s', prof_type_new, res_str, new_interp_str);
+            if strcmp(quantity,'amf')
+                new_filedir = sprintf('Atlanta BEHR %s - No clouds%s%s', prof_type_new, res_str, new_interp_str);
+            else
+                new_filedir = sprintf('SE US BEHR %s - No ghost%s', prof_type_new, res_str);
+            end
             new_filename = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed',new_filedir,sprintf('OMI_BEHR_%s.mat', date_to_comp));
+            if ~exist(base_filename,'file') && strcmp(quantity,'vcd')
+                fprintf('Only a limited subset of options for comparing VCDs are available.\n')
+                return
+            end
             New = load(new_filename);
         end
-        % Now load and plot. Since there's only the AMFs available, these
-        % will be pretty simple.
+        % Now load and plot. Will need to cut down the VCD array if it is
+        % requested
+                
         
-        
-        
-        lonxy = squeeze(Base.Data.Loncorn(1,:,:));
-        latxy = squeeze(Base.Data.Latcorn(1,:,:));
-        if strcmp(plot_type,'d')
-            perdiff = (New.Data.BEHRAMFTrop ./ Base.Data.BEHRAMFTrop - 1)*100;
+        if strcmp(quantity,'amf')
+            lonxy = squeeze(Base.Data.Loncorn(1,:,:));
+            latxy = squeeze(Base.Data.Latcorn(1,:,:));
+            if strcmp(plot_type,'p')
+                perdiff = (New.Data.BEHRAMFTrop ./ Base.Data.BEHRAMFTrop - 1)*100;
+            elseif strcmp(plot_type,'a')
+                perdiff = New.Data.BEHRAMFTrop - Base.Data.BEHRAMFTrop;
+            else
+                perdiff = Base.Data.BEHRAMFTrop;
+            end
         else
-            perdiff = Base.Data.BEHRAMFTrop;
+            xx = 761:860;
+            yy = 141:210;
+            lonxy = Base.OMI(2).Longitude(yy,xx);
+            latxy = Base.OMI(2).Latitude(yy,xx);
+            if strcmp(plot_type, 'p')
+                perdiff = (New.OMI(2).BEHRColumnAmountNO2Trop(yy,xx) ./ Base.OMI(2).BEHRColumnAmountNO2Trop(yy,xx) - 1)*100;
+            elseif strcmp(plot_type, 'a')
+                perdiff = New.OMI(2).BEHRColumnAmountNO2Trop(yy,xx) - Base.OMI(2).BEHRColumnAmountNO2Trop(yy,xx);
+            else
+                perdiff = Base.OMI(2).BEHRColumnAmountNO2Trop(yy,xx);
+            end
         end
         
         figure; 
@@ -1352,7 +1386,7 @@ end
         
         set(gca,'fontsize',16);
         
-        if strcmp(plot_type,'d')
+        if ismember(plot_type,{'a','p'})
             title(sprintf('%s: %s km %s vs %s km %s', date_to_comp, res_new, new_interp_str, res_base, base_interp_str));
             % ensure colorbar limits are a multiple of 10 and equal positive
             % and negative if doing a difference
@@ -1363,7 +1397,20 @@ end
             C = load('blue_red_cmap.mat');
             colormap(C.blue_red_cmap);
             
-            cb.Label.String = '%\Delta AMF';
+            if strcmp(quantity,'amf')
+                if strcmp(plot_type,'p')
+                    cb.Label.String = '%\Delta AMF';
+                else
+                    cb.Label.String = 'Delta AMF';
+                end
+            else
+                shading flat
+                if strcmp(plot_type,'p')
+                    cb.Label.String = '%\Delta VCD';
+                else
+                    cb.Label.String = '\Delta VCD';
+                end
+            end
         else
             title(sprintf('%s: %s km %s', date_to_comp, res_base, base_interp_str));
             cb.Label.String = 'AMF';
