@@ -45,17 +45,23 @@ function [ Ffixed, F, Nfixed, N ] = fit_line_density_variation( no2_x, no2_ld, n
 p = inputParser;
 p.addParameter('emgtype','lu');
 p.addParameter('sd',[]);
+p.addParameter('fittype','ssresid');
 p.parse(varargin{:});
 pout = p.Results;
 
 emgtype = pout.emgtype;
+fittype = pout.fittype;
 sd = pout.sd;
 
 E = JLLErrors;
 
 if ~ismember(emgtype,{'lu','defoy'})
     E.badinput('The parameter ''emgtype'' must be ''lu'' or ''defoy''')
-elseif ~isnumeric(sd) || numel(sd) ~= 5
+end
+if ~ismember(fittype,{'ssresid','unexvar'})
+    E.badinput('fittype must be one of ''ssresid'' or ''unexvar''')
+end
+if ~isempty(sd) && (~isnumeric(sd) || numel(sd) ~= 5)
     E.badinput('If giving standard deviations, they must be given as a 5-element vector')
 end
 
@@ -63,7 +69,7 @@ params = {'a','x0','mux','sx','B'};
 fns_params = {'a','x_0','mu_x','sigma_x','B'};
 
 
-    [F.ffit, F.emgfit, F.f0, ~, ~, N] = fit_line_density(no2_x, no2_ld,'none','emgtype',emgtype);
+    [F.ffit, F.emgfit, F.stats, F.f0, ~, ~, N] = fit_line_density(no2_x, no2_ld,'none','emgtype',emgtype,'fittype',fittype);
     F.ssresid = nansum2((F.emgfit - no2_ld).^2);
     F.no2x = no2_x;
     F.no2ld = no2_ld;
@@ -80,22 +86,15 @@ fns_params = {'a','x_0','mu_x','sigma_x','B'};
     end
     
 if isempty(sd)
-    % Calculate the std. deviations from the covariance matrix
-    sd = nan(1,size(N.CovB,1));
-    for a=1:size(N.CovB,1)
-        sd(a) = sqrt(N.CovB(a,a));
-        if abs(sd(a)) < 1e-4
-            fprintf('Standard deviation is near 0; assuming a 10%% variation from initial fit for %s\n', fns_params{a});
-            sd(a) = 0.1*F.ffit.(fns_params{a});
-        end
-    end
+    % Take the standard deviations from the stats field in F.
+    sd = F.stats.sd;
 end
 
 
 % Create the structures that will define both which parameters are fixed
 % and take the output from fit_line_density.
 
-Ffixed = struct('fixed_par',params,'fixed_val',[],'ffit',struct('a',nan,'x_0',nan,'mu_x',nan,'sigma_x',nan,'B',nan),'emgfit',nan(size(no2_x)),'f0',nan,'ssresid',nan,'no2x',no2_x,'no2ld',no2_ld);
+Ffixed = struct('fixed_par',params,'fixed_val',[],'ffit',struct('a',nan,'x_0',nan,'mu_x',nan,'sigma_x',nan,'B',nan),'emgfit',nan(size(no2_x)),'stats',struct('sd',0,'ci95',0,'r',0,'r2',0),'f0',nan,'ssresid',nan,'no2x',no2_x,'no2ld',no2_ld);
 Ffixed = repmat(Ffixed,n_var,1);
 Nfixed = struct('fixed_par',params,'fixed_val',[],'ffit',struct('a',nan,'x_0',nan,'mu_x',nan,'sigma_x',nan,'B',nan),'MSE',nan,'emgfit',nan(size(no2_x)),'ssresid',nan,'no2x',no2_x,'no2ld',no2_ld);
 Nfixed = repmat(Nfixed,n_var,1);
@@ -106,7 +105,7 @@ for a=1:numel(sd)
         Nfixed(b,a).fixed_val = vals(b);
         
         try
-            [Ffixed(b,a).ffit, Ffixed(b,a).emgfit, Ffixed(b,a).f0, ~, ~, Ntmp] = fit_line_density(no2_x, no2_ld, 'none', 'fixed_param',Ffixed(b,a).fixed_par,'fixed_val',Ffixed(b,a).fixed_val, 'emgtype', emgtype);
+            [Ffixed(b,a).ffit, Ffixed(b,a).emgfit, Ffixed(b,a).stats, Ffixed(b,a).f0, ~, ~, Ntmp] = fit_line_density(no2_x, no2_ld, 'none', 'fixed_param',Ffixed(b,a).fixed_par,'fixed_val',Ffixed(b,a).fixed_val, 'emgtype', emgtype,'fittype',fittype);
             Ffixed(b,a).ssresid = nansum2((Ffixed(b,a).emgfit - no2_ld).^2);
         catch err
             if strcmp(err.identifier,'fit_line_density:fixed_val_out_of_range')

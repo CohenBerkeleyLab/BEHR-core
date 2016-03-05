@@ -1,4 +1,4 @@
-function [ ffit, emgfit, f0, history, fitresults, N ] = fit_line_density( no2_x, no2_ld, varargin )
+function [ ffit, emgfit, param_stats, f0, history, fitresults, N, L ] = fit_line_density( no2_x, no2_ld, varargin )
 %FIT_LINE_DENSITY Fits an exponentiall modified Gaussian function to a line density
 %   Expoentially modified Gaussian (EMG) functions work very well to fit
 %   line densities of NO2 plumes observed from space because the two
@@ -62,6 +62,7 @@ p.addParameter('f0',[]);
 p.addParameter('lb',[]);
 p.addParameter('ub',[]);
 p.addParameter('emgtype','lu');
+p.addParameter('fittype','ssresid');
 p.parse(varargin{:});
 pout=p.Results;
 
@@ -72,6 +73,7 @@ f0in = pout.f0;
 ubin = pout.ub;
 lbin = pout.lb;
 emgtype = lower(pout.emgtype);
+fittype = lower(pout.fittype);
 
 E = JLLErrors;
 E.addCustomError('fixed_val_out_of_range','The fixed value given is outside the upper and lower bounds allowed for that value.');
@@ -101,7 +103,10 @@ if ~isempty(lbin) && numel(lbin) ~= 5
     E.badinput('If an lb is specified as input, it must have five elements')
 end
 if ~ismember(emgtype,{'defoy','lu'})
-    E.badinput('The parameter ''emgtype'' must be one of defoy, lu, me, conv')
+    E.badinput('The parameter ''emgtype'' must be one of defoy or lu')
+end
+if ~ismember(fittype,{'ssresid','unexvar'})
+    E.badinput('The parameter ''fittype'' must be one of ssresid or unexvar')
 end
 
 % Define the fit function, which although is physically a function of x, is
@@ -131,7 +136,13 @@ switch emgtype
         emgfxn = @emgfxn_lu;
 end
 
-fitfxn = @(f) nansum((emgfxn(f,no2_x) - no2_ld).^2);
+if strcmp(fittype,'ssresid')
+    fitfxn = @(f) nansum((emgfxn(f,no2_x) - no2_ld).^2);
+elseif strcmp(fittype,'unexvar')
+    fitfxn = @(f) nansum((emgfxn(f,no2_x) - no2_ld).^2) / nansum((no2_ld - nanmean(no2_ld)).^2);
+else
+    E.notimplemented(sprintf('fittype = %s',fittype));
+end
 
 history.x = [];
 opts = optimoptions('fmincon','Display',fmincon_output,'OutputFcn',@outfun);%,'MaxFunEvals',10000,'MaxIter',5000);
@@ -182,7 +193,7 @@ f_lb = nan(1,5);
 f_ub = nan(1,5);
 
 % a (related to plume mass) must be > 0 to be physically meaningful
-f_lb(1) = 0; f_ub(1) = Inf; %f_ub(1) = max(no2_ld)*1.5;
+f_lb(1) = 100; f_ub(1) = Inf; %f_ub(1) = max(no2_ld)*1.5;
 
 % x0 (length scale of chemical decay) must be > 0 to be physically
 % meaningful. This term tends to cause problems in the fit when the
@@ -327,41 +338,56 @@ while true
         end
     end
 end
-switch fixed_param
-    case 'a'
-        ffinal = [fixed_val, fitparams];
-    case 'x0'
-        ffinal = [fitparams(1), fixed_val, fitparams(2:4)];
-    case 'mux'
-        ffinal = [fitparams(1:2), fixed_val, fitparams(3:4)];
-    case 'sx'
-        ffinal = [fitparams(1:3), fixed_val, fitparams(4)];
-    case 'B'
-        ffinal = [fitparams, fixed_val];
-    otherwise 
-        ffinal = fitparams;
+unc_opts = optimoptions('fminunc','algorithm','quasi-newton','maxfunevals',1,'display','none'); % will switch to QN anyway to get Hessian w/o gradient; this avoids that message.
+[f_unc,~,~,~,~,unc_hessian] = fminunc(fitfxn_fix, fitparams, unc_opts);
+
+if any(abs(f_unc - fitparams) > 0.01)
+    warning('fminunc found a different minimum than fmincon, check it''s Hessian before using the standard deviations')
 end
-ffit.a = ffinal(1);
-ffit.x_0 = ffinal(2);
-ffit.mu_x = ffinal(3);
-ffit.sigma_x = ffinal(4);
-ffit.B = ffinal(5);
+
+ffit = unfix_params(fitparams, fixed_param, fixed_val);
+
+
 emgfit = emgfxn_fix(fitparams, no2_x);
 
-if nargout >= 6
-    try
-        opts = statset('derivstep',eps^(1/4).* abs(f0));
-        %[N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,f0);
-        [N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,fitparams);
-        N.emg = emgfxn_fix(N.beta,no2_x);
-    catch err
-        if strcmp(err.identifier,'stats:nlinfit:NonFiniteFunOutput')
-            N = struct;
-            fprintf('nlinfit found NaNs or Inf in the function for inputs: \n\tfixed_param = %s \n\tfixed_val = %.3g \n\tf0in = %s \n\tf0 = %s\n', fixed_param, fixed_val, mat2str(f0in), mat2str(f0));
-        else
-            rethrow(err)
-        end
-    end
+% The inverse of the Hessian is an approximation to the covariance matrix
+% (Dovi 1991, Appl. Math. Lett. Vol 4, No 1, pp. 87-90; also
+% http://www.mathworks.com/matlabcentral/answers/153414-estimator-standard-errors-using-fmincon-portfolio-optimization-context)
+% however the fmincon Hessian can be inaccurate, hence we take it from
+% fminunc that is initialized at the solution from fmincon.
+param_stats.sd = sqrt(diag(inv(unc_hessian)));
+param_stats.percentsd = param_stats.sd ./ abs(fitparams') * 100;
+
+% tinv gives the t value for a one-tailed distribution, we want two-tailed
+% so alpha must be halved, thus 97.5% certainty one-tailed is equivalent to
+% 95% two-tailed. Also, since we're dealing with a fit, we've used up two
+% degrees of freedom (slope & intercept).
+student_t = tinv(0.975,numel(no2_x)-2);
+param_stats.ci95 = param_stats.sd .* student_t ./ sqrt(numel(no2_x)-2);
+param_stats.percent_ci95 = param_stats.ci95 ./ abs(fitparams') * 100;
+fitresults.fminunc_soln = f_unc;
+fitresults.fminunc_hessian = unc_hessian;
+
+% Calculate r (http://onlinestatbook.com/2/describing_bivariate_data/calculation.html)
+x = no2_ld - nanmean(no2_ld);
+y = emgfit - nanmean(emgfit);
+param_stats.r = nansum2(x .* y) ./ sqrt(nansum2(x.^2) .* nansum2(y.^2));
+% This is really a check I did r right more than anything.
+param_stats.r2 = 1 - nansum2((no2_ld - emgfit).^2) / nansum2((no2_ld - nanmean(no2_ld)).^2);
+
+if nargout >= 7
+    opts = statset('funvalcheck','off'); % This prevents nlinfit from stopping if NaNs or Infs occur. But can make the CovB matrix unusually large.
+    %[N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,f0,opts);
+    [N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,fitparams,opts);
+    N.emg = emgfxn_fix(N.beta,no2_x);
+    N.ffit = unfix_params(N.beta, fixed_param, fixed_val);
+end
+
+if nargout >= 8
+    [L.beta,~,~,~,~,~,L.Jacobian] = lsqcurvefit(emgfxn_fix, fitparams, no2_x, no2_ld, f_lb, f_ub);
+    L.Cov = inv(L.Jacobian' * L.Jacobian);
+    L.emg = emgfxn_fix(L.beta, no2_x);
+    L.ffit = unfix_params(L.beta, fixed_param, fixed_val);
 end
 
     function stop = outfun(x,optimvals,state)
@@ -386,3 +412,25 @@ end
     end
 end
 
+function ffit = unfix_params(fitparams, fixed_param, fixed_val)
+
+switch fixed_param
+    case 'a'
+        ffinal = [fixed_val, fitparams];
+    case 'x0'
+        ffinal = [fitparams(1), fixed_val, fitparams(2:4)];
+    case 'mux'
+        ffinal = [fitparams(1:2), fixed_val, fitparams(3:4)];
+    case 'sx'
+        ffinal = [fitparams(1:3), fixed_val, fitparams(4)];
+    case 'B'
+        ffinal = [fitparams, fixed_val];
+    otherwise 
+        ffinal = fitparams;
+end
+ffit.a = ffinal(1);
+ffit.x_0 = ffinal(2);
+ffit.mu_x = ffinal(3);
+ffit.sigma_x = ffinal(4);
+ffit.B = ffinal(5);
+end

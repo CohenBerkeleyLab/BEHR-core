@@ -1,4 +1,4 @@
-function [ x, f0, nacc ] = emg_fit_montecarlo(no2_x, no2_ld, emgtype)
+function [ x, f0, nacc ] = emg_fit_montecarlo(no2_x, no2_ld, varargin)
 %EMG_FIT_MONTECARLO(NO2_X, NO2_LD) Uses Monte Carlo sampling to examine distribution of fitting parameters.
 %   One way to calculate the relationships between the fitting parameters
 %   in the EMG fit would be to use Monte Carlo sampling to see how
@@ -34,9 +34,13 @@ function [ x, f0, nacc ] = emg_fit_montecarlo(no2_x, no2_ld, emgtype)
 %
 %   Josh Laughner <joshlaugh5@gmail.com> Feb 2016
 
-if ~exist('emgtype','var')
-    emgtype = 'lu';
-end
+p=inputParser;
+p.addParameter('emgtype','lu');
+p.addParameter('f0',[]);
+p.parse(varargin{:});
+pout=p.Results;
+emgtype = pout.emgtype;
+f0in = pout.f0;
 
     lb = [0, 1.6, min(no2_x), 2.5, 0];
     [~,m] = max(no2_ld);
@@ -72,13 +76,20 @@ switch lower(emgtype)
         E.badinput('EMGTYPE must be ''lu'' or ''defoy''')
 end
 
-fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2) / nansum(no2_ld.^2);
+%fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2) / nansum(no2_ld.^2);
+%fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2) / nansum((no2_ld - nanmean(no2_ld)).^2);
+fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2);
 
 P = @(f) exp(-fitfxn(f));
-f0 = [rand*1e4, rand*100, 2*(rand-.5)*50, rand*100, rand*5e3];
+if isempty(f0in)
+    f0 = [rand*9e5+1e5, rand*100, 2*(rand-.5)*50, rand*100, rand*5e3];
+else
+    f0 = f0in;
+end
 f0 = max(cat(1,f0,lb),[],1);
 f0 = min(cat(1,f0,ub),[],1);
-delta = [5e3, 20, 20, 20, 5e3]; % max step size, found by trial and error to give fraction of accepted steps < 0.5.
+%delta = [1e5, 20, 20, 20, 5e3]; % max step size, found by trial and error to give fraction of accepted steps < 0.5.
+delta = [1, 2e-4, 2e-4, 2e-4, 0.5]; % max step size, found by trial and error to give fraction of accepted steps < 0.5.
 proprnd = @(f) f + rand(1,5) .* 2 .* delta - delta;
 
 [x,nacc] = mhsample(f0,50000,'pdf',P,'proprnd',proprnd,'symmetric','sym','burnin',1000,'thin',10);

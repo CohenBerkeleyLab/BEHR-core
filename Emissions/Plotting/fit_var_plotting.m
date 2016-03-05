@@ -1,4 +1,4 @@
-function [  ] = fit_var_plotting(plottype, Ffixed, F, varargin )
+function [  ] = fit_var_plotting(plottype, varargin )
 %FIT_VAR_PLOTTING(PLOTTYPE, FFIXED, F, ...) Misc. plotting functions for output of fit_line_density_var.m
 %   Collection of miscellaneous plotting functions that takes the Ffixed
 %   and F or Nfixed and N outputs from fit_line_density_variation.m to show
@@ -21,33 +21,116 @@ function [  ] = fit_var_plotting(plottype, Ffixed, F, varargin )
 %       fixed parameter you want to plot for. This must be a string that
 %       matches the string in Ffixed.fixed_par.
 
+E=JLLErrors;
+
 switch lower(plottype)
     case 'residuals'
-        residuals(Ffixed,F,varargin{:})
+        residuals(varargin{:})
+    case 'residuals-onepar'
+        residuals_onepar(varargin{:})
     case 'crosseffects'
-        cross_effects(Ffixed,F, varargin{:})
+        cross_effects(varargin{:})
     case 'showfits'
-        show_fits(Ffixed, F, varargin{:})
+        show_fits(varargin{:})
+    case 'mchist'
+        mchist(varargin{:});
     otherwise
         fprintf('Plot type not recognized\n')
 end
 
 
-    function residuals(Ffixed,F,prof_wind_type)
+    function residuals(Ffixed,F,prof_wind_type,resid_type)
         % Let's first just plot the relative sum of squared residuals vs. the fixed
-        % value for each parameter
+        % value for each parameter or the R-square value. THe last option
+        % selects which one to use; input 'rel' or nothing to select the
+        % ratio of SSresid to optimal and 'r2' to plot R-square values.
+        if ~exist('resid_type','var')
+            resid_type = 'rel';
+        end
         params = {Ffixed(1,:).fixed_par};
         fns = fieldnames(F.ffit);
         for a=1:numel(params)
             x=[Ffixed(:,a).fixed_val];
-            y=[Ffixed(:,a).ssresid] ./ F.ssresid;
+            switch resid_type
+                case 'rel'
+                    y=[Ffixed(:,a).ssresid] ./ F.ssresid;
+                    yopt = 1;
+                    ytext = 'Sum of squared resid fixed / sum SR unfixed';
+                case 'r2'
+                    y = nan(size(Ffixed,1),1);
+                    for b=1:numel(y)
+                        y(b) = Ffixed(b,a).stats.r2;
+                    end
+                    yopt = F.stats.r2;
+                    ytext = 'R^2';
+                case 'r'
+                    y = nan(size(Ffixed,1),1);
+                    for b=1:numel(y)
+                        y(b) = Ffixed(b,a).stats.r;
+                    end
+                    yopt = F.stats.r;
+                    ytext = 'R';
+                otherwise
+                    fprintf('Residual type not recognized');
+                    return
+            end
             figure;
             plot(x,y,'ko','markersize',8,'linewidth',2)
-            line(F.ffit.(fns{a}),1,'linestyle','none','marker','x','markersize',8,'color','k','linewidth',2)
+            line(F.ffit.(fns{a}),yopt,'linestyle','none','marker','x','markersize',8,'color','k','linewidth',2)
             xlabel(sprintf('Fixed value of %s',params{a}));
-            ylabel('Sum of squared resid fixed / sum SR unfixed')
+            ylabel(ytext)
             set(gca,'fontsize',16)
             title(sprintf('%s residuals - %s fixed, %d points',prof_wind_type,params{a},numel(x)))
+        end
+    end
+
+    function residuals_onepar(par, varargin)
+        % A variation on the last one that allows you to plot the residual
+        % change with one parameter over many cases. Inputs: par must be a
+        % the index of the parameter to plot (a = 1, x_0 = 2, etc). The
+        % rest of the inputs must be pairs of Ffixed and F structures.
+        if ismember(varargin{end},{'rel','r2','r'})
+            resid_type = varargin{end};
+            varargin(end) = [];
+        else
+            resid_type = 'rel';
+        end
+        params = {varargin{1}(1,:).fixed_par};
+        fns = fieldnames(varargin{2}.ffit);
+        for a=1:numel(varargin)/2
+            Ffixed = varargin{a*2-1};
+            F = varargin{a*2};
+            x=[Ffixed(:,par).fixed_val];
+            switch resid_type
+                case 'rel'
+                    y=[Ffixed(:,par).ssresid] ./ F.ssresid;
+                    yopt = 1;
+                    ytext = 'Sum of squared resid fixed / sum SR unfixed';
+                case 'r2'
+                    y = nan(size(Ffixed,1),1);
+                    for b=1:numel(y)
+                        y(b) = Ffixed(b,par).stats.r2;
+                    end
+                    yopt = F.stats.r2;
+                    ytext = 'R^2';
+                case 'r'
+                    y = nan(size(Ffixed,1),1);
+                    for b=1:numel(y)
+                        y(b) = Ffixed(b,par).stats.r;
+                    end
+                    yopt = F.stats.r;
+                    ytext = 'R';
+                otherwise
+                    fprintf('Residual type not recognized');
+                    return
+            end
+            figure;
+            plot(x,y,'ko','markersize',8,'linewidth',2)
+            line(F.ffit.(fns{par}),yopt,'linestyle','none','marker','x','markersize',8,'color','k','linewidth',2)
+            xlabel(sprintf('Fixed value of %s',params{par}));
+            ylabel(ytext)
+            set(gca,'fontsize',16)
+            title(sprintf('Residuals - %s fixed, %d points',params{par},numel(x)))
         end
     end
 
@@ -98,6 +181,15 @@ end
         end
         legend(l',lstr)
         title(sprintf('%s - %s fixed',prof_wind_type, fixed_var))
+    end
+
+    function mchist(mcpoints, ffit)
+        params = fieldnames(ffit);
+        for a=1:5
+            figure; hist(mcpoints(:,a),50);
+            y = get(gca,'ylim');
+            line([ffit.(params{a}), ffit.(params{a})], y, 'color', 'r', 'linewidth', 2);
+        end
     end
 end
 
