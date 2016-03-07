@@ -1,4 +1,4 @@
-function read_tempo_simulator(date_start, date_end)
+function read_tempo_simulator(date_start, date_end, Data_in)
 % readhe5_omno2_v_aug2012
 %Reads omno2 he5 files as of the Aug 2012 version; saves the resulting .mat
 %file as <satellite>_<retrieval>_<year><month><day>. Based on
@@ -141,7 +141,7 @@ else
     tempo_base_file = '/Users/Josh/Documents/MATLAB/BEHR/Utils/TEMPO/tempo_pix_geocoords.mat';
     
     %This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
-    modis_mcd43_dir = '/Volumes/share-sat/SAT/MODIS/MCD43C3';
+    modis_mcd43_dir = '/Volumes/share-sat/SAT/MODIS/MCD43C1';
     
     %This is the directory where the GLOBE data files and their headers (.hdr files) are saved.
     %Do not include a trailing separator.
@@ -161,6 +161,7 @@ tic %Start the timer
 
 % What hours (in UTC) that we'll assume TEMPO will retrieve
 utc_hrs = 13:22;
+n = numel(utc_hrs);
 % The position of the TEMPO satellite (assumed for now)
 tempo_lon = -100;
 tempo_lat = 0;
@@ -230,60 +231,71 @@ for j=1:length(datenums)
     month=this_date(6:7);
     day=this_date(9:10);
     
-    D = load(local_tempo_file);
-    Data = D.Data;
-    
-    % Cut down to just the area we want to deal with b/c seriously this
-    % takes way too long otherwise.
-    xx = any(Data.Longitude > lonmin, 1) & any(Data.Longitude < lonmax, 1);
-    yy = any(Data.Latitude > latmin, 2) & any(Data.Latitude < latmax, 2);
-    % Sometimes there only a few points in a column or row that aren't nans
-    % that get removed by one of the criteria
-    xx2 = any(~isnan(Data.Longitude(yy,:)), 1);
-    yy2 = any(~isnan(Data.Latitude(:,xx)), 2);
-    
-    Data.Longitude = Data.Longitude(yy&yy2, xx&xx2);
-    Data.Latitude = Data.Latitude(yy&yy2, xx&xx2);
-    Data.Loncorn = Data.Loncorn(:, yy&yy2, xx&xx2);
-    Data.Latcorn = Data.Latcorn(:, yy&yy2, xx&xx2);
-    
-    sz = size(Data.Longitude);
-    Data.SolarZenithAngle = nan(sz);
-    Data.ViewingZenithAngle = nan(sz);
-    Data.RelativeAzimuthAngle = nan(sz);
-    Data.CloudFraction = zeros(sz);
-    Data.CloudPressure = 1013*ones(sz);
-    Data.CloudRadianceFraction = zeros(sz);
-    Data.MODISAlbedo = nan(sz);
-    Data.MODIS_Albedo_File = '';
-    Data.GLOBETerpres = nan(sz);
-    
-    
-    n = numel(utc_hrs);
-    Data = repmat(Data,n,1);
+    if ~exist('Data_in','var')
+        D = load(local_tempo_file);
+        Data = D.Data;
+        
+        
+        % Cut down to just the area we want to deal with b/c seriously this
+        % takes way too long otherwise.
+        xx = any(Data.Longitude > lonmin, 1) & any(Data.Longitude < lonmax, 1);
+        yy = any(Data.Latitude > latmin, 2) & any(Data.Latitude < latmax, 2);
+        % Sometimes there only a few points in a column or row that aren't nans
+        % that get removed by one of the criteria
+        xx2 = any(~isnan(Data.Longitude(yy,:)), 1);
+        yy2 = any(~isnan(Data.Latitude(:,xx)), 2);
+        
+        Data.Longitude = Data.Longitude(yy&yy2, xx&xx2);
+        Data.Latitude = Data.Latitude(yy&yy2, xx&xx2);
+        Data.Loncorn = Data.Loncorn(:, yy&yy2, xx&xx2);
+        Data.Latcorn = Data.Latcorn(:, yy&yy2, xx&xx2);
+        
+        sz = size(Data.Longitude);
+        Data.SolarZenithAngle = nan(sz);
+        Data.ViewingZenithAngle = nan(sz);
+        Data.RelativeAzimuthAngle = nan(sz);
+        Data.CloudFraction = zeros(sz);
+        Data.CloudPressure = 1013*ones(sz);
+        Data.CloudRadianceFraction = zeros(sz);
+        Data.MODISAlbedo = nan(sz);
+        Data.MODIS_Albedo_File = '';
+        Data.GLOBETerpres = nan(sz);
+
+        Data = repmat(Data,n,1);
+        was_data_passed = false;
+    else
+        Data = Data_in;
+        was_data_passed = true;
+    end
     
     for e=1:n %For loop over all the scans in a given day.
         if DEBUG_LEVEL > 0; fprintf('Adding data for %d UTC\n',utc_hrs(e)); end
         % Need surface pressure in order to get the zenith angles, which we
         % need in turn to get the MODIS albedo (at least over the ocean)
-        if e == 1
-            % Terrain height better not change hour to hour!
-            Data(e) = addGLOBETerpress(Data(e), globe_lon_matrix, globe_lat_matrix, terpres, DEBUG_LEVEL);
-        else
-            Data(e).GLOBETerpres = Data(1).GLOBETerpres;
+        if ~was_data_passed || isempty(Data(e).GLOBETerpres)
+            if e == 1
+                % Terrain height better not change hour to hour!
+                Data(e) = addGLOBETerpress(Data(e), globe_lon_matrix, globe_lat_matrix, terpres, DEBUG_LEVEL);
+            else
+                Data(e).GLOBETerpres = Data(1).GLOBETerpres;
+            end
         end
         
-        time = sprintf('%s-%s-%s %02d:00:00',year,month,day,utc_hrs(e));
-        [Data(e).SolarZenithAngle, Data(e).ViewingZenithAngle, Data(e).RelativeAzimuthAngle] = sat_angles(Data(e).Longitude, Data(e).Latitude, Data(e).GLOBETerpres, tempo_lon, tempo_lat, tempo_alt, time);
+        if ~was_data_passed || isempty(Data(e).SolarZenithAngle) || isempty(Data(e).ViewingZenithAngle) || isempty(Data(e).RelativeAzimuthAngle)
+            time = sprintf('%s-%s-%s %02d:00:00',year,month,day,utc_hrs(e));
+            [Data(e).SolarZenithAngle, Data(e).ViewingZenithAngle, Data(e).RelativeAzimuthAngle] = sat_angles(Data(e).Longitude, Data(e).Latitude, Data(e).GLOBETerpres, tempo_lon, tempo_lat, tempo_alt, time);
+        end
         
-        if e == 1 || ~strcmpi(alb_type,'black-sky')
-            Data(e) = addMODISAlbedo(Data(e), datenums(j), local_modis_mcd34_dir, alb_type, DEBUG_LEVEL);
-        else
-            % Similarly, if we don't use a BRDF product, albedo
-            % shouldn't change with SZA. (That may be something to think
-            % about too though.)
-            Data(e).MODISAlbedo = Data(1).MODISAlbedo;
-            Data(e).MODIS_Albedo_File = Data(1).MODIS_Albedo_File;
+        if ~was_data_passed || isempty(Data(e).MODISAlbedo)
+            if e == 1 || ~strcmpi(alb_type,'black-sky')
+                Data(e) = addMODISAlbedo(Data(e), datenums(j), local_modis_mcd34_dir, alb_type, DEBUG_LEVEL);
+            else
+                % Similarly, if we don't use a BRDF product, albedo
+                % shouldn't change with SZA. (That may be something to think
+                % about too though.)
+                Data(e).MODISAlbedo = Data(1).MODISAlbedo;
+                Data(e).MODIS_Albedo_File = Data(1).MODIS_Albedo_File;
+            end
         end
         
         % For now, we're just going to leave the cloud fractions as 0. We
@@ -415,35 +427,32 @@ if DEBUG_LEVEL > 3; MODISAlb_Ocn = zeros(s); end %JLL
 
 %Now actually average the MODIS albedo for each OMI pixel
 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
-parfor k=1:c;
+for k=1:c;
     t = getCurrentTask();
-%    t.ID = 0;
+    t.ID = 0;
     if DEBUG_LEVEL > 1 && mod(k,10000)==1; fprintf('Adding albedo data to pixel %d of %d\n',k,c); end
     if DEBUG_LEVEL > 2; tic; end
-    x1 = Data.Loncorn(1,k);   y1 = Data.Latcorn(1,k);
-    x2 = Data.Loncorn(2,k);   y2 = Data.Latcorn(2,k);
-    x3 = Data.Loncorn(3,k);   y3 = Data.Latcorn(3,k);
-    x4 = Data.Loncorn(4,k);   y4 = Data.Latcorn(4,k);
     
-    
-    xall=[x1;x2;x3;x4;x1];
-    yall=[y1;y2;y3;y4;y1];
-    
-    xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
+    % Because of the smaller size of TEMPO pixels, we should interpolate
+    % the MODIS data to them, rather than average them.
     
     if strcmpi(alb_type,'black-sky')
         if DEBUG_LEVEL>1 && mod(k,10000)==1; fprintf('W%d: Calculating average black-sky albedo\n',t.ID); end
-        band3_vals=band3(xx_alb);  band3_zeros=band3_vals==0;
-        band3_vals(band3_zeros)=NaN; band3_vals(isnan(band3_vals))=[];
-        band3_avg=mean(band3_vals);
+        band3_avg = interp2(band3_lons, band3_lats, band3, Data.Longitude(k), Data.Latitude(k));
     elseif strcmpi(alb_type,'brdf')
         if DEBUG_LEVEL>1 && mod(k,10000)==1; fprintf('W%d: Calculating average BRDF albedo\n',t.ID); end
-        band3_vals_brdf = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data.SolarZenithAngle(k), Data.ViewingZenithAngle, Data.RelativeAzimuthAngle(k));
+        band3_iso_val = interp2(band3_lons, band3_lats, band3_iso, Data.Longitude(k), Data.Latitude(k));
+        band3_vol_val = interp2(band3_lons, band3_lats, band3_vol, Data.Longitude(k), Data.Latitude(k));
+        band3_geo_val = interp2(band3_lons, band3_lats, band3_geo, Data.Longitude(k), Data.Latitude(k));
+        band3_vals_brdf = modis_brdf_alb(band3_iso_val, band3_vol_val, band3_geo_val, Data.SolarZenithAngle(k), Data.ViewingZenithAngle, Data.RelativeAzimuthAngle(k));
         band3_avg = nanmean(band3_vals_brdf(band3_vals_brdf>0));
     elseif strcmpi(alb_type,'poly')    
         if DEBUG_LEVEL>1 && mod(k,10000)==1; fprintf('W%d: Calculating average polynomial albedo\n',t.ID); end
-        band3_vals_poly = modis_brdf_alb_poly(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data.SolarZenithAngle(k));
-        band3_avg = nanmean(band3_vals_poly);
+        band3_iso_val = interp2(band3_lons, band3_lats, band3_iso, Data.Longitude(k), Data.Latitude(k));
+        band3_vol_val = interp2(band3_lons, band3_lats, band3_vol, Data.Longitude(k), Data.Latitude(k));
+        band3_geo_val = interp2(band3_lons, band3_lats, band3_geo, Data.Longitude(k), Data.Latitude(k));
+        band3_vals_poly = modis_brdf_alb_poly(band3_iso_val, band3_vol_val, band3_geo_val, Data.SolarZenithAngle(k));
+        band3_avg = nanmean(band3_vals_poly(band3_vals_poly>=0));
     end
     %put in ocean surface albedo from LUT
     if isnan(band3_avg)==1;
