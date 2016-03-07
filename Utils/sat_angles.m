@@ -148,7 +148,7 @@ pix_saa = constrain_angles(pix_saa);
 pix_vaa = constrain_angles(pix_vaa);
 
 pix_raa = abs(pix_saa + 180 - pix_vaa);
-pix_raa(pix_raa > 180) = 360 - pix_raa(pix_raa > 180);
+pix_raa(pix_raa > 180) = abs(360 - pix_raa(pix_raa > 180));
 
 end
 

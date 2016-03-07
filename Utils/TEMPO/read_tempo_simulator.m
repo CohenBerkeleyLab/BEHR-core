@@ -89,7 +89,7 @@ end
 %These will be included in the file name
 %****************************%
 satellite='TEMPO';
-retrieval='SIM_US';
+retrieval='SIM_POLYALB_US';
 %****************************%
 
 
@@ -166,6 +166,16 @@ tempo_lon = -100;
 tempo_lat = 0;
 tempo_alt = 35786; % in km
 
+% Type of albedo to use. Options are 'black-sky' which will use the normal
+% MCD43C3 albedo (fixed SZA at noon, integrated over all viewing angles).
+% 'poly' will adjust for the solar zenith angle using a polynomial and the
+% kernels given in the MCD43C1 product. 'brdf' will do a full kernel implementation
+% that accounts for all of the viewing geometry.
+alb_type = 'poly';
+if ~ismember(alb_type, {'black-sky','poly','brdf'})
+    E.callError('bad_setting','The albedo type is not recognized')
+end
+
 %File names will be prefixed with "<satellite>_<retrieval>_", e.g. for OMI
 %satellite SP retrieval, the prefix will be "OMI_SP_" and then the date in
 %year, month, date order.  This section checks to see if the last file in
@@ -202,7 +212,7 @@ terpres(isnan(terpres)) = -500;
 % total_days=datenum(date_end)-datenum(last_date)+1;
 % for j=1:total_days;
 
-if onCluster
+if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
@@ -266,10 +276,10 @@ for j=1:length(datenums)
         time = sprintf('%s-%s-%s %02d:00:00',year,month,day,utc_hrs(e));
         [Data(e).SolarZenithAngle, Data(e).ViewingZenithAngle, Data(e).RelativeAzimuthAngle] = sat_angles(Data(e).Longitude, Data(e).Latitude, Data(e).GLOBETerpres, tempo_lon, tempo_lat, tempo_alt, time);
         
-        if e == 1
-            Data(e) = addMODISAlbedo(Data(e), datenums(j), local_modis_mcd34_dir, DEBUG_LEVEL);
+        if e == 1 || ~strcmpi(alb_type,'black-sky')
+            Data(e) = addMODISAlbedo(Data(e), datenums(j), local_modis_mcd34_dir, alb_type, DEBUG_LEVEL);
         else
-            % Similarly, since we don't use a BRDF product, albedo
+            % Similarly, if we don't use a BRDF product, albedo
             % shouldn't change with SZA. (That may be something to think
             % about too though.)
             Data(e).MODISAlbedo = Data(1).MODISAlbedo;
@@ -297,7 +307,7 @@ function saveData(filename,Data)
 save(filename,'Data','-v7.3')
 end
 
-function Data = addMODISAlbedo(Data, this_date, modis_mcd43_dir, DEBUG_LEVEL)
+function Data = addMODISAlbedo(Data, this_date, modis_mcd43_dir, alb_type, DEBUG_LEVEL)
 E = JLLErrors;
 
 %Convert the OMI date to a Julian calendar day
@@ -313,7 +323,14 @@ alb_dir = fullfile(modis_mcd43_dir,yr);
 in=[0 1 -1 2 -2 3 -3 4 -4 5 -5 6 -6 7 -7 8 -8 9 -9 10 -10 11 -11 12 -12 13 -13 14 -14 15 -15 16 -16 17 -17 18 -18 19 -19 20 -20 21 -21];
 for ii=1:length(in);
     mcd_date = num2str(julian_day + in(ii),'%03g');
-    alb_filename = fullfile(alb_dir,['MCD43C3.A',yr,mcd_date,'*.hdf']);
+    if strcmpi(alb_type,'black-sky')
+        alb_prefix = 'MCD43C3.A';
+    elseif ismember(alb_type,{'poly','brdf'})
+        alb_prefix = 'MCD43C1.A';
+    else
+        error('read_tempo_simulator:add_modis:bad_alb_type','Albedo prefix not recognized')
+    end
+    alb_filename = fullfile(alb_dir,[alb_prefix,yr,mcd_date,'*.hdf']);
     alb_files = dir(alb_filename);
     if DEBUG_LEVEL > 1; fprintf('Looking for %s \n', alb_filename); end
     %if exist('alb_filename','file') == 2
@@ -325,10 +342,45 @@ for ii=1:length(in);
     end
 end
 
+% I think it causes a problem for parallel loops if a variable that *may*
+% be used in the loop never gets defined before the loop starts, causing
+% MATLAB to crash because it tries to send the variable just in case and 
+% can't. That happens when which variable is used it selected by an if 
+% statement like the versions of band3 here. Get around that by initializing
+% them as empty variables.
+
+band3 = [];
+band3_iso = [];
+band3_vol = [];
+band3_geo = [];
+
 mcd43_info = hdfinfo(fullfile(alb_dir,alb_files(1).name));
-band3 = hdfread(hdf_dsetID(mcd43_info,1,1,'Albedo_BSA_Band3'));
-band3 = double(band3);
-band3 = flipud(band3);
+if strcmpi(alb_type,'black-sky')
+    band3 = hdfread(hdf_dsetID(mcd43_info,1,1,'Albedo_BSA_Band3'));
+    band3 = double(band3);
+    band3 = flipud(band3);
+    band3(band3==32767)=NaN; %JLL 11 Apr 2014: 32767 is the fill value for this data set; we will remove the NaNs further down
+    band3 = band3 * 1e-3; %JLL 11-Apr-2014 Albedo matrix needs to have the scale factor applied
+elseif ismember(alb_type, {'poly','brdf'})
+    band3_iso = hdfread(hdf_dsetID(mcd43_info,1,1,'BRDF_Albedo_Parameter1_Band3'));
+    band3_vol = hdfread(hdf_dsetID(mcd43_info,1,1,'BRDF_Albedo_Parameter2_Band3'));
+    band3_geo = hdfread(hdf_dsetID(mcd43_info,1,1,'BRDF_Albedo_Parameter3_Band3'));
+
+    band3_iso = flipud(double(band3_iso));
+    band3_vol = flipud(double(band3_vol));
+    band3_geo = flipud(double(band3_geo)); 
+
+    % Remove fill values (as specified in the HDF attributes)
+    band3_iso(band3_iso==32767)=nan;
+    band3_vol(band3_vol==32767)=nan;
+    band3_geo(band3_geo==32767)=nan;
+
+    % Applied the scale factor (as specified in the HDF
+    % attributes)
+    band3_iso = band3_iso * 1e-3;
+    band3_vol = band3_vol * 1e-3;
+    band3_geo = band3_geo * 1e-3;
+end
 
 %MODIS albedo is given in 0.05 degree cells and a single file covers the
 %full globe, so figure out the lat/lon of the middle of the grid cells as:
@@ -346,9 +398,13 @@ lon_max=Data.Loncorn(:); lon_max(lon_max==0)=[]; lon_max=ceil(max(lon_max));
 
 in_lats = find(band3_lat>=lat_min & band3_lat<=lat_max);
 in_lons = find(band3_lon>=lon_min & band3_lon<=lon_max);
-band3=band3(in_lats,in_lons);
-band3(band3==32767)=NaN; %JLL 11 Apr 2014: 32767 is the fill value for this data set; we will remove the NaNs further down
-band3 = band3 * 1e-3; %JLL 11-Apr-2014 Albedo matrix needs to have the scale factor applied
+if strcmpi(alb_type,'black-sky')
+    band3=band3(in_lats,in_lons);
+elseif ismember(alb_type,{'poly','brdf'})
+    band3_iso = band3_iso(in_lats,in_lons); 
+    band3_vol = band3_vol(in_lats,in_lons);
+    band3_geo = band3_geo(in_lats,in_lons);
+end
 band3_lats=band3_lats(in_lats,in_lons);
 band3_lons=band3_lons(in_lats,in_lons);
 s=size(Data.Latitude);
@@ -360,6 +416,8 @@ if DEBUG_LEVEL > 3; MODISAlb_Ocn = zeros(s); end %JLL
 %Now actually average the MODIS albedo for each OMI pixel
 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
 parfor k=1:c;
+    t = getCurrentTask();
+%    t.ID = 0;
     if DEBUG_LEVEL > 1 && mod(k,10000)==1; fprintf('Adding albedo data to pixel %d of %d\n',k,c); end
     if DEBUG_LEVEL > 2; tic; end
     x1 = Data.Loncorn(1,k);   y1 = Data.Latcorn(1,k);
@@ -373,10 +431,20 @@ parfor k=1:c;
     
     xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
     
-    band3_vals=band3(xx_alb);  band3_zeros=band3_vals==0;
-    band3_vals(band3_zeros)=NaN; band3_vals(isnan(band3_vals))=[];
-    band3_avg=mean(band3_vals);
-    
+    if strcmpi(alb_type,'black-sky')
+        if DEBUG_LEVEL>1 && mod(k,10000)==1; fprintf('W%d: Calculating average black-sky albedo\n',t.ID); end
+        band3_vals=band3(xx_alb);  band3_zeros=band3_vals==0;
+        band3_vals(band3_zeros)=NaN; band3_vals(isnan(band3_vals))=[];
+        band3_avg=mean(band3_vals);
+    elseif strcmpi(alb_type,'brdf')
+        if DEBUG_LEVEL>1 && mod(k,10000)==1; fprintf('W%d: Calculating average BRDF albedo\n',t.ID); end
+        band3_vals_brdf = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data.SolarZenithAngle(k), Data.ViewingZenithAngle, Data.RelativeAzimuthAngle(k));
+        band3_avg = nanmean(band3_vals_brdf(band3_vals_brdf>0));
+    elseif strcmpi(alb_type,'poly')    
+        if DEBUG_LEVEL>1 && mod(k,10000)==1; fprintf('W%d: Calculating average polynomial albedo\n',t.ID); end
+        band3_vals_poly = modis_brdf_alb_poly(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), Data.SolarZenithAngle(k));
+        band3_avg = nanmean(band3_vals_poly);
+    end
     %put in ocean surface albedo from LUT
     if isnan(band3_avg)==1;
         sza_vec = [5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 89];

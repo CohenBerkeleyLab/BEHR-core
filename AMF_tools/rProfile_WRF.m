@@ -1,4 +1,4 @@
-function [ no2_bins ] = rProfile_WRF( date_in, hour_in, avg_mode, lons, lats, surfPres, pressures )
+function [ no2_bins ] = rProfile_WRF( date_in, hour_in, avg_mode, lons, lats, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -61,16 +61,6 @@ E = JLLErrors;
 % called: the variable name and the file name.
 E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %s. Likely this file was not processed with (slurm)run_wrf_output.sh, or the processing failed before writing the calculated quantites.');
 
-%%%%%%%%%%%%%%%%%%%%%
-%%%%% CONSTANTS %%%%%
-%%%%%%%%%%%%%%%%%%%%%
-
-% The main folder for the WRF output, should contain subfolders 'monthly',
-% 'daily', and 'hourly'. This will need modified esp. if trying to run on a
-% PC.
-wrf_output_path = fullfile('/Volumes','share2','USERS','LaughnerJ','WRF','SE_US_TEMPO','NEI11Emis');
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -114,6 +104,13 @@ catch err
     else
         rethrow(err);
     end
+end
+
+% Verify that the path to the WRF profiles exists
+if ~ischar(wrf_output_path)
+    E.badinput('wrf_output_path must be a string');
+elseif ~exist(wrf_output_path,'dir')
+    E.badinput('wrf_output_path (%s) does not appear to be a directory',wrf_output_path);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -233,9 +230,7 @@ end
         % Finally, with either the monthly or hourly files (daily makes no
         % sense for TEMPO, why would we average over the course of a day
         % when the satellite takes repeated measurements?) we need to cut
-        % down to the proper hour for this scan, but the way the averaging
-        % occurs puts the hour along a different dimension in the two
-        % files.
+        % down to the proper hour for this scan.
         try
             utchr = ncread(wrf_info.Filename, 'utchr');
         catch err
@@ -251,21 +246,11 @@ end
             E.callError('hour_not_avail','The hour %d is not available in the WRF chem output file %s.', hour_in, F(1).name);
         end
             
-        if strcmp(avg_mode,'hourly')
-            % These two variables should have dimensions west_east, south_north,
-            % bottom_top, Time (i.e. day), and hour_index
-            wrf_no2 = squeeze(wrf_no2(:,:,:,:,uu));
-            wrf_pres = squeeze(wrf_pres(:,:,:,:,uu));
-            % These should have west_east, south_north, Time
-            wrf_lon = wrf_lon(:,:,1);
-            wrf_lat = wrf_lat(:,:,1);
-        elseif strcmp(avg_mode,'monthly')
-            % In the monthly files these will not have the Time dimension
-            wrf_no2 = squeeze(wrf_no2(:,:,:,uu));
-            wrf_pres = squeeze(wrf_pres(:,:,:,uu));
-            % the lon/lat coordinates are already cut down to the right
-            % number of dimensions.
-        end
+        % Cut these down to the right hour. Keep all spatial points.
+        wrf_no2 = squeeze(wrf_no2(:,:,:,uu));
+        wrf_pres = squeeze(wrf_pres(:,:,:,uu));
+        % the lon/lat coordinates are already cut down to the right
+        % number of dimensions.
         
         % Ensure all points are double-precision, which is demanded for the
         % scattered interpolant
