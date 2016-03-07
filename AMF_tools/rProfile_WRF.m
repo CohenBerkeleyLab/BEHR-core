@@ -230,9 +230,7 @@ end
         % Finally, with either the monthly or hourly files (daily makes no
         % sense for TEMPO, why would we average over the course of a day
         % when the satellite takes repeated measurements?) we need to cut
-        % down to the proper hour for this scan, but the way the averaging
-        % occurs puts the hour along a different dimension in the two
-        % files.
+        % down to the proper hour for this scan.
         try
             utchr = ncread(wrf_info.Filename, 'utchr');
         catch err
@@ -248,21 +246,11 @@ end
             E.callError('hour_not_avail','The hour %d is not available in the WRF chem output file %s.', hour_in, F(1).name);
         end
             
-        if strcmp(avg_mode,'hourly')
-            % These two variables should have dimensions west_east, south_north,
-            % bottom_top, Time (i.e. day), and hour_index
-            wrf_no2 = squeeze(wrf_no2(:,:,:,:,uu));
-            wrf_pres = squeeze(wrf_pres(:,:,:,:,uu));
-            % These should have west_east, south_north, Time
-            wrf_lon = wrf_lon(:,:,1);
-            wrf_lat = wrf_lat(:,:,1);
-        elseif strcmp(avg_mode,'monthly')
-            % In the monthly files these will not have the Time dimension
-            wrf_no2 = squeeze(wrf_no2(:,:,:,uu));
-            wrf_pres = squeeze(wrf_pres(:,:,:,uu));
-            % the lon/lat coordinates are already cut down to the right
-            % number of dimensions.
-        end
+        % Cut these down to the right hour. Keep all spatial points.
+        wrf_no2 = squeeze(wrf_no2(:,:,:,uu));
+        wrf_pres = squeeze(wrf_pres(:,:,:,uu));
+        % the lon/lat coordinates are already cut down to the right
+        % number of dimensions.
         
         % Ensure all points are double-precision, which is demanded for the
         % scattered interpolant
