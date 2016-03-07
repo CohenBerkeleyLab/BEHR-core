@@ -276,10 +276,10 @@ for j=1:length(datenums)
         time = sprintf('%s-%s-%s %02d:00:00',year,month,day,utc_hrs(e));
         [Data(e).SolarZenithAngle, Data(e).ViewingZenithAngle, Data(e).RelativeAzimuthAngle] = sat_angles(Data(e).Longitude, Data(e).Latitude, Data(e).GLOBETerpres, tempo_lon, tempo_lat, tempo_alt, time);
         
-        if e == 1
+        if e == 1 || ~strcmpi(alb_type,'black-sky')
             Data(e) = addMODISAlbedo(Data(e), datenums(j), local_modis_mcd34_dir, alb_type, DEBUG_LEVEL);
         else
-            % Similarly, since we don't use a BRDF product, albedo
+            % Similarly, if we don't use a BRDF product, albedo
             % shouldn't change with SZA. (That may be something to think
             % about too though.)
             Data(e).MODISAlbedo = Data(1).MODISAlbedo;
