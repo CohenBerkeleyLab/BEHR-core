@@ -20,6 +20,9 @@ end
 if onCluster
     addpath('~/MATLAB/Utils');
     addpath('~/MATLAB/Classes');
+    
+    % Cleanup object will safely exit if there's a problem
+    cleanupobj = onCleanup(@() mycleanup());
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%
@@ -89,10 +92,10 @@ else
     
     dirs_dne = {};
     if ~exist('mat_file_dir','dir')
-        dirs_dne{end+1} = 'mat_file_dir';
+        dirs_dne{end+1} = sprintf('mat_file_dir (%s)', mat_file_dir);
     end
     if ~exist('save_dir','dir')
-        dirs_dne{end+1} = 'save_dir';
+        dirs_dne{end+1} = sprintf('save_dir (%s)', save_dir);
     end
     if ~isempty(dirs_dne)
         E.dir_dne(dirs_dne);
@@ -603,3 +606,14 @@ fclose(fid);
 
 end
 
+function mycleanup()
+err=lasterror;
+if ~isempty(err.message)
+    fprintf('MATLAB exiting due to problem: %s\n', err.message);
+    if ~isempty(gcp('nocreate'))
+        delete(gcp)
+    end 
+
+    exit(1)
+end
+end
