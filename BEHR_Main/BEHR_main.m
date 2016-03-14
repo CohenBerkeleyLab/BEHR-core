@@ -96,7 +96,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -132,7 +132,7 @@ end
 % Which WRF profiles to use. Can be 'hourly', 'daily', 'monthly', or
 % 'hybrid'
 %****************************%
-wrf_avg_mode = 'hourly';
+wrf_avg_mode = 'monthly';
 %****************************%
 
 %These will be included in the file name
@@ -336,7 +336,7 @@ for j=1:length(datenums)
         %             'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
         %             'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
         OMI = struct('BEHRColumnAmountNO2Trop', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'AMFTrop', [], 'CloudFraction', [], 'CloudRadianceFraction', [],...
-            'CloudPressure', [], 'ColumnAmountNO2Trop', [], 'RelativeAzimuthAngle', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'BEHRAMFTrop', [],...% 'OriginalBEHRAMF', [], 'OriginalBEHRColumn', [],...
+            'CloudPressure', [], 'ColumnAmountNO2Trop', [], 'RelativeAzimuthAngle', [], 'MODISAlbedo', [], 'MODISCloud', [], 'GLOBETerpres', [], 'BEHRAMFTrop', [],...% 'OriginalBEHRAMF', [], 'OriginalBEHRColumn', [],...
             'Latitude', [], 'Longitude', [], 'MapData', struct, 'Count', [], 'Area', [], 'Areaweight', [], 'vcdQualityFlags', {{}}, 'XTrackQualityFlags', {{}});
         % Matlab treats structures as matrices, so we can duplicate our
         % structure to have the required number of entries just like a
