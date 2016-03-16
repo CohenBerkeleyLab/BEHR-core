@@ -1,4 +1,4 @@
-function [ no2_bins ] = rProfile_WRF( date_in, avg_mode, loncorns, latcorns, surfPres, pressures )
+function [ no2_bins ] = rProfile_WRF( date_in, avg_mode, lons, lats, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -61,16 +61,6 @@ E = JLLErrors;
 % called: the variable name and the file name.
 E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %s. Likely this file was not processed with (slurm)run_wrf_output.sh, or the processing failed before writing the calculated quantites.');
 
-%%%%%%%%%%%%%%%%%%%%%
-%%%%% CONSTANTS %%%%%
-%%%%%%%%%%%%%%%%%%%%%
-
-% The main folder for the WRF output, should contain subfolders 'monthly',
-% 'daily', and 'hourly'. This will need modified esp. if trying to run on a
-% PC.
-wrf_output_path = fullfile('/Volumes','share2','USERS','LaughnerJ','WRF','SE_US_BEHR','NEI11Emis');
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -113,6 +103,13 @@ catch err
     else
         rethrow(err);
     end
+end
+
+% Verify that the path to the WRF profiles exists
+if ~ischar(wrf_output_path)
+    E.badinput('wrf_output_path must be a string');
+elseif ~exist(wrf_output_path,'dir')
+    E.badinput('wrf_output_path (%s) does not appear to be a directory',wrf_output_path);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
