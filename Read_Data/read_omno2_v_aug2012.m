@@ -440,7 +440,7 @@ parfor j=1:length(datenums)
                 
                 H5F.close(fileID); %close omi file to free up space
                 
-                RelativeAzimuthAngle=abs(SolarAzimuthAngle-ViewingAzimuthAngle);
+                RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle); % the extra factor of 180 corrects for the definition of RAA in the scattering weight lookup table
                 RelativeAzimuthAngle(RelativeAzimuthAngle > 180)=360-RelativeAzimuthAngle(RelativeAzimuthAngle > 180);
                 
                 % We already identified what rows to keep, so we'll reuse
