@@ -1,5 +1,5 @@
 function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
-%CAT_SAT_DATA Concatenates data from OMI .mat files
+%CAT_SAT_DATA(FILEPATH, DATAFIELDS) Concatenates data from OMI .mat files
 %   In some cases, one might wish to use satellite data from multiple days,
 %   but we import OMI data and process BEHR data into daily files. This
 %   function will load all the .mat files in the directory given by
@@ -7,7 +7,7 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %   fields given by DATAFIELDS, which should be a string or cell array of
 %   strings.
 %
-%   Some optional parameters are:
+%   Parameter arguments are:
 %
 %       'prefix' - the prefix of the file names (the part before the date).
 %       This function will use all files in the directory FILEPATH that
