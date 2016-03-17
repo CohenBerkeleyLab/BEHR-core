@@ -28,6 +28,8 @@ switch lower(plttype)
         plot_changes_by_sector(varargin{:});
     case 'dif'
         plot_diff();
+    case 'cld'
+        plot_cloudfrac(varargin{1});
     case 'res'
         plot_diff_resolutions();
     otherwise
@@ -993,11 +995,11 @@ end
                 D = load(daily_file,'OMI');
                 M = load(monthly_file,'OMI');
                 
-                D.OMI = omi_pixel_reject(D.OMI(s),'omi',0.2,'XTrackFlags');
-                %D.OMI = omi_pixel_reject(D.OMI(s),'modis',0,'XTrackFlags');
+                %D.OMI = omi_pixel_reject(D.OMI(s),'omi',0.2,'XTrackFlags');
+                D.OMI = omi_pixel_reject(D.OMI(s),'modis',0.2,'XTrackFlags');
                 badpix = D.OMI.Areaweight == 0;
-                M.OMI = omi_pixel_reject(M.OMI(s),'omi',0.2,'XTrackFlags');
-                %M.OMI = omi_pixel_reject(M.OMI(s),'modis',0,'XTrackFlags');
+                %M.OMI = omi_pixel_reject(M.OMI(s),'omi',0.2,'XTrackFlags');
+                M.OMI = omi_pixel_reject(M.OMI(s),'modis',0.2,'XTrackFlags');
                 
                 lon = D.OMI.Longitude(yy,xx);
                 lat = D.OMI.Latitude(yy,xx);
@@ -1095,6 +1097,40 @@ end
                 end
             end
         end
+    end
+
+    function plot_cloudfrac(date_in)
+        fpath = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';
+        fname = sprintf('OMI_BEHR_%s.mat', datestr(date_in,'yyyymmdd'));
+        X = load(fullfile(fpath, fname),'OMI');
+        xx = 761:860;
+        yy = 141:210;
+        OMI = X.OMI(2);
+        figure;
+        subplot(3,1,1);
+        pcolor(OMI.Longitude(yy,xx), OMI.Latitude(yy,xx), OMI.CloudFraction(yy,xx));
+        colorbar;
+        caxis([0 1]);
+        colormap('jet');
+        shading flat
+        title('OMI');
+        
+        subplot(3,1,2);
+        pcolor(OMI.Longitude(yy,xx), OMI.Latitude(yy,xx), OMI.MODISCloud(yy,xx));
+        colorbar;
+        caxis([0 1]);
+        colormap('jet');
+        shading flat
+        title('MODIS');
+        
+        OMI = omi_pixel_reject(OMI,'omi',1,'XTrackFlags');
+        subplot(3,1,3);
+        pcolor(OMI.Longitude(yy,xx), OMI.Latitude(yy,xx), double(OMI.Areaweight(yy,xx) == 0));
+        colorbar;
+        caxis([0 1]);
+        colormap('jet');
+        shading flat
+        title('Other reject');
     end
 
     function plot_changes_by_sector(daily_prof_type, ghost_type, colorbydate, d_km)
