@@ -96,7 +96,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Test';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -110,7 +110,7 @@ else
     %This is the directory where the NO2 profiles are stored. This will
     %need to be changed to match your machine and the files' location.
     %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
-    no2_profile_path = '/Volumes/share-sat/SAT/BEHR/Monthly_NO2_Profiles';
+    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR';
 end
 
 %Store paths to relevant files
@@ -138,7 +138,7 @@ restart = false;
 if exist('prof_mode','var')
     allowed_modes = {'hourly','daily','monthly','hybrid'};
     if ~ismember(prof_mode,allowed_modes)
-        error('BEHR_main:bad_input','prof_mode (if given) must be one of %s',allowed_modes);
+        error('BEHR_main:bad_input','prof_mode (if given) must be one of %s',strjoin(allowed_modes,', '));
     end
     wrf_avg_mode = prof_mode;
 else
