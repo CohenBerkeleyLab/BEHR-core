@@ -124,6 +124,26 @@ else
     [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars(avg_mode);
 end
 
+num_profs = numel(wrf_lon);
+prof_length = size(wrf_no2,3);
+
+num_pix = numel(surfPres);
+no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
+
+if isempty(wrf_no2)
+    % If there are no profiles, then it can be assumed that the swath lies
+    % outside the expected times and we have no profiles for it.
+    bin_mode = 'none';
+    return
+end
+
+if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
+    error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
+end
+wrf_lon_bnds = [wrf_lon(1,1), wrf_lon(1,end), wrf_lon(end,end), wrf_lon(end,1)];
+wrf_lat_bnds = [wrf_lat(1,1), wrf_lat(1,end), wrf_lat(end,end), wrf_lat(end,1)];
+    
+
 % If the WRF profiles are spaced at intervals larger than the smallest dimension
 % of OMI pixels, interpolate instead of averaging b/c we will likely have at least
 % some pixels with no profiles within them.
@@ -140,10 +160,8 @@ end
 
 % Reshape the NO2 profiles and pressures such that the profiles are along
 % the first dimension
-num_profs = numel(wrf_lon);
-prof_length = size(wrf_no2,3);
 
-% Reorder dimensions. This will make the perm_vec be [3, 1, 2, (4:end)]
+
 if interp_bool
     wrf_lon = repmat(wrf_lon,1,1,prof_length);
     wrf_lat = repmat(wrf_lat,1,1,prof_length);
@@ -151,6 +169,7 @@ if interp_bool
     wrf_no2_F = scatteredInterpolant(double(wrf_lon(:)), double(wrf_lat(:)), double(wrf_z(:)), double(wrf_no2(:)));
     wrf_pres_F = scatteredInterpolant(double(wrf_lon(:)), double(wrf_lat(:)), double(wrf_z(:)), double(wrf_pres(:)));
 else
+    % Reorder dimensions. This will make the perm_vec be [3, 1, 2, (4:end)]
     perm_vec = 1:ndims(wrf_no2);
     perm_vec(3) = [];
     perm_vec = [3, perm_vec];
@@ -164,9 +183,12 @@ else
     wrf_lat = reshape(wrf_lat, 1, num_profs);
 end
 
-num_pix = numel(surfPres);
-no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
+lons = squeeze(nanmean(loncorns,1));
+lats = squeeze(nanmean(latcorns,1));
 for p=1:num_pix
+    if ~inpolygon(lons(p), lats(p), wrf_lon_bnds, wrf_lat_bnds)
+        continue
+    end
     if interp_bool
         no2_bins(:,p) = interp_apriori();
     else
@@ -226,8 +248,6 @@ end
     end
 
     function no2_vec = interp_apriori()
-        lons = squeeze(nanmean(loncorns,1));
-        lats = squeeze(nanmean(latcorns,1));
         interp_no2 = nan(prof_length,1);
         interp_pres = nan(prof_length,1);
         for i=1:prof_length
@@ -235,7 +255,7 @@ end
             interp_pres(i) = wrf_pres_F(lons(p), lats(p),i);   
         end
         interp_no2 = exp(interp1(log(interp_pres), log(interp_no2), log(pressures),'linear','extrap'));
-        last_below_surf = find(pressures > surfPres(x,y),1,'last');
+        last_below_surf = find(pressures > surfPres(p),1,'last');
         no2_vec = nan(size(pressures));
         no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
     end
@@ -332,14 +352,21 @@ end
             % minimum between that and utchr indicates which WRF profile is closest
             % to overpass. If WRF output more than 1 file per hour, this will average 
             % the profiles for that hour.
-            [~,uu] = min(abs(14 - utc_offset - utchr));
+            uu = 14 - utc_offset == utchr;
             % These two variables should have dimensions west_east, south_north,
             % bottom_top, Time
-            wrf_no2 = nanmean(wrf_no2(:,:,:,uu),4);
-            wrf_pres = nanmean(wrf_pres(:,:,:,uu),4);
+            wrf_no2 = wrf_no2(:,:,:,uu);
+            wrf_pres = wrf_pres(:,:,:,uu);
             % These should have west_east, south_north, Time
-            wrf_lon = nanmean(wrf_lon(:,:,uu),3);
-            wrf_lat = nanmean(wrf_lat(:,:,uu),3);
+            wrf_lon = wrf_lon(:,:,uu);
+            wrf_lat = wrf_lat(:,:,uu);
+            
+            if sum(uu) > 0
+                wrf_no2 = nanmean(wrf_no2,4);
+                wrf_pres = nanmean(wrf_pres,4);
+                wrf_lon = nanmean(wrf_lon,3);
+                wrf_lat = nanmean(wrf_lat,3);
+            end
         end
     end
 end
