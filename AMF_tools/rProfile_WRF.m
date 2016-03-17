@@ -1,4 +1,4 @@
-function [ no2_bins ] = rProfile_WRF( date_in, avg_mode, lons, lats, surfPres, pressures, wrf_output_path )
+function [ no2_bins, bin_mode ] = rProfile_WRF( date_in, avg_mode, loncorns, latcorns, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -117,15 +117,23 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if strcmpi(avg_mode,'hybrid')
-    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat] = load_wrf_vars('monthly');
+    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars('monthly');
     [wrf_no2_h, wrf_pres] = load_wrf_vars('hourly');
     wrf_no2 = combine_wrf_profiles(wrf_no2_h, wrf_pres, wrf_no2_m, wrf_pres_m);
 else
-    [wrf_no2, wrf_pres, wrf_lon, wrf_lat] = load_wrf_vars(avg_mode);
+    [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars(avg_mode);
+end
+
+% If the WRF profiles are spaced at intervals larger than the smallest dimension
+% of OMI pixels, interpolate instead of averaging b/c we will likely have at least
+% some pixels with no profiles within them.
+interp_bool = wrf_dx > 13 || wrf_dy > 13;
+if interp_bool
+    bin_mode = 'interp';
+else
+    bin_mode = 'avg';
 end
     
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% BIN PROFILES TO PIXELS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -136,76 +144,103 @@ num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
 
 % Reorder dimensions. This will make the perm_vec be [3, 1, 2, (4:end)]
-perm_vec = 1:ndims(wrf_no2);
-perm_vec(3) = [];
-perm_vec = [3, perm_vec];
+if interp_bool
+    wrf_lon = repmat(wrf_lon,1,1,prof_length);
+    wrf_lat = repmat(wrf_lat,1,1,prof_length);
+    wrf_z = repmat(permute(1:prof_length,[1 3 2]),size(wrf_lon,1),size(wrf_lon,2),1);
+    wrf_no2_F = scatteredInterpolant(double(wrf_lon(:)), double(wrf_lat(:)), double(wrf_z(:)), double(wrf_no2(:)));
+    wrf_pres_F = scatteredInterpolant(double(wrf_lon(:)), double(wrf_lat(:)), double(wrf_z(:)), double(wrf_pres(:)));
+else
+    perm_vec = 1:ndims(wrf_no2);
+    perm_vec(3) = [];
+    perm_vec = [3, perm_vec];
 
-wrf_no2 = permute(wrf_no2, perm_vec);
-wrf_pres = permute(wrf_pres, perm_vec);
+    wrf_no2 = permute(wrf_no2, perm_vec);
+    wrf_pres = permute(wrf_pres, perm_vec);
 
-wrf_no2 = reshape(wrf_no2, prof_length, num_profs);
-wrf_pres = reshape(wrf_pres, prof_length, num_profs);
-wrf_lon = reshape(wrf_lon, 1, num_profs);
-wrf_lat = reshape(wrf_lat, 1, num_profs);
-
+    wrf_no2 = reshape(wrf_no2, prof_length, num_profs);
+    wrf_pres = reshape(wrf_pres, prof_length, num_profs);
+    wrf_lon = reshape(wrf_lon, 1, num_profs);
+    wrf_lat = reshape(wrf_lat, 1, num_profs);
+end
 
 num_pix = numel(surfPres);
 no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
 for p=1:num_pix
-    xall = loncorns(:,p);
-    xall(5) = xall(1);
-    
-    yall = latcorns(:,p);
-    yall(5) = yall(1);
-    
-    % Try to speed this up by removing profiles outside a rectangle around
-    % the pixel first, then deal with the fact that the pixel is angled
-    % relative to lat/lon.
-    
-    xx = wrf_lon < max(xall) & wrf_lon > min(xall) & wrf_lat < max(yall) & wrf_lat > min(yall);
-    tmp_no2 = wrf_no2(:,xx);
-    tmp_pres = wrf_pres(:,xx);
-    tmp_lon = wrf_lon(xx);
-    tmp_lat = wrf_lat(xx);
-    
-    yy = inpolygon(tmp_lon, tmp_lat, xall, yall);
-    
-    if sum(yy) < 1
-        %E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
-        no2_bins(:,p) = nan(length(pressures),1);
-        continue
+    if interp_bool
+        no2_bins(:,p) = interp_apriori();
+    else
+        no2_bins(:,p) = avg_apriori();
     end
-    
-    tmp_no2(:,~yy) = [];
-    tmp_pres(:,~yy) = [];
-    
-    % Interpolate all the NO2 profiles to the input pressures, then average
-    % them together. Extrapolate so that later we can be sure to have one
-    % bin below the surface pressure for omiAmfAK2 and integPr2.
-    % Interpolate in log-log space to account for the exponential
-    % dependence of pressure on altitude and the often exponential decrease
-    % of concentration with altitude.
-    
-    interp_no2 = nan(length(pressures), size(tmp_no2,2));
-    
-    if ~iscolumn(pressures); pressures = pressures'; end
-    
-    for a=1:size(tmp_no2,2)
-        interp_no2(:,a) = interp1(log(tmp_pres(:,a)), log(tmp_no2(:,a)), log(pressures), 'linear', 'extrap');
-    end
-    
-    interp_no2 = exp(interp_no2);
-    
-    last_below_surf = find(pressures > surfPres(p),1,'last')-1;
-    interp_no2(1:last_below_surf,:) = nan;
-    
-    no2_bins(:,p) = nanmean(interp_no2,2);
-    
-    
-    
 end
 
-    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat] = load_wrf_vars(avg_mode)
+    function no2_vec = avg_apriori()
+        xall = loncorns(:,p);
+        xall(5) = xall(1);
+        
+        yall = latcorns(:,p);
+        yall(5) = yall(1);
+        
+        % Try to speed this up by removing profiles outside a rectangle around
+        % the pixel first, then deal with the fact that the pixel is angled
+        % relative to lat/lon.
+        
+        xx = wrf_lon < max(xall) & wrf_lon > min(xall) & wrf_lat < max(yall) & wrf_lat > min(yall);
+        tmp_no2 = wrf_no2(:,xx);
+        tmp_pres = wrf_pres(:,xx);
+        tmp_lon = wrf_lon(xx);
+        tmp_lat = wrf_lat(xx);
+        
+        yy = inpolygon(tmp_lon, tmp_lat, xall, yall);
+        
+        if sum(yy) < 1
+            %E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
+            no2_vec = nan(length(pressures),1);
+            return
+        end
+        
+        tmp_no2(:,~yy) = [];
+        tmp_pres(:,~yy) = [];
+        
+        % Interpolate all the NO2 profiles to the input pressures, then average
+        % them together. Extrapolate so that later we can be sure to have one
+        % bin below the surface pressure for omiAmfAK2 and integPr2.
+        % Interpolate in log-log space to account for the exponential
+        % dependence of pressure on altitude and the often exponential decrease
+        % of concentration with altitude.
+        
+        interp_no2 = nan(length(pressures), size(tmp_no2,2));
+        
+        if ~iscolumn(pressures); pressures = pressures'; end
+        
+        for a=1:size(tmp_no2,2)
+            interp_no2(:,a) = interp1(log(tmp_pres(:,a)), log(tmp_no2(:,a)), log(pressures), 'linear', 'extrap');
+        end
+        
+        interp_no2 = exp(interp_no2);
+        
+        last_below_surf = find(pressures > surfPres(p),1,'last')-1;
+        interp_no2(1:last_below_surf,:) = nan;
+        
+        no2_vec = nanmean(interp_no2,2);
+    end
+
+    function no2_vec = interp_apriori()
+        lons = squeeze(nanmean(loncorns,1));
+        lats = squeeze(nanmean(latcorns,1));
+        interp_no2 = nan(prof_length,1);
+        interp_pres = nan(prof_length,1);
+        for i=1:prof_length
+            interp_no2(i) = wrf_no2_F(lons(p), lats(p),i);
+            interp_pres(i) = wrf_pres_F(lons(p), lats(p),i);   
+        end
+        interp_no2 = exp(interp1(log(interp_pres), log(interp_no2), log(pressures),'linear','extrap'));
+        last_below_surf = find(pressures > surfPres(x,y),1,'last');
+        no2_vec = nan(size(pressures));
+        no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
+    end
+
+    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars(avg_mode)
         % Redefine the path to the WRF data to include the averaging mode
         wrf_output_mode_path = fullfile(wrf_output_path,avg_mode);
         
@@ -230,6 +265,14 @@ end
         
         wrf_vars = {wrf_info.Variables.Name};
         
+        % Get the a priori resolution to determine if we need to average or
+        % interpolate profiles to the pixels
+        wrf_atts = {wrf_info.Attributes.Name};
+        dx_ind = strcmpi(wrf_atts, 'dx');
+        wrf_dx = wrf_info.Attributes(dx_ind).Value/1000; % convert m to km
+        dy_ind = strcmpi(wrf_atts, 'dy');
+        wrf_dy = wrf_info.Attributes(dy_ind).Value/1000; % convert m to km
+
         % Load NO2 and check what unit it is - we'll use that to convert to
         % parts-per-part later. Make the location of units as general as possible
         try
@@ -287,15 +330,16 @@ end
             utc_offset = round(nanmean(loncorns(:))/15);
             % 14 - utc_offset will give 1400 local std. time in UTC, finding the
             % minimum between that and utchr indicates which WRF profile is closest
-            % to overpass
+            % to overpass. If WRF output more than 1 file per hour, this will average 
+            % the profiles for that hour.
             [~,uu] = min(abs(14 - utc_offset - utchr));
             % These two variables should have dimensions west_east, south_north,
             % bottom_top, Time
-            wrf_no2 = wrf_no2(:,:,:,uu);
-            wrf_pres = wrf_pres(:,:,:,uu);
+            wrf_no2 = nanmean(wrf_no2(:,:,:,uu),4);
+            wrf_pres = nanmean(wrf_pres(:,:,:,uu),4);
             % These should have west_east, south_north, Time
-            wrf_lon = wrf_lon(:,:,uu);
-            wrf_lat = wrf_lat(:,:,uu);
+            wrf_lon = nanmean(wrf_lon(:,:,uu),3);
+            wrf_lat = nanmean(wrf_lat(:,:,uu),3);
         end
     end
 end

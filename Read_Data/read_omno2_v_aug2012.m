@@ -84,6 +84,10 @@ if nargin < 2
     date_start='2013/08/01';
     date_end='2013/08/06';
 end
+
+% Set to true to resume from last completed file,
+% set to false to overwrite any existing files.
+restart = false;
 %****************************%
 
 %These will be included in the file name
@@ -204,7 +208,7 @@ tic %Start the timer
 file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
 last_file=dir(fullfile(sp_mat_dir,[file_prefix,'*.mat']));
 
-if ~isempty(last_file)
+if ~isempty(last_file) && restart == true
     last_datenum = datenum(last_file(end).name(l+1:l+8),'yyyymmdd')+1;
 else
     last_datenum = 0;
@@ -249,7 +253,7 @@ terpres(isnan(terpres)) = -500;
 % total_days=datenum(date_end)-datenum(last_date)+1;
 % for j=1:total_days;
 
-if onCluster
+if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
