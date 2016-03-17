@@ -670,15 +670,25 @@ end
         
         % Follow up if using BEHR: should we compare hybrid or hour-wise
         % data to the monthly average?
-        allowed_apriori = {'hourly','hybrid'};
-        while true
-            q_str = 'Compare retrieval using the hourly or hybrid data to the monthly average? ';
-            apriori = lower(input(q_str,'s'));
-            if ~ismember(apriori, allowed_apriori)
-                fprintf('You must enter one of the allowed choices: %s. Try again, or press Ctrl+C to cancel\n',strjoin(allowed_apriori,', '));
-            else
-                break
+        if ~strcmpi(source,'wrf')
+            allowed_apriori = {'hourly','hybrid'};
+            while true
+                q_str = 'Compare retrieval using the hourly or hybrid data to the monthly average? ';
+                apriori = lower(input(q_str,'s'));
+                if ~ismember(apriori, allowed_apriori)
+                    fprintf('You must enter one of the allowed choices: %s. Try again, or press Ctrl+C to cancel\n',strjoin(allowed_apriori,', '));
+                else
+                    break
+                end
             end
+        end
+        
+        % And if using the full retrieval (for now) do we want to use the
+        % fine or coarse WRF simulation?
+        if strcmpi(source,'behr')
+            q_str = 'Do you want the fine (12 km) or coarse (108 km) WRF a priori';
+            allowed_res = {'f','c'};
+            res = ask_multichoice(q_str, allowed_res);
         end
         
         % Second question: which city. Expandable.
@@ -713,21 +723,22 @@ end
             end
         end
         
-        % Follow up only if doing VCDs: which ghost column to use? 
-        if ~isempty(regexpi(source,'behr'))
-            allowed_ghosts = {'none','new','old'};
-            q_str = sprintf('Which ghost column correction do you want to use? %s: ', strjoin(allowed_ghosts, ', '));
-            while true 
-                ghost = lower(input(q_str, 's'));
-                if ~ismember(ghost, allowed_ghosts)
-                    fprintf('You must select one of the allowed choices. Try again, or press Ctrl+C to cancel\n');
-                else
-                    break
-                end
-            end
-        else
-            ghost = 'old';
-        end
+%         % Follow up only if doing VCDs: which ghost column to use? 
+%         if ~isempty(regexpi(source,'behr'))
+%             allowed_ghosts = {'none','new','old'};
+%             q_str = sprintf('Which ghost column correction do you want to use? %s: ', strjoin(allowed_ghosts, ', '));
+%             while true 
+%                 ghost = lower(input(q_str, 's'));
+%                 if ~ismember(ghost, allowed_ghosts)
+%                     fprintf('You must select one of the allowed choices. Try again, or press Ctrl+C to cancel\n');
+%                 else
+%                     break
+%                 end
+%             end
+%         else
+%             ghost = 'old';
+%         end
+        ghost = 'none';
         
         % Fourth, is this a percent or absolute difference?
         while true
@@ -780,15 +791,28 @@ end
                     '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly';...
                     '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds'};
             case 'none' 
-                daily_path = {  NaN;...
-                                NaN;...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost'};
-                hybrid_path = { NaN;...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost'};
-                monthly_path = {NaN;...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost'};
+                switch res
+                    case 'f'
+                        daily_path = {  '/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/hourly';...
+                            NaN;...
+                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost'};
+                        hybrid_path = { NaN;...
+                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';...
+                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost'};
+                        monthly_path = {'/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/monthly';...
+                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';...
+                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost'};
+                    case 'c'
+                        daily_path = {  NaN;...
+                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost - Coarse WRF';...
+                            NaN};
+                        hybrid_path = { NaN;...
+                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost - Coarse WRF';...
+                            NAn};
+                        monthly_path = {NaN;...
+                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost - Coarse WRF';...
+                            NaN};
+                end
             case 'new'
                 daily_path = {  NaN;...
                                 NaN;...
@@ -970,8 +994,10 @@ end
                 M = load(monthly_file,'OMI');
                 
                 D.OMI = omi_pixel_reject(D.OMI(s),'omi',0.2,'XTrackFlags');
+                %D.OMI = omi_pixel_reject(D.OMI(s),'modis',0,'XTrackFlags');
                 badpix = D.OMI.Areaweight == 0;
                 M.OMI = omi_pixel_reject(M.OMI(s),'omi',0.2,'XTrackFlags');
+                %M.OMI = omi_pixel_reject(M.OMI(s),'modis',0,'XTrackFlags');
                 
                 lon = D.OMI.Longitude(yy,xx);
                 lat = D.OMI.Latitude(yy,xx);
