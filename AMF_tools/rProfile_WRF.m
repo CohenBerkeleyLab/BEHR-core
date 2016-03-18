@@ -61,6 +61,8 @@ E = JLLErrors;
 % called: the variable name and the file name.
 E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %s. Likely this file was not processed with (slurm)run_wrf_output.sh, or the processing failed before writing the calculated quantites.');
 
+nearest = true;
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -117,8 +119,8 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if strcmpi(avg_mode,'hybrid')
-    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars('monthly');
-    [wrf_no2_h, wrf_pres] = load_wrf_vars('hourly');
+    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars('monthly');
+    [wrf_no2_h, wrf_pres, ~, ~, ~, ~, wrf_utchr] = load_wrf_vars('hourly');
     wrf_no2 = combine_wrf_profiles(wrf_no2_h, wrf_pres, wrf_no2_m, wrf_pres_m);
 else
     [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars(avg_mode);
@@ -148,8 +150,10 @@ wrf_lat_bnds = [wrf_lat(1,1), wrf_lat(1,end), wrf_lat(end,end), wrf_lat(end,1)];
 % of OMI pixels, interpolate instead of averaging b/c we will likely have at least
 % some pixels with no profiles within them.
 interp_bool = wrf_dx > 13 || wrf_dy > 13;
-if interp_bool
+if interp_bool && ~nearest
     bin_mode = sprintf('interp:%s', wrf_utchr);
+elseif nearest
+    bin_mode = sprintf('nearest:%s', wrf_utchr);
 else
     bin_mode = sprintf('avg:%s', wrf_utchr);
 end
@@ -162,7 +166,7 @@ end
 % the first dimension
 
 
-if interp_bool
+if interp_bool && ~nearest
     wrf_lon = repmat(wrf_lon,1,1,prof_length);
     wrf_lat = repmat(wrf_lat,1,1,prof_length);
     wrf_z = repmat(permute(1:prof_length,[1 3 2]),size(wrf_lon,1),size(wrf_lon,2),1);
@@ -189,8 +193,10 @@ for p=1:num_pix
     if ~inpolygon(lons(p), lats(p), wrf_lon_bnds, wrf_lat_bnds)
         continue
     end
-    if interp_bool
+    if interp_bool && ~nearest
         no2_bins(:,p) = interp_apriori();
+    elseif nearest
+        no2_bins(:,p) = nearest_apriori();
     else
         no2_bins(:,p) = avg_apriori();
     end
@@ -255,6 +261,14 @@ end
             interp_pres(i) = wrf_pres_F(lons(p), lats(p),i);   
         end
         interp_no2 = exp(interp1(log(interp_pres), log(interp_no2), log(pressures),'linear','extrap'));
+        last_below_surf = find(pressures > surfPres(p),1,'last');
+        no2_vec = nan(size(pressures));
+        no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
+    end
+    
+    function no2_vec = nearest_apriori()
+        [~,I] = min(sqrt((lons(p)-wrf_lon).^2 + (lats(p)-wrf_lat).^2));
+        interp_no2 = exp(interp1(log(wrf_pres(:,I)), log(wrf_no2(:,I)), log(pressures),'linear','extrap'));
         last_below_surf = find(pressures > surfPres(p),1,'last');
         no2_vec = nan(size(pressures));
         no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
@@ -404,5 +418,4 @@ wrf_no2 = wrf_no2_h;
 wrf_no2(pp) = wrf_no2_m(pp);
 
 end
-
 
