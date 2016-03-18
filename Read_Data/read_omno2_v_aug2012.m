@@ -370,6 +370,7 @@ parfor j=1:length(datenums)
                 memspaceID = H5S.create_simple(length(slabsize),slabsize,slabsize);
                 offset = [(min(i_i)-1),0,0];
                 
+
                 %Occasionally there are problems where the corner lat/lon
                 %fields in the OMI files don't have 4 points.  If that is
                 %the case, fill those fields with NaNs.  If some other
@@ -385,7 +386,7 @@ parfor j=1:length(datenums)
                         rethrow(err);
                     end
                 end
-                    
+                
                 %Import all remaining pieces of information from the standard
                 %product.
                 offset = [(min(i_i)-1),0];
@@ -431,7 +432,7 @@ parfor j=1:length(datenums)
                 
                 H5F.close(fileID); %close omi file to free up space
                 
-                RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle);
+                RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle); % the extra factor of 180 corrects for the definition of RAA in the scattering weight lookup table
                 RelativeAzimuthAngle(RelativeAzimuthAngle > 180)=360-RelativeAzimuthAngle(RelativeAzimuthAngle > 180);
                 
                 % We already identified what rows to keep, so we'll reuse
@@ -466,7 +467,8 @@ parfor j=1:length(datenums)
                 ColumnAmountNO2TropStd(~rows_to_keep,:) = [];
                 Row(~rows_to_keep,:)=[];                         
                 Pixel(~rows_to_keep,:)=[];
-                Swath(~rows_to_keep,:)=[];                       
+                Swath(~rows_to_keep,:)=[];
+
                 
                 if DEBUG_LEVEL > 0; disp(' Saving imported OMI fields to "Data"'); end
                 %Save the imported items to the structure 'Data'.  Changed
@@ -489,7 +491,6 @@ parfor j=1:length(datenums)
                 Data(E).Row = Row;                                       Data(E).XTrackQualityFlags = XTrackQualityFlags;
                 Data(E).Swath = Swath;                                   Data(E).Date=date;
                 Data(E).TropopausePressure = TropopausePressure;         Data(E).Pixel=Pixel;
-                
                 %Add MODIS cloud info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
                 
