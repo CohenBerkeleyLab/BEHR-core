@@ -373,6 +373,8 @@ end
             else
                 utc_hr = 'N/A';
             end
+        else
+            utc_hr = avg_mode;
         end
     end
 end
