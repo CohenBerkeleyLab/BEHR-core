@@ -117,11 +117,11 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if strcmpi(avg_mode,'hybrid')
-    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars('monthly');
+    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars('monthly');
     [wrf_no2_h, wrf_pres] = load_wrf_vars('hourly');
     wrf_no2 = combine_wrf_profiles(wrf_no2_h, wrf_pres, wrf_no2_m, wrf_pres_m);
 else
-    [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars(avg_mode);
+    [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars(avg_mode);
 end
 
 num_profs = numel(wrf_lon);
@@ -149,9 +149,9 @@ wrf_lat_bnds = [wrf_lat(1,1), wrf_lat(1,end), wrf_lat(end,end), wrf_lat(end,1)];
 % some pixels with no profiles within them.
 interp_bool = wrf_dx > 13 || wrf_dy > 13;
 if interp_bool
-    bin_mode = 'interp';
+    bin_mode = sprintf('interp:%s', wrf_utchr);
 else
-    bin_mode = 'avg';
+    bin_mode = sprintf('avg:%s', wrf_utchr);
 end
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -260,7 +260,7 @@ end
         no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
     end
 
-    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars(avg_mode)
+    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, utc_hr] = load_wrf_vars(avg_mode)
         % Redefine the path to the WRF data to include the averaging mode
         wrf_output_mode_path = fullfile(wrf_output_path,avg_mode);
         
@@ -368,6 +368,8 @@ end
                 wrf_pres = nanmean(wrf_pres,4);
                 wrf_lon = nanmean(wrf_lon,3);
                 wrf_lat = nanmean(wrf_lat,3);
+                
+                utc_hr = mat2str(utchr(uu));
             end
         end
     end
