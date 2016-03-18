@@ -245,6 +245,7 @@ parfor (j=1:length(datenums), n_workers)
                 lat = Data(d).Latitude;
                 loncorns=Data(d).Loncorn;
                 latcorns=Data(d).Latcorn;
+                time = Data(d).Time;
                 
                 sza = Data(d).SolarZenithAngle;
                 vza = Data(d).ViewingZenithAngle;
@@ -278,7 +279,7 @@ parfor (j=1:length(datenums), n_workers)
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
                 if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
-                [no2_bins, apriori_bin_mode] = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+                [no2_bins, apriori_bin_mode] = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, time, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
                 no2Profile1 = no2_bins;
                 no2Profile2 = no2_bins;
                 

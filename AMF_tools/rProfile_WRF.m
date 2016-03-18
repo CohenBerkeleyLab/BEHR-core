@@ -1,4 +1,4 @@
-function [ no2_bins, bin_mode ] = rProfile_WRF( date_in, avg_mode, loncorns, latcorns, surfPres, pressures, wrf_output_path )
+function [ no2_bins, bin_mode ] = rProfile_WRF( date_in, avg_mode, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -338,7 +338,7 @@ end
         
         if strcmp(avg_mode,'hourly')
             try
-                utchr = ncread(wrf_info.Filename, 'utchr');
+                utchr = double(ncread(wrf_info.Filename, 'utchr'));
             catch err
                 if strcmp(err.identifier, 'MATLAB:imagesci:netcdf:unknownLocation')
                     E.callCustomError('ncvar_not_found','utchr',F(1).name);
@@ -347,12 +347,14 @@ end
                 end
             end
             
-            utc_offset = round(nanmean(loncorns(:))/15);
             % 14 - utc_offset will give 1400 local std. time in UTC, finding the
             % minimum between that and utchr indicates which WRF profile is closest
             % to overpass. If WRF output more than 1 file per hour, this will average 
             % the profiles for that hour.
-            uu = 14 - utc_offset == utchr;
+            omi_utc_mean = omi_time_conv(nanmean(omi_time(:)));
+            omi_hh = str2double(datestr(omi_utc_mean,'HH')) + str2double(datestr(omi_utc_mean,'MM'))/60;
+            min_dt = min(abs(utchr - omi_hh));
+            uu = abs(abs(utchr - omi_hh) - min_dt) < 0.01;
             % These two variables should have dimensions west_east, south_north,
             % bottom_top, Time
             wrf_no2 = wrf_no2(:,:,:,uu);
