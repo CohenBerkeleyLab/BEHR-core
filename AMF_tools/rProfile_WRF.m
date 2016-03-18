@@ -370,6 +370,8 @@ end
                 wrf_lat = nanmean(wrf_lat,3);
                 
                 utc_hr = mat2str(utchr(uu));
+            else
+                utc_hr = 'N/A';
             end
         end
     end
