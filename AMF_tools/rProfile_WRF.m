@@ -152,7 +152,7 @@ wrf_lat_bnds = [wrf_lat(1,1), wrf_lat(1,end), wrf_lat(end,end), wrf_lat(end,1)];
 interp_bool = wrf_dx > 13 || wrf_dy > 13;
 if interp_bool && ~nearest
     bin_mode = sprintf('interp:%s', wrf_utchr);
-elseif nearest
+elseif interp_bool && nearest
     bin_mode = sprintf('nearest:%s', wrf_utchr);
 else
     bin_mode = sprintf('avg:%s', wrf_utchr);
@@ -195,7 +195,7 @@ for p=1:num_pix
     end
     if interp_bool && ~nearest
         no2_bins(:,p) = interp_apriori();
-    elseif nearest
+    elseif interp_bool && nearest
         no2_bins(:,p) = nearest_apriori();
     else
         no2_bins(:,p) = avg_apriori();
