@@ -20,6 +20,8 @@ switch lower(plttype)
     case 'calcwind'
         varargout{1} = calc_wind_mag(varargin{1}, varargin{2});
         varargout{2} = calc_wind_dir(varargin{1}, varargin{2});
+    case 'calcavgwind'
+        [varargout{1}, varargout{2}] = calc_avg_wind(varargin{:});
     case 'perdiffvstheta'
         plot_delamf_vs_delangle(varargin{:});
     case 'perrec'
@@ -1560,6 +1562,18 @@ end
         end
     end
 
+    function [windspd, winddir] = calc_avg_wind(xlon, xlat, U, V, clon, clat)
+        [xx1,yy1] = find_square_around(xlon, xlat, clon, clat, 1);
+        windspd = nan(1, size(U,3));
+        winddir = nan(1, size(U,3));
+        for a=1:size(U,3)
+            Ubar = nanmean(reshape(U(xx1, yy1, a),[],1));
+            Vbar = nanmean(reshape(V(xx1, yy1, a),[],1));
+            windspd(a) = calc_wind_mag(Ubar, Vbar);
+            winddir(a) = calc_wind_dir(Ubar, Vbar);
+        end
+    end
+
     function mag = calc_wind_mag(U,V)
         mag = (U.^2 + V.^2).^0.5;
     end
@@ -1567,11 +1581,7 @@ end
     function theta = calc_wind_dir(U,V)
         theta = nan(size(U));
         for b=1:numel(U)
-            if U(b) >= 0
-                theta(b) = atand(V(b)/U(b));
-            else
-                theta(b) = atand(V(b)/U(b))+180;
-            end
+            theta(b) = atan2d(V(b),U(b));
         end
     end
 
