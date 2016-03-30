@@ -1,4 +1,4 @@
-function [ no2_bins ] = rProfile_WRF( date_in, avg_mode, loncorns, latcorns, surfPres, pressures )
+function [ no2_bins, bin_mode ] = rProfile_WRF( date_in, avg_mode, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -61,15 +61,7 @@ E = JLLErrors;
 % called: the variable name and the file name.
 E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %s. Likely this file was not processed with (slurm)run_wrf_output.sh, or the processing failed before writing the calculated quantites.');
 
-%%%%%%%%%%%%%%%%%%%%%
-%%%%% CONSTANTS %%%%%
-%%%%%%%%%%%%%%%%%%%%%
-
-% The main folder for the WRF output, should contain subfolders 'monthly',
-% 'daily', and 'hourly'. This will need modified esp. if trying to run on a
-% PC.
-wrf_output_path = fullfile('/Volumes','share2','USERS','LaughnerJ','WRF','SE_US_BEHR','NEI11Emis');
-
+nearest = true;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
@@ -115,98 +107,174 @@ catch err
     end
 end
 
+% Verify that the path to the WRF profiles exists
+if ~ischar(wrf_output_path)
+    E.badinput('wrf_output_path must be a string');
+elseif ~exist(wrf_output_path,'dir')
+    E.badinput('wrf_output_path (%s) does not appear to be a directory',wrf_output_path);
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% LOAD netCDF and READ VARIABLES %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if strcmpi(avg_mode,'hybrid')
-    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat] = load_wrf_vars('monthly');
-    [wrf_no2_h, wrf_pres] = load_wrf_vars('hourly');
+    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars('monthly');
+    [wrf_no2_h, wrf_pres, ~, ~, ~, ~, wrf_utchr] = load_wrf_vars('hourly');
     wrf_no2 = combine_wrf_profiles(wrf_no2_h, wrf_pres, wrf_no2_m, wrf_pres_m);
 else
-    [wrf_no2, wrf_pres, wrf_lon, wrf_lat] = load_wrf_vars(avg_mode);
+    [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars(avg_mode);
 end
+
+num_profs = numel(wrf_lon);
+prof_length = size(wrf_no2,3);
+
+num_pix = numel(surfPres);
+no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
+
+if isempty(wrf_no2)
+    % If there are no profiles, then it can be assumed that the swath lies
+    % outside the expected times and we have no profiles for it.
+    bin_mode = 'none';
+    return
+end
+
+if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
+    error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
+end
+wrf_lon_bnds = [wrf_lon(1,1), wrf_lon(1,end), wrf_lon(end,end), wrf_lon(end,1)];
+wrf_lat_bnds = [wrf_lat(1,1), wrf_lat(1,end), wrf_lat(end,end), wrf_lat(end,1)];
     
 
-
+% If the WRF profiles are spaced at intervals larger than the smallest dimension
+% of OMI pixels, interpolate instead of averaging b/c we will likely have at least
+% some pixels with no profiles within them.
+interp_bool = wrf_dx > 13 || wrf_dy > 13;
+if interp_bool && ~nearest
+    bin_mode = sprintf('interp:%s', wrf_utchr);
+elseif interp_bool && nearest
+    bin_mode = sprintf('nearest:%s', wrf_utchr);
+else
+    bin_mode = sprintf('avg:%s', wrf_utchr);
+end
+    
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% BIN PROFILES TO PIXELS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Reshape the NO2 profiles and pressures such that the profiles are along
 % the first dimension
-num_profs = numel(wrf_lon);
-prof_length = size(wrf_no2,3);
-
-% Reorder dimensions. This will make the perm_vec be [3, 1, 2, (4:end)]
-perm_vec = 1:ndims(wrf_no2);
-perm_vec(3) = [];
-perm_vec = [3, perm_vec];
-
-wrf_no2 = permute(wrf_no2, perm_vec);
-wrf_pres = permute(wrf_pres, perm_vec);
-
-wrf_no2 = reshape(wrf_no2, prof_length, num_profs);
-wrf_pres = reshape(wrf_pres, prof_length, num_profs);
-wrf_lon = reshape(wrf_lon, 1, num_profs);
-wrf_lat = reshape(wrf_lat, 1, num_profs);
 
 
-num_pix = numel(surfPres);
-no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
-for p=1:num_pix
-    xall = loncorns(:,p);
-    xall(5) = xall(1);
-    
-    yall = latcorns(:,p);
-    yall(5) = yall(1);
-    
-    % Try to speed this up by removing profiles outside a rectangle around
-    % the pixel first, then deal with the fact that the pixel is angled
-    % relative to lat/lon.
-    
-    xx = wrf_lon < max(xall) & wrf_lon > min(xall) & wrf_lat < max(yall) & wrf_lat > min(yall);
-    tmp_no2 = wrf_no2(:,xx);
-    tmp_pres = wrf_pres(:,xx);
-    tmp_lon = wrf_lon(xx);
-    tmp_lat = wrf_lat(xx);
-    
-    yy = inpolygon(tmp_lon, tmp_lat, xall, yall);
-    
-    if sum(yy) < 1
-        E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
-    end
-    
-    tmp_no2(:,~yy) = [];
-    tmp_pres(:,~yy) = [];
-    
-    % Interpolate all the NO2 profiles to the input pressures, then average
-    % them together. Extrapolate so that later we can be sure to have one
-    % bin below the surface pressure for omiAmfAK2 and integPr2.
-    % Interpolate in log-log space to account for the exponential
-    % dependence of pressure on altitude and the often exponential decrease
-    % of concentration with altitude.
-    
-    interp_no2 = nan(length(pressures), size(tmp_no2,2));
-    
-    if ~iscolumn(pressures); pressures = pressures'; end
-    
-    for a=1:size(tmp_no2,2)
-        interp_no2(:,a) = interp1(log(tmp_pres(:,a)), log(tmp_no2(:,a)), log(pressures), 'linear', 'extrap');
-    end
-    
-    interp_no2 = exp(interp_no2);
-    
-    last_below_surf = find(pressures > surfPres(p),1,'last')-1;
-    interp_no2(1:last_below_surf,:) = nan;
-    
-    no2_bins(:,p) = nanmean(interp_no2,2);
-    
-    
-    
+if interp_bool && ~nearest
+    wrf_lon = repmat(wrf_lon,1,1,prof_length);
+    wrf_lat = repmat(wrf_lat,1,1,prof_length);
+    wrf_z = repmat(permute(1:prof_length,[1 3 2]),size(wrf_lon,1),size(wrf_lon,2),1);
+    wrf_no2_F = scatteredInterpolant(double(wrf_lon(:)), double(wrf_lat(:)), double(wrf_z(:)), double(wrf_no2(:)));
+    wrf_pres_F = scatteredInterpolant(double(wrf_lon(:)), double(wrf_lat(:)), double(wrf_z(:)), double(wrf_pres(:)));
+else
+    % Reorder dimensions. This will make the perm_vec be [3, 1, 2, (4:end)]
+    perm_vec = 1:ndims(wrf_no2);
+    perm_vec(3) = [];
+    perm_vec = [3, perm_vec];
+
+    wrf_no2 = permute(wrf_no2, perm_vec);
+    wrf_pres = permute(wrf_pres, perm_vec);
+
+    wrf_no2 = reshape(wrf_no2, prof_length, num_profs);
+    wrf_pres = reshape(wrf_pres, prof_length, num_profs);
+    wrf_lon = reshape(wrf_lon, 1, num_profs);
+    wrf_lat = reshape(wrf_lat, 1, num_profs);
 end
 
-    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat] = load_wrf_vars(avg_mode)
+lons = squeeze(nanmean(loncorns,1));
+lats = squeeze(nanmean(latcorns,1));
+for p=1:num_pix
+    if ~inpolygon(lons(p), lats(p), wrf_lon_bnds, wrf_lat_bnds)
+        continue
+    end
+    if interp_bool && ~nearest
+        no2_bins(:,p) = interp_apriori();
+    elseif interp_bool && nearest
+        no2_bins(:,p) = nearest_apriori();
+    else
+        no2_bins(:,p) = avg_apriori();
+    end
+end
+
+    function no2_vec = avg_apriori()
+        xall = loncorns(:,p);
+        xall(5) = xall(1);
+        
+        yall = latcorns(:,p);
+        yall(5) = yall(1);
+        
+        % Try to speed this up by removing profiles outside a rectangle around
+        % the pixel first, then deal with the fact that the pixel is angled
+        % relative to lat/lon.
+        
+        xx = wrf_lon < max(xall) & wrf_lon > min(xall) & wrf_lat < max(yall) & wrf_lat > min(yall);
+        tmp_no2 = wrf_no2(:,xx);
+        tmp_pres = wrf_pres(:,xx);
+        tmp_lon = wrf_lon(xx);
+        tmp_lat = wrf_lat(xx);
+        
+        yy = inpolygon(tmp_lon, tmp_lat, xall, yall);
+        
+        if sum(yy) < 1
+            %E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
+            no2_vec = nan(length(pressures),1);
+            return
+        end
+        
+        tmp_no2(:,~yy) = [];
+        tmp_pres(:,~yy) = [];
+        
+        % Interpolate all the NO2 profiles to the input pressures, then average
+        % them together. Extrapolate so that later we can be sure to have one
+        % bin below the surface pressure for omiAmfAK2 and integPr2.
+        % Interpolate in log-log space to account for the exponential
+        % dependence of pressure on altitude and the often exponential decrease
+        % of concentration with altitude.
+        
+        interp_no2 = nan(length(pressures), size(tmp_no2,2));
+        
+        if ~iscolumn(pressures); pressures = pressures'; end
+        
+        for a=1:size(tmp_no2,2)
+            interp_no2(:,a) = interp1(log(tmp_pres(:,a)), log(tmp_no2(:,a)), log(pressures), 'linear', 'extrap');
+        end
+        
+        interp_no2 = exp(interp_no2);
+        
+        last_below_surf = find(pressures > surfPres(p),1,'last')-1;
+        interp_no2(1:last_below_surf,:) = nan;
+        
+        no2_vec = nanmean(interp_no2,2);
+    end
+
+    function no2_vec = interp_apriori()
+        interp_no2 = nan(prof_length,1);
+        interp_pres = nan(prof_length,1);
+        for i=1:prof_length
+            interp_no2(i) = wrf_no2_F(lons(p), lats(p),i);
+            interp_pres(i) = wrf_pres_F(lons(p), lats(p),i);   
+        end
+        interp_no2 = exp(interp1(log(interp_pres), log(interp_no2), log(pressures),'linear','extrap'));
+        last_below_surf = find(pressures > surfPres(p),1,'last');
+        no2_vec = nan(size(pressures));
+        no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
+    end
+    
+    function no2_vec = nearest_apriori()
+        [~,I] = min(sqrt((lons(p)-wrf_lon).^2 + (lats(p)-wrf_lat).^2));
+        interp_no2 = exp(interp1(log(wrf_pres(:,I)), log(wrf_no2(:,I)), log(pressures),'linear','extrap'));
+        last_below_surf = find(pressures > surfPres(p),1,'last');
+        no2_vec = nan(size(pressures));
+        no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
+    end
+
+    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, utc_hr] = load_wrf_vars(avg_mode)
         % Redefine the path to the WRF data to include the averaging mode
         wrf_output_mode_path = fullfile(wrf_output_path,avg_mode);
         
@@ -231,6 +299,14 @@ end
         
         wrf_vars = {wrf_info.Variables.Name};
         
+        % Get the a priori resolution to determine if we need to average or
+        % interpolate profiles to the pixels
+        wrf_atts = {wrf_info.Attributes.Name};
+        dx_ind = strcmpi(wrf_atts, 'dx');
+        wrf_dx = wrf_info.Attributes(dx_ind).Value/1000; % convert m to km
+        dy_ind = strcmpi(wrf_atts, 'dy');
+        wrf_dy = wrf_info.Attributes(dy_ind).Value/1000; % convert m to km
+
         % Load NO2 and check what unit it is - we'll use that to convert to
         % parts-per-part later. Make the location of units as general as possible
         try
@@ -276,7 +352,7 @@ end
         
         if strcmp(avg_mode,'hourly')
             try
-                utchr = ncread(wrf_info.Filename, 'utchr');
+                utchr = double(ncread(wrf_info.Filename, 'utchr'));
             catch err
                 if strcmp(err.identifier, 'MATLAB:imagesci:netcdf:unknownLocation')
                     E.callCustomError('ncvar_not_found','utchr',F(1).name);
@@ -285,11 +361,14 @@ end
                 end
             end
             
-            utc_offset = round(nanmean(loncorns(:))/15);
             % 14 - utc_offset will give 1400 local std. time in UTC, finding the
             % minimum between that and utchr indicates which WRF profile is closest
-            % to overpass
-            [~,uu] = min(abs(14 - utc_offset - utchr));
+            % to overpass. If WRF output more than 1 file per hour, this will average 
+            % the profiles for that hour.
+            omi_utc_mean = omi_time_conv(nanmean(omi_time(:)));
+            omi_hh = str2double(datestr(omi_utc_mean,'HH')) + str2double(datestr(omi_utc_mean,'MM'))/60;
+            min_dt = min(abs(utchr - omi_hh));
+            uu = abs(abs(utchr - omi_hh) - min_dt) < 0.01;
             % These two variables should have dimensions west_east, south_north,
             % bottom_top, Time
             wrf_no2 = wrf_no2(:,:,:,uu);
@@ -297,6 +376,19 @@ end
             % These should have west_east, south_north, Time
             wrf_lon = wrf_lon(:,:,uu);
             wrf_lat = wrf_lat(:,:,uu);
+            
+            if sum(uu) > 0
+                wrf_no2 = nanmean(wrf_no2,4);
+                wrf_pres = nanmean(wrf_pres,4);
+                wrf_lon = nanmean(wrf_lon,3);
+                wrf_lat = nanmean(wrf_lat,3);
+                
+                utc_hr = mat2str(utchr(uu));
+            else
+                utc_hr = 'N/A';
+            end
+        else
+            utc_hr = avg_mode;
         end
     end
 end
@@ -326,5 +418,4 @@ wrf_no2 = wrf_no2_h;
 wrf_no2(pp) = wrf_no2_m(pp);
 
 end
-
 

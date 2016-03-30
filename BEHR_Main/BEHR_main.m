@@ -1,4 +1,4 @@
-function BEHR_main(date_start, date_end)
+function BEHR_main(date_start, date_end, prof_mode)
 %Josh Laughner <joshlaugh5@gmail.com>
 %Based on BEHR_nwus by Ashley Russell (02/09/2012)
 %Takes "OMI_SP_yyyymmdd.m" files produced by read_omno2_v_aug2012.m as it's
@@ -110,7 +110,7 @@ else
     %This is the directory where the NO2 profiles are stored. This will
     %need to be changed to match your machine and the files' location.
     %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
-    no2_profile_path = '/Volumes/share-sat/SAT/BEHR/Monthly_NO2_Profiles';
+    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR';
 end
 
 %Store paths to relevant files
@@ -127,11 +127,24 @@ if nargin < 2
     date_end='2013/06/30';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
+
+% restart from last file produced (true) or run entire time period (false)
+restart = false;
 %****************************%
 
-% Which WRF profiles to use
+% Which WRF profiles to use. Can be 'hourly', 'daily', 'monthly', or
+% 'hybrid'
 %****************************%
-wrf_avg_mode = 'hybrid';
+if exist('prof_mode','var')
+    allowed_modes = {'hourly','daily','monthly','hybrid'};
+    if ~ismember(prof_mode,allowed_modes)
+        error('BEHR_main:bad_input','prof_mode (if given) must be one of %s',strjoin(allowed_modes,', '));
+    end
+    wrf_avg_mode = prof_mode;
+else
+    wrf_avg_mode = 'hourly';
+    fprintf('BEHR_main: Used hard-coded wrf_avg_mode = %s\n',wrf_avg_mode);
+end
 %****************************%
 
 %These will be included in the file name
@@ -165,7 +178,7 @@ end
 file_prefix = [satellite,'_',retrieval,'_']; l = length(file_prefix);
 last_file=dir(fullfile(behr_mat_dir,sprintf('%s*.mat',file_prefix)));
 
-if ~isempty(last_file)
+if ~isempty(last_file) && restart
     last_datenum = datenum(last_file(end).name(l+1:l+8),'yyyymmdd')+1;
 else
     last_datenum = 0;
@@ -179,11 +192,18 @@ end
 
 tic
 % Create a parallel pool if one doesn't exist and we are on a cluster
-if onCluster && isempty(gcp('nocreate'))
-    parpool(numThreads);
+if onCluster    
+    if isempty(gcp('nocreate'))
+        parpool(numThreads);
+    end    
+    n_workers = Inf;
+else
+    n_workers = 0;
 end
 
-for j=1:length(datenums)
+
+parfor (j=1:length(datenums), n_workers)
+%for j=1:length(datenums)
     %Read the desired year, month, and day
     R=datenums(j);
     date=datestr(R,26);
@@ -203,13 +223,6 @@ for j=1:length(datenums)
         S=load(fullfile(sp_mat_dir,filename)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
         Data=S.Data;
         
-        if exist('profile_file','file')==1 && strcmp(profile_file(2:3),month)==1; %JLL 20 Mar 2014:
-        else
-            profile_file=['m',month,'_NO2_profile'];
-            if DEBUG_LEVEL > 1; disp(['Loading ',fullfile(no2_profile_path,profile_file)]); end
-            S=load(fullfile(no2_profile_path,profile_file));
-            PROFILE = S.PROFILE;
-        end
         for d=1:length(Data);
             % Data is initialized in read_omno2_v_aug2012 with a single 0
             % in the Longitude field.  Since points outside the lat/lons of
@@ -232,6 +245,7 @@ for j=1:length(datenums)
                 lat = Data(d).Latitude;
                 loncorns=Data(d).Loncorn;
                 latcorns=Data(d).Latcorn;
+                time = Data(d).Time;
                 
                 sza = Data(d).SolarZenithAngle;
                 vza = Data(d).ViewingZenithAngle;
@@ -265,7 +279,7 @@ for j=1:length(datenums)
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
                 if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
-                no2_bins = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, pTerr, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+                [no2_bins, apriori_bin_mode] = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, time, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
                 no2Profile1 = no2_bins;
                 no2Profile2 = no2_bins;
                 
@@ -282,6 +296,7 @@ for j=1:length(datenums)
                 Data(d).BEHRScatteringWeights = reshape(scattering_weights, [len_vecs, sz]);
                 Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
                 Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
+                Data(d).BEHRaprioriMode = apriori_bin_mode;
                 Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
             end
         end
@@ -361,11 +376,6 @@ for j=1:length(datenums)
         savename=[file_prefix,year,month,day];
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
         saveData(fullfile(behr_mat_dir,savename),Data,OMI)
-        toc
-        t=toc;
-        %if t>1200
-        %error('Time exceeded 20 min. Stopping')
-        %end
     end
 end
 end
