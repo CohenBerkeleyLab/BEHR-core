@@ -177,8 +177,7 @@ else
     % FWHM/2.355.
     halfmax = (max(no2_ld) - no2_ld(1))/2 + no2_ld(1);
     mpre = find(no2_ld(1:m) < halfmax, 1, 'last');
-    mpost = find(no2_ld > halfmax, 1, 'first');
-    fwhm = abs(interp1(no2_ld(mpre:mpost), no2_x(mpre:mpost), halfmax));
+    fwhm = abs(interp1(no2_ld(mpre:mpre+1), no2_x(mpre:mpre+1), halfmax));
     f0(4) = fwhm / 2.355;
 
     % f(5) is the constant term B, or background. So let's just set to be the
@@ -193,6 +192,7 @@ f_lb = nan(1,5);
 f_ub = nan(1,5);
 
 % a (related to plume mass) must be > 0 to be physically meaningful
+% 100 mol/km is a little more than 
 f_lb(1) = 100; f_ub(1) = Inf; %f_ub(1) = max(no2_ld)*1.5;
 
 % x0 (length scale of chemical decay) must be > 0 to be physically
@@ -215,6 +215,7 @@ f_lb(2) = 1.6; f_ub(2) = Inf;
 % might be that it must lie within 1 std. dev. of the maximum of the line
 % density, that may be useful if fitting continues to be foolish.
 f_lb(3) = min(no2_x); f_ub(3) = max(no2_x);
+%f_lb(3) = -50; f_ub(3) = 50;
 
 % sigma_x describes the width of the Gaussian; it must be positive (and not
 % just technically positive - it should have at least some width. Therefore

@@ -1,4 +1,4 @@
-function [ no2_x, no2_linedens, lon, lat, no2_mean ] = calc_line_density( fpath, fnames, center_lon, center_lat, theta, varargin )
+function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std ] = calc_line_density( fpath, fnames, center_lon, center_lat, theta, varargin )
 %CALC_LINE_DENSITY Calculate a wind-aligned line density for a given time period
 %   Calculates a line density of NO2 up and downwind of a city by aligning
 %   each day's plume to the x-axis as described in Valin 2013.  By fitting
@@ -291,12 +291,17 @@ end
 
 %no2_mean = nanmean(nox,3);
 no2_mean = nansum2(nox .* aw, 3) ./ nansum2(aw, 3);
+% Calculate the weighted standard deviation (c.f.
+% https://en.wikipedia.org/wiki/Mean_square_weighted_deviation)
+no2_var = (nansum2(aw .* nox.^2, 3) .* nansum2(aw,3) - (nansum2(aw .* nox, 3)).^2)./(nansum2(aw,3).^2 - nansum(aw.^2,3));
+no2_std = sqrt(no2_var);
 
 % Calculate the line density. See de Foy et al., Atmos. Environ. (2014) p.
 % 66. Basically an integration along the line perpendicular to the plume.
 
 if DEBUG_LEVEL > 0; disp('Calculating line density'); end
 no2_linedens = zeros(1,size(lon,2));
+no2_lindens_std = zeros(1,size(lon,2));
 no2_x = nan(1,size(lon,2));
 d_cm = nan(size(lon));
 for a=1:numel(no2_linedens)
@@ -304,6 +309,8 @@ for a=1:numel(no2_linedens)
         d_cm(b,a) = m_lldist(lon(b:b+1,a),lat(b:b+1,a)) * 1e5;
         if ~isnan(no2_mean(b,a))
             no2_linedens(a) = no2_linedens(a) + no2_mean(b,a) * d_cm(b,a);
+            % add the uncertainties in quadrature.
+            no2_lindens_std(a) = no2_lindens_std(a) + no2_std(b,a).^2 * d_cm(b,a);
         end
     end
     % Calculate x in km distant from the center lon/lat. OMI is a gridded
@@ -317,9 +324,14 @@ end
 rr = ~all(isnan(no2_mean),1);
 no2_x = no2_x(rr);
 no2_linedens = no2_linedens(rr);
+no2_lindens_std = no2_lindens_std(rr);
+
+% Finalize the uncertainties
+no2_lindens_std = sqrt(no2_lindens_std);
 
 % Convert line density from molec/cm to moles/km
 no2_linedens = no2_linedens * 1e5 / 6.022e23;
+no2_lindens_std = no2_lindens_std * 1e5 / 6.022e23;
 
 end
 

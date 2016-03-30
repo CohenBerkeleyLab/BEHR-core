@@ -77,8 +77,8 @@ switch lower(emgtype)
 end
 
 %fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2) / nansum(no2_ld.^2);
-%fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2) / nansum((no2_ld - nanmean(no2_ld)).^2);
-fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2);
+fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2) / nansum((no2_ld - nanmean(no2_ld)).^2);
+%fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2);
 
 P = @(f) exp(-fitfxn(f));
 if isempty(f0in)
