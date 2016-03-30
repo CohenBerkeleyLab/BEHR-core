@@ -662,69 +662,68 @@ end
         % First question: WRF or BEHR. pseudo-BEHR is the one where I used
         % the same set of pixels each day.
         allowed_sources = {'wrf','behr','pseudo-behr'};
-        q_str = sprintf('Which source will you be using? %s: ',strjoin(allowed_sources, ', '));
-        while true
-            source = lower(input(q_str,'s'));
-            if ~ismember(source, allowed_sources)
-                fprintf('You must select one of the allowed choices. Try again, or press Ctrl+C to cancel\n');
-            else
-                break
-            end
-        end
+        source = ask_multichoice('Which source will you be using?', allowed_sources);
         
         % Follow up if using BEHR: should we compare hybrid or hour-wise
         % data to the monthly average?
         if ~strcmpi(source,'wrf')
             allowed_apriori = {'hourly','hybrid'};
-            while true
-                q_str = 'Compare retrieval using the hourly or hybrid data to the monthly average? ';
-                apriori = lower(input(q_str,'s'));
-                if ~ismember(apriori, allowed_apriori)
-                    fprintf('You must enter one of the allowed choices: %s. Try again, or press Ctrl+C to cancel\n',strjoin(allowed_apriori,', '));
-                else
-                    break
-                end
-            end
+            apriori = ask_multichoice('Compare retrieval using the hourly or hybrid data to the monthly average?', allowed_apriori);
+        else 
+            apriori = 'hourly';
         end
         
         % And if using the full retrieval (for now) do we want to use the
         % fine or coarse WRF simulation?
-        if strcmpi(source,'behr')
-            q_str = 'Do you want the fine (12 km) or coarse (108 km) WRF a priori';
+        if ismember(source,{'wrf','behr'})
             allowed_res = {'f','c'};
-            res = ask_multichoice(q_str, allowed_res);
+            res = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF a priori', allowed_res);
         end
         
         % Second question: which city. Expandable.
-        allowed_cities = {'Atlanta'};
-        n_cities = numel(allowed_cities);
-        while true
-            fprintf('Which city should we focus on?\n')
-            for a=1:n_cities
-                fprintf('\t%d - %s\n', a, allowed_cities{a});
-            end
-            city_index = str2double(input('Enter the number of your selection: ','s'));
-            if isnan(city_index) || city_index < 1 || city_index > n_cities
-                fprintf('You must choose a number between 1 and %d, or press Ctrl+C to cancel\n', n_cities);
-            else
-                break
-            end
-        end
+        city_index = 1; % hold over from old code.
+%         allowed_cities = {'Atlanta'};
+%         n_cities = numel(allowed_cities);
+%         while true
+%             fprintf('Which city should we focus on?\n')
+%             for a=1:n_cities
+%                 fprintf('\t%d - %s\n', a, allowed_cities{a});
+%             end
+%             city_index = str2double(input('Enter the number of your selection: ','s'));
+%             if isnan(city_index) || city_index < 1 || city_index > n_cities
+%                 fprintf('You must choose a number between 1 and %d, or press Ctrl+C to cancel\n', n_cities);
+%             else
+%                 break
+%             end
+%         end
         
-        % Third question: VCDs or AMFs. If WRF, VCDs are the only option
-        allowed_quantities = {'amf','vcd'};
-        q_str = sprintf('Which source will you be using? %s: ',strjoin(allowed_quantities, ', '));
-        if strcmpi(source,'wrf')
-            quantity = 'vcd';
-        else
-            while true
-                quantity = lower(input(q_str,'s'));
-                if ~ismember(quantity, allowed_quantities)
-                    fprintf('You must select one of the allowed choices. Try again, or press Ctrl+C to cancel\n');
-                else
-                    break
+        % Third question: which quantity. WRF has VCD and winds. Full BEHR
+        % has VCDs or AMFs. Pseudo-behr only has AMFs.
+        coarsen = 1;
+        switch source
+            case 'wrf'
+                allowed_quantities = {'vcd','wind'};
+                quantity = ask_multichoice('Which source will you be using?', allowed_quantities);
+                if strcmp(quantity,'wind')
+                    while true
+                        u_ans = input('Do you want to average winds together? Enter an integer of 1 if not, or greater if yes (default 1): ', 's');
+                        if ~isempty(u_ans)
+                            coarsen = str2double(u_ans);
+                        else
+                            coarsen = 1;
+                        end
+                        if ~isnan(coarsen)
+                            break
+                        else
+                            fprintf('Value not recognized. Try again\n');
+                        end
+                    end
                 end
-            end
+            case 'behr'
+                allowed_quantities = {'amf','vcd'};
+                quantity = ask_multichoice('Which source will you be using?', allowed_quantities);
+            otherwise
+                quantity = 'amf';
         end
         
 %         % Follow up only if doing VCDs: which ghost column to use? 
@@ -742,32 +741,20 @@ end
 %         else
 %             ghost = 'old';
 %         end
-        ghost = 'none';
         
         % Fourth, is this a percent or absolute difference?
-        while true
-            diff_type = lower(input('Do you want absolute or percent differences, or just the daily or monthly values? Type p, a, d, or m: ','s'));
-            if ~ismember(diff_type,{'a','p','d','m'});
-                fprintf('You must select one of the allowed choices. Try again, or press Ctrl+C to cancel\n');
-            else 
-                break
-            end
+        if strcmpi(quantity,'wind')
+            allowed_diff = {'d','m'};
+            diff_type = ask_multichoice('Do you want the daily or monthly winds?', allowed_diff);
+        else
+            allowed_diff = {'a','p','d','m'};
+            diff_type = ask_multichoice('Do you want absolute or percent differences, or just the daily or monthly values?', allowed_diff);
         end
         
+        
         % Lastly, we need a date
-        while true
-            date_in = input('Enter the date to compare, using a format datenum can parse: ', 's');
-            try
-                datenum_in = datenum(date_in);
-                break % only executes if the previous line is successfull
-            catch err
-                if strcmp(err.identifier, 'MATLAB:datenum:ConvertDateString')
-                    fprintf('The format could not be recognized by datenum. Try yyyy-mm-dd, or Ctrl+C to cancel\n')
-                else
-                    rethrow(err)
-                end
-            end
-        end
+        date_in = ask_date('Enter the date to compare, using a format datenum can parse');
+
         
         %%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% PARSING INPUT %%%%%
@@ -776,113 +763,67 @@ end
         % File paths: need the daily and monthly paths. Will construct a
         % cell array where the first dimension corresponds to the
         % difference sources (e.g. WRF, BEHR, pseudo-BEHR) and the second
-        % to cities. Put NaNs in cells that don't have data. The order
-        % needs to match the "allowed_sources" and "allowed_cities"
-        % variables.
+        % to cities. Put NaNs for cases that don't exist.
+        %
+        % File name format: strings should include a %1$04d where the year,
+        % %2$02d where the month, and %3$02d where the day get filled in.
+        % Only expected to be different for the different sources.
         
-        switch ghost
-            case 'old'
-                daily_path = {  '/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/hourly';...
-                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly';...
-                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds'};
-                % this will be concatenated in the third dimensions with daily
-                % path, so it needs to be the same size. Fill with NaNs if needed.
-                hybrid_path = { NaN;...
-                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid';...
-                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds'};
-                
-                monthly_path = {  '/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/monthly';...
-                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly';...
-                    '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds'};
-            case 'none' 
+        sharedir = '/Volumes/share2/USERS/LaughnerJ/';
+        workdir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/';
+        
+        switch source
+            case 'wrf'
+                daily_file_name_spec = 'WRF_BEHR_hourly_%1$04d-%2$02d-%3$02d.nc';
+                monthly_file_name_spec = 'WRF_BEHR_monthly_%1$04d-%2$02d-%3$02d.nc';
                 switch res
                     case 'f'
-                        daily_path = {  '/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/hourly';...
-                            NaN;...
-                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost'};
-                        hybrid_path = { NaN;...
-                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';...
-                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost'};
-                        monthly_path = {'/Volumes/share2/USERS/LaughnerJ/WRF/SE_US_BEHR/NEI11Emis/monthly';...
-                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';...
-                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost'};
+                        daily_path = fullfile(sharedir,'WRF','E_US_BEHR','hourly');
+                        hybrid_path = NaN;
+                        monthly_path = fullfile(sharedir,'WRF','E_US_BEHR','monthly');
                     case 'c'
-                        daily_path = {  NaN;...
-                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost - Coarse WRF';...
-                            NaN};
-                        hybrid_path = { NaN;...
-                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost - Coarse WRF';...
-                            NAn};
-                        monthly_path = {NaN;...
-                            '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost - Coarse WRF';...
-                            NaN};
+                        daily_path = fullfile(sharedir,'WRF','E_US_BEHR_COARSE','hourly');
+                        hybrid_path = NaN;
+                        monthly_path = fullfile(sharedir,'WRF','E_US_BEHR_COARSE','monthly');
                 end
-            case 'new'
-                daily_path = {  NaN;...
-                                NaN;...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - New ghost'};
-                hybrid_path = { NaN;...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - New ghost';...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - New ghost'};
-                monthly_path = {NaN;...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - New ghost';...
-                                '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - New ghost'};
+            case 'behr'
+                daily_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
+                monthly_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
+                s = 2;
+                switch res
+                    case 'f'
+                        daily_path = fullfile(workdir,'SE US BEHR Hourly - No ghost');
+                        hybrid_path = fullfile(workdir,'SE US BEHR Hybrid - No ghost');
+                        monthly_path = fullfile(workdir,'SE US BEHR Monthly - No ghost');
+                    case 'c'
+                        daily_path = fullfile(workdir,'SE US BEHR Hourly - No ghost - Coarse WRF');
+                        hybrid_path = fullfile(workdir,'SE US BEHR Hybrid - No ghost - Coarse WRF');
+                        monthly_path = fullfile(workdir,'SE US BEHR Monthly - No ghost - Coarse WRF');
+                end
+            case 'pseudo-behr'
+                daily_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
+                monthly_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
+                xx = 1:11;
+                yy = 1:19;
+                s = 1;
+                switch res
+                    case 'f'
+                        daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost');
+                        hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost');
+                        monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost');
+                    case 'c'
+                        daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Coarse WRF');
+                        hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Coarse WRF');
+                        monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost - Coarse WRF');
+                end
         end
-        
-                    
-        daily_path = cat(3, daily_path, hybrid_path);
-                    
-        source_index = find(strcmp(source, allowed_sources));
-        if isempty(regexp(source,'behr','once'))
-           apriori_index = 1; 
-        else
-           apriori_index = find(strcmp(apriori, allowed_apriori));
-        end
-        % city_index is calculated during the user response
-        
-        daily_path = daily_path{source_index, city_index, apriori_index}; 
-        monthly_path = monthly_path{source_index, city_index};
-        
-        % File name format: strings should include a %1$04d where the year,
-        % %2$02d where the month, and %3$02d where the day get filled in. Only
-        % expected to be different for the different sources, again, follow
-        % the order of the allowed_sources variable.
-        
-        daily_file_name_spec = {    'WRF_BEHR_hourly_%1$04d-%2$02d-%3$02d.nc';...
-                                    'OMI_BEHR_%1$04d%2$02d%3$02d.mat';...
-                                    'OMI_BEHR_%1$04d%2$02d%3$02d.mat'};
-        monthly_file_name_spec = {    'WRF_BEHR_monthly_%1$04d-%2$02d-%3$02d.nc';...
-                                    'OMI_BEHR_%1$04d%2$02d%3$02d.mat';...
-                                    'OMI_BEHR_%1$04d%2$02d%3$02d.mat'};
-                                
-        daily_file_name = sprintf(daily_file_name_spec{source_index}, year(date_in), month(date_in), day(date_in));
+
+        daily_file_name = sprintf(daily_file_name_spec, year(date_in), month(date_in), day(date_in));
         if strcmp(source,'wrf')
-            monthly_file_name = sprintf(monthly_file_name_spec{source_index}, year(date_in), month(date_in), eomday(year(date_in), month(date_in)));
+            monthly_file_name = sprintf(monthly_file_name_spec, year(date_in), month(date_in), eomday(year(date_in), month(date_in)));
         else
-            monthly_file_name = sprintf(monthly_file_name_spec{source_index}, year(date_in), month(date_in), day(date_in));
+            monthly_file_name = sprintf(monthly_file_name_spec, year(date_in), month(date_in), day(date_in));
         end
-        
-        % Which swath or hour to use (BEHR or WRF respectively). First
-        % dimension is by source, second by city.
-        
-        swath_or_hour = [   2;
-                            2;
-                            2];
-                        
-        s = swath_or_hour(source_index, city_index);
-        
-        % Cutting down the arrays to the right pixels. Again, source down
-        % the first dimension, city across the second.
-        
-        xxes = {    148:185;...
-                    761:860;...
-                    1:11}; % use all the pixels in the pseudo retrieval
-        yyes = {    65:97;...
-                    141:210;...
-                    1:19}; % use all the pixels in the pseudo retrieval
-        
-        xx = xxes{source_index, city_index};
-        yy = yyes{source_index, city_index};
         
         % Plot x and y limits. Only varies by city.
         city_xlims = {[-87.1 -82]};
@@ -903,25 +844,47 @@ end
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% LOAD DATA, CALCULATE QUANTITIES, AND PLOT %%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        daily_file = fullfile(daily_path, daily_file_name);
+        if strcmpi(apriori,'hourly')
+            daily_file = fullfile(daily_path, daily_file_name);
+        else
+            daily_file = fullfile(hybrid_path, daily_file_name);
+        end
         monthly_file = fullfile(monthly_path, monthly_file_name);
         
-        if strcmp(source,'wrf') && strcmp(quantity,'amf')
-            E.notimplemented('%s','WRF output does not contain an AMF value');
-        elseif strcmp(source,'wrf') && strcmp(quantity,'vcd')
+        if strcmp(source,'wrf')
             
             
             XLONG = ncread(daily_file, 'XLONG');
-            xlon = XLONG(xx,yy,1);
             XLAT = ncread(daily_file, 'XLAT');
+            
+            xx = any(XLONG >= min(xl) & XLONG <= max(xl) & XLAT >= min(yl) & XLAT <= max(yl),2);
+            yy = any(XLONG >= min(xl) & XLONG <= max(xl) & XLAT >= min(yl) & XLAT <= max(yl),1);
+            xx = squeeze(xx(:,:,1));
+            yy = squeeze(yy(:,:,1));
+            if strcmpi(res,'c')
+                % add a few more in the coarse version b/c it can miss some
+                % edges
+                xx = find(xx);
+                xx = (min(xx)-2):(max(xx)+2);
+                yy = find(yy);
+                yy = (min(yy)-2):(max(yy)+2);
+            end
+            
+            xlon = XLONG(xx,yy,1);
             xlat = XLAT(xx,yy,1);
             
+            utchr = ncread(daily_file, 'utchr');
+            s = utchr == 19;
+            
+            if strcmpi(quantity, 'vcd')
+            [xlon_pcol, xlat_pcol] = pcolor_pixel_corners(xlon,xlat);
+            
             daily_no2 = ncread(daily_file, 'no2_ndens'); %[NO2 in number density]
-            daily_no2 = daily_no2(xx,yy,:,s); % cut down to the hour we want
+            daily_no2 = nanmean(daily_no2(xx,yy,:,s),4); % cut down to the hour we want. If there are multiple outputs, average them.
             daily_zlev = ncread(daily_file, 'zlev'); % Thickness of each layer in meters
-            daily_zlev = daily_zlev(xx,yy,:,s);
+            daily_zlev = nanmean(daily_zlev(xx,yy,:,s),4);
             daily_tplev = find_wrf_tropopause(ncinfo(daily_file));
-            daily_tplev = daily_tplev(xx,yy,s);
+            daily_tplev = floor(nanmean(daily_tplev(xx,yy,s),3));
             
             for a=1:size(daily_no2,1)
                 for b=1:size(daily_no2,2)
@@ -963,9 +926,9 @@ end
                     del = monthly_no2_columns;
             end
             
-            figure; pcolor(xlon, xlat, del);
+            figure; pcolor(xlon_pcol, xlat_pcol, del);
             cb=colorbar;
-            set(gca,'fontsize',16);
+            set(gca,'fontsize',20);
             xlim(xl);
             ylim(yl);
             colormap('jet');
@@ -991,17 +954,74 @@ end
 %                 cm = round(cm/p10)*p10;
 %                 caxis([0 cm]);
 %             end
-            
+            elseif strcmpi(quantity, 'wind')
+                if strcmpi(diff_type,'d')
+                    U = ncread(daily_file, 'U');
+                    U = squeeze(nanmean(U(:,:,1,s),4));
+                    V = ncread(daily_file, 'V');
+                    V = squeeze(nanmean(V(:,:,1,s),4));
+                    COSALPHA = ncread(daily_file, 'COSALPHA');
+                    COSALPHA = COSALPHA(:,:,1); % should not change with time
+                    SINALPHA = ncread(daily_file, 'SINALPHA');
+                    SINALPHA = SINALPHA(:,:,1);
+                elseif strcmpi(diff_type,'m')
+                    U = ncread(monthly_file, 'U');
+                    U = squeeze(U(:,:,1));
+                    V = ncread(monthly_file, 'V');
+                    V = squeeze(V(:,:,1));
+                    COSALPHA = ncread(monthly_file, 'COSALPHA');
+                    COSALPHA = COSALPHA(xx,yy);
+                    SINALPHA = ncread(monthly_file, 'SINALPHA');
+                    SINALPHA = SINALPHA(xx,yy);
+                end
+                [U_e, V_e] = wrf_winds_transform(U,V,COSALPHA,SINALPHA);
+                % want to cut these down only after they are unstaggered.
+                U_e = U_e(xx,yy);
+                V_e = V_e(xx,yy);
+                
+                if coarsen > 1
+                    xlon_new = nan(floor(size(xlon)/coarsen));
+                    xlat_new = nan(floor(size(xlat)/coarsen));
+                    U_new = nan(floor(size(U_e)/coarsen));
+                    V_new = nan(floor(size(V_e)/coarsen));
+                    for a=1:size(U_new,1)
+                        i=(a-1)*coarsen + 1;
+                        for b=1:size(V_new,2)
+                            j=(b-1)*coarsen + 1;
+                            xlon_tmp = xlon(i:(i+coarsen-1),j:(j+coarsen-1));
+                            xlon_new(a,b) = nanmean(xlon_tmp(:));
+                            xlat_tmp = xlat(i:(i+coarsen-1),j:(j+coarsen-1));
+                            xlat_new(a,b) = nanmean(xlat_tmp(:));
+                            u_tmp = U_e(i:(i+coarsen-1),j:(j+coarsen-1));
+                            U_new(a,b) = nanmean(u_tmp(:));
+                            v_tmp = V_e(i:(i+coarsen-1),j:(j+coarsen-1));
+                            V_new(a,b) = nanmean(v_tmp(:));
+                        end
+                    end
+                    xlon = xlon_new;
+                    xlat = xlat_new;
+                    U_e = U_new;
+                    V_e = V_new;
+                end
+                
+                figure; quiver(xlon,xlat,U_e,V_e,'linewidth',2,'color','k');
+                set(gca,'fontsize',20);
+                xlim(xl);
+                ylim(yl);
+            end
         elseif ~isempty(regexp(source, 'behr', 'once'))
             if strcmp(source,'behr')
                 D = load(daily_file,'OMI');
                 M = load(monthly_file,'OMI');
                 
-                %D.OMI = omi_pixel_reject(D.OMI(s),'omi',0.2,'XTrackFlags');
-                D.OMI = omi_pixel_reject(D.OMI(s),'modis',0.2,'XTrackFlags');
+                xx = any(D.OMI.Longitude >= min(xl) & D.OMI.Longitude <= max(xl) & D.OMI.Latitude >= min(yl) & D.OMI.Latitude <= max(yl),2);
+                yy = any(D.OMI.Longitude >= min(xl) & D.OMI.Longitude <= max(xl) & D.OMI.Latitude >= min(yl) & D.OMI.Latitude <= max(yl),2);
+                
+                D.OMI = omi_pixel_reject(D.OMI(s),'omi',0.2,'XTrackFlags');
+                %D.OMI = omi_pixel_reject(D.OMI(s),'modis',0.2,'XTrackFlags');
                 badpix = D.OMI.Areaweight == 0;
-                %M.OMI = omi_pixel_reject(M.OMI(s),'omi',0.2,'XTrackFlags');
-                M.OMI = omi_pixel_reject(M.OMI(s),'modis',0.2,'XTrackFlags');
+                M.OMI = omi_pixel_reject(M.OMI(s),'omi',0.2,'XTrackFlags');
+                %M.OMI = omi_pixel_reject(M.OMI(s),'modis',0.2,'XTrackFlags');
                 
                 lon = D.OMI.Longitude(yy,xx);
                 lat = D.OMI.Latitude(yy,xx);
@@ -1060,45 +1080,48 @@ end
             
         end
         
-        switch quantity
-            case 'vcd'
-                label_pt2 = 'VCD_{NO_2}';
-                label_unit = '(molec. cm^{-2})';
-            case 'amf'
-                label_pt2 = 'AMF';
-                label_unit = '';
-        end
-        switch diff_type
-            case 'a'
-                label_pt1 = '\Delta';
-            case 'p'
-                label_pt1 = '%\Delta';
-                label_unit = ''; % remove the unit if doing a percent difference
-            case 'd'
-                label_pt1 = 'Daily';
-            case 'm'
-                label_pt1 = 'Monthly';
-        end
-        
-        cb.Label.String = strjoin({label_pt1, label_pt2, label_unit}, ' ');
-        
-        l=line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color','k','linewidth',2);
-        legend(l,city_name);
-        cm = max(abs(del(:)));
-        if ~isnan(cm)
-            if strcmp(diff_type,'p')
-                cm = round(cm/10)*10;
-                caxis([-cm cm]);
-            else
-                p10 = (10^floor(log10(cm)));
-                cm = round(cm/p10)*p10;
-                if strcmp(diff_type,'a')
+        if ~strcmpi(quantity,'wind')
+            switch quantity
+                case 'vcd'
+                    label_pt2 = 'VCD_{NO_2}';
+                    label_unit = '(molec. cm^{-2})';
+                case 'amf'
+                    label_pt2 = 'AMF';
+                    label_unit = '';
+            end
+            switch diff_type
+                case 'a'
+                    label_pt1 = '\Delta';
+                case 'p'
+                    label_pt1 = '%\Delta';
+                    label_unit = ''; % remove the unit if doing a percent difference
+                case 'd'
+                    label_pt1 = 'Daily';
+                case 'm'
+                    label_pt1 = 'Monthly';
+            end
+
+            cb.Label.String = strjoin({label_pt1, label_pt2, label_unit}, ' ');
+            
+            cm = max(abs(del(:)));
+            if ~isnan(cm)
+                if strcmp(diff_type,'p')
+                    cm = round(cm/10)*10;
                     caxis([-cm cm]);
                 else
-                    caxis([0 cm]);
+                    p10 = (10^floor(log10(cm)));
+                    cm = round(cm/p10)*p10;
+                    if strcmp(diff_type,'a')
+                        caxis([-cm cm]);
+                    else
+                        caxis([0 cm]);
+                    end
                 end
             end
         end
+        l=line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color','k','linewidth',2);
+        legend(l,city_name);
+
     end
 
     function plot_cloudfrac(date_in)
