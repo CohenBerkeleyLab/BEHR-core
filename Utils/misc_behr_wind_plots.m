@@ -680,6 +680,14 @@ end
             res = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF a priori', allowed_res);
         end
         
+        % Use the hour-average or instantaneous profiles?
+        if strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'})) && strcmpi(res,'f')
+            allowed_timemode = {'avg','instant'};
+            timemode = ask_multichoice('Use profiles averaged over an hour or instantaneous at the top of the hour?', allowed_timemode);
+        else
+            timemode = 'avg';
+        end
+        
         % Second question: which city. Expandable.
         city_index = 1; % hold over from old code.
 %         allowed_cities = {'Atlanta'};
@@ -808,8 +816,13 @@ end
                 s = 1;
                 switch res
                     case 'f'
-                        daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost');
-                        hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost');
+                        if strcmpi(timemode,'avg')
+                            daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost');
+                            hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost');
+                        else
+                            daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Instantaneous');
+                            hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Instantaneous');
+                        end
                         monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost');
                     case 'c'
                         daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Coarse WRF');
