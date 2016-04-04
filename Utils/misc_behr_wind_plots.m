@@ -15,6 +15,8 @@ switch lower(plttype)
         plot_nearest_profile(varargin{:});
     case 'plotapriori'
         plot_apriori(varargin{:});
+    case 'plotavgapriori'
+        plot_avg_apriori(varargin{:});
     case 'getnearprof'
         varargout{1} = get_nearest_profiles(varargin{:});
     case 'calcwind'
@@ -31,7 +33,9 @@ switch lower(plttype)
     case 'dif'
         plot_diff();
     case 'dif-ts'
-        plot_pseduo_diff_timeser();
+        plot_pseudo_diff_timeser();
+    case 'db-avg'
+        plot_behr_avg();
     case 'cld'
         plot_cloudfrac(varargin{1});
     case 'res'
@@ -438,6 +442,71 @@ end
                 title_sf = 'conc';
             end
             title(sprintf('Pixel at %.2f W, %.2f N (%s) - %s',DataHourly.Longitude(x,y),DataHourly.Latitude(x,y),mat2str([x,y]), title_sf));
+        end
+    end
+
+    function plot_avg_apriori(indicies, startdate, enddate)
+        if ~isnumeric(indicies) || ~ismatrix(indicies) || size(indicies,2) ~= 2
+            E.badinput('Indicies must be an n-by-2 matrix')
+        end
+        sdate=datenum(startdate);
+        edate=datenum(enddate);
+        
+        hourly_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+        monthly_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+        
+        F_hr = dir(fullfile(hourly_path, 'OMI*.mat'));
+        F_mn = dir(fullfile(monthly_path, 'OMI*.mat'));
+        
+        if numel(F_hr) ~= numel(F_mn)
+            E.callError('different_num_files','Different number of hybrid and monthly files');
+        end
+        
+        hr_profs = nan(30,numel(F_hr),size(indicies,1));
+        hr_pres = nan(30,size(indicies,1));
+        mn_profs = nan(30,numel(F_mn),size(indicies,1));
+        mn_pres = nan(30,size(indicies,1));
+        
+        lon = nan(1,size(indicies,1));
+        lat = nan(1,size(indicies,1));
+        
+        first_time = true;
+        
+        for a=1:numel(F_hr)
+            [s,e] = regexp(F_hr(a).name,'\d\d\d\d\d\d\d\d');
+            fdate = datenum(F_hr(a).name(s:e),'yyyymmdd');
+            if fdate >= sdate && fdate <= edate
+                hr = load(fullfile(hourly_path, F_hr(a).name),'Data');
+                mn = load(fullfile(monthly_path, F_mn(a).name),'Data');
+                
+                for b=1:size(indicies,1)
+                    x=indicies(b,1);
+                    y=indicies(b,2);
+                    hr_profs(:,a,b) = hr.Data.BEHRNO2apriori(:,x,y);
+                    mn_profs(:,a,b) = mn.Data.BEHRNO2apriori(:,x,y);
+                    if first_time
+                        % In the pseudo retrieval, these should stay the
+                        % same across all days
+                        hr_pres(:,b) = hr.Data.BEHRPressureLevels(:,x,y);
+                        mn_pres(:,b) = mn.Data.BEHRPressureLevels(:,x,y);
+                        lon(b) = hr.Data.Longitude(x,y);
+                        lat(b) = hr.Data.Latitude(x,y);
+                        first_time = false;
+                    end
+                end
+            end
+        end
+        
+        hr_avg_prof = squeeze(nanmean(hr_profs,2));
+        mn_avg_prof = squeeze(nanmean(mn_profs,2));
+        
+        for b=1:size(indicies,1)
+            figure;
+            line(hr_avg_prof(:,b), hr_pres(:,b), 'color','b','linewidth',2);
+            line(mn_avg_prof(:,b), mn_pres(:,b), 'color','r','linewidth',2);
+            legend('Hourly','Monthly');
+            set(gca,'ydir','reverse');
+            set(gca,'fontsize',16);
         end
     end
 
@@ -1054,9 +1123,9 @@ end
                 
                 if strcmp(quantity, 'amf')
                     D.OMI.BEHRAMFTrop(badpix) = nan;
-                    daily_value = D.OMI.BEHRAMFTrop(yy,xx);
+                    daily_value = D.OMI.BEHRAMFTrop(xx,yy);
                     M.OMI.BEHRAMFTrop(badpix) = nan;
-                    monthly_value = M.OMI.BEHRAMFTrop(yy,xx);
+                    monthly_value = M.OMI.BEHRAMFTrop(xx,yy);
                 else
                     D.OMI.BEHRColumnAmountNO2Trop(badpix) = nan;
                     daily_value = D.OMI.BEHRColumnAmountNO2Trop(xx,yy);
@@ -1134,18 +1203,23 @@ end
             
             cm = max(abs(del(:)));
             if ~isnan(cm)
-                if strcmp(diff_type,'p')
-                    cm = round(cm/10)*10;
+                if ismember(diff_type,{'p','a'})
                     caxis([-cm cm]);
                 else
-                    p10 = (10^floor(log10(cm)));
-                    cm = round(cm/p10)*p10;
-                    if ismember(diff_type,{'a','p'})
-                        caxis([-cm cm]);
-                    elseif strcmp(quantity,'vcd');
-                        caxis([0 cm]);
-                    end
+                    caxis([0 cm]);
                 end
+%                 if strcmp(diff_type,'p')
+%                     cm = round(cm/10)*10;
+%                     caxis([-cm cm]);
+%                 else
+%                     p10 = (10^floor(log10(cm)));
+%                     cm = round(cm/p10)*p10;
+%                     if ismember(diff_type,{'a','p'})
+%                         caxis([-cm cm]);
+%                     elseif strcmp(quantity,'vcd');
+%                         caxis([0 cm]);
+%                     end
+%                 end
             end
         end
         if ischar(cmap) && strcmpi(cmap,'jet')
@@ -1162,42 +1236,101 @@ end
 
     end
 
-    function plot_pseduo_diff_timeser()
-        allowed_modes = {'box','dist','scatter','scatter-wbox','combo'};
-        plot_mode = ask_multichoice('Which type of plot do you want: box and whisker, by distance from Atlanta, a scatter, or a combo?', allowed_modes);
-        
+    function plot_pseudo_diff_timeser()
+        allowed_diffs = {'hr-hy','hy-mn','hr-mn','all'};
+        diff_mode = ask_multichoice('Which difference to consider; hourly vs hybrid or hybrid vs monthly?', allowed_diffs);
+        if ~strcmpi(diff_mode,'all')
+            allowed_modes = {'box','dist','scatter-dist','scatter-dist-wbox','scatter-angle','scatter-angle-wbox','pcolor','pcolor-med','combo'};
+            plot_mode = ask_multichoice('Which type of plot do you want:', allowed_modes);
+        else
+            plot_mode = 'box-comp';
+        end
         city_lon = -84.39;
         city_lat = 33.775;
         
-        hourly_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
-        F_hr = dir(fullfile(hourly_dir,'OMI*.mat'));
-        hybrid_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
-        F_hy = dir(fullfile(hybrid_dir,'OMI*.mat'));
-        
-        if numel(F_hr) ~= numel(F_hy)
+        switch diff_mode
+            case 'hr-hy'
+                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                F_new = dir(fullfile(new_dir,'OMI*.mat'));
+                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                F_old = dir(fullfile(old_dir,'OMI*.mat'));
+            case 'hy-mn'
+                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                F_new = dir(fullfile(new_dir,'OMI*.mat'));
+                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                F_old = dir(fullfile(old_dir,'OMI*.mat'));
+            case 'hr-mn'
+                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                F_new = dir(fullfile(new_dir,'OMI*.mat'));
+                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                F_old = dir(fullfile(old_dir,'OMI*.mat'));
+            case 'all'
+                hr_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                F_hr = dir(fullfile(hr_dir,'OMI*.mat'));
+                hy_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                F_hy = dir(fullfile(hy_dir,'OMI*.mat'));
+                mn_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                F_mn = dir(fullfile(mn_dir,'OMI*.mat'));
+                
+        end
+        if ~strcmpi(diff_mode,'all') && numel(F_new) ~= numel(F_old)
             E.callError('unequal_num_files','There are not equal numbers of hourly and hybrid files');
         end
         
-        for a=1:numel(F_hr)
-            new = load(fullfile(hourly_dir, F_hr(a).name));
-            base = load(fullfile(hybrid_dir, F_hy(a).name));
-            del = (new.Data.BEHRAMFTrop ./ base.Data.BEHRAMFTrop - 1)*100;
-            if a == 1
-                delmat = nan(numel(del), numel(F_hr));
-                if strcmp(plot_mode, 'dist')
-                    distmat = nan(numel(del), numel(F_hr));
-                    dvec = nan(1, numel(F_hr));
-                end
+        if isDisplay
+            wb = waitbar(0,'Loading files');
+        end
+        
+        if strcmpi(diff_mode,'all')
+            n = numel(F_hy);
+        else
+            n = numel(F_new);
+        end
+        
+        for a=1:n
+            if isDisplay
+                waitbar(a/n);
             end
-            delmat(:,a) = del(:);
-            
-            if ismember(plot_mode, {'scatter','scatter-wbox','dist','combo'})
-                for b=1:numel(del)
-                    distmat(b,a) = m_lldist([new.Data.Longitude(b), city_lon], [new.Data.Latitude(b), city_lat]);
+            if strcmpi(diff_mode,'all')
+                hr = load(fullfile(hr_dir, F_hr(a).name));
+                hy = load(fullfile(hy_dir, F_hy(a).name));
+                mn = load(fullfile(mn_dir, F_mn(a).name));
+                if a == 1
+                    delmat = nan(numel(hr.Data.Longitude), n,3);
                 end
+                del = (hy.Data.BEHRAMFTrop ./ mn.Data.BEHRAMFTrop - 1)*100;
+                delmat(:,a,1) = del(:);
+                del = (hr.Data.BEHRAMFTrop ./ mn.Data.BEHRAMFTrop - 1)*100;
+                delmat(:,a,2) = del(:);
+                del = (hr.Data.BEHRAMFTrop ./ hy.Data.BEHRAMFTrop - 1)*100;
+                delmat(:,a,3) = del(:);
+            else
+                new = load(fullfile(new_dir, F_new(a).name));
+                base = load(fullfile(old_dir, F_old(a).name));
+                del = (new.Data.BEHRAMFTrop ./ base.Data.BEHRAMFTrop - 1)*100;
+                if a == 1
+                    delmat = nan(numel(del), numel(F_new));
+                    if strcmp(plot_mode, 'dist')
+                        distmat = nan(numel(del), numel(F_new));
+                        anglemat = nan(numel(del), numel(F_new));
+                        dvec = nan(1, numel(F_new));
+                    end
+                end
+                delmat(:,a) = del(:);
+                
+                if ismember(plot_mode, {'dist','combo'}) || ~isempty(regexp(plot_mode,'scatter', 'once'));
+                    for b=1:numel(del)
+                        distmat(b,a) = m_lldist([new.Data.Longitude(b), city_lon], [new.Data.Latitude(b), city_lat]);
+                        anglemat(b,a) = atan2d(new.Data.Latitude(b) - city_lat, new.Data.Longitude(b) - city_lon);
+                    end
+                end
+                [s,e] = regexp(F_new(a).name,'\d\d\d\d\d\d\d\d');
+                dvec(a) = datenum(F_new(a).name(s:e),'yyyymmdd');
             end
-            [s,e] = regexp(F_hr(a).name,'\d\d\d\d\d\d\d\d');
-            dvec(a) = datenum(F_hr(a).name(s:e),'yyyymmdd');
+        end
+        
+        if isDisplay
+            close(wb);
         end
         
         figure;
@@ -1219,20 +1352,256 @@ end
             xlabel('Pixel dist. from Atlanta (km)');
             ylabel('% difference full vs. hybrid');
         elseif ~isempty(regexp(plot_mode,'scatter', 'once'))
-            if strcmp(plot_mode,'scatter-wbox')
-                subplot(1,2,1);
+            if ~isempty(regexp(plot_mode,'dist','once'))
+                scatter(distmat(:), delmat(:), 16, 'k');
+                xlabel('Distance from Atlanta (km)')
+            elseif ~isempty(regexp(plot_mode, 'angle', 'once'))
+                scatter(anglemat(:), delmat(:), 16, 'k');
+                xlabel('Heading from Atlanta (deg. CCW from east)');
             end
-            scatter(distmat(:), delmat(:), 16, 'k');
-            xlabel('Distance from Atlanta (km)')
             ylabel('% difference full vs. hybrid');
-            if strcmp(plot_mode,'scatter-wbox')
+            if ~isempty(regexp(plot_mode,'wbox', 'once'))
                 yl = get(gca,'ylim');
-                subplot(1,2,2)
+                figure;
                 boxplot(delmat(:));
                 ylim(yl);
             end
+        elseif ~isempty(regexp(plot_mode, 'pcolor', 'once'))
+            if strcmpi(plot_mode,'pcolor-med')
+                delmatmean = reshape(nanmedian(delmat,2), size(new.Data.Longitude));
+            else
+                delmatmean = reshape(nanmean(delmat,2), size(new.Data.Longitude));
+            end
+            delmatstd = reshape(nanstd(delmat,0,2), size(new.Data.Longitude));
+            pcolor(squeeze(new.Data.Loncorn(1,:,:)),squeeze(new.Data.Latcorn(1,:,:)),delmatmean);
+            set(gca,'fontsize',20);
+            cb=colorbar;
+            cb.Label.String = 'Mean %\Delta AMF';
+            cb.FontSize = 20;
+            cmax = max(abs(cb.Limits));
+            caxis([-cmax, cmax]);
+            colormap(C.blue_red_cmap);
+            
+            figure; 
+            pcolor(squeeze(new.Data.Loncorn(1,:,:)),squeeze(new.Data.Latcorn(1,:,:)),delmatstd);
+            cb=colorbar;
+            cb.Label.String = '1\sigma %\Delta AMF';
+            cb.FontSize = 20;
+            caxis([0 max(cb.Limits)]);
+            colormap('jet')
+        elseif strcmpi(plot_mode, 'box-comp')
+            delmat_final = reshape(delmat,[],3);
+            boxplot(delmat_final)
+            set(gca,'xticklabels',{'Hybrid daily vs. monthly','Full daily vs. monthly','Full vs. hybrid daily'})
         end
         set(gca,'fontsize',20)
+    end
+
+    function plot_behr_avg()
+        allowed_apriori = {'hourly','hybrid','monthly'};
+        try
+            new_apriori = ask_multichoice(sprintf('Which a priori do you want to use as the "new" apriori?\n'), allowed_apriori, 'default', 'hybrid');
+            old_apriori = ask_multichoice(sprintf('Which a priori do you want to use as the base apriori?\n'), allowed_apriori, 'default', 'monthly');
+            clds = ask_multichoice('Filter by clouds?', {'y','n'});
+            rowanom = ask_multichoice('Filter for row anomaly (XFlag > 0 or VCD > 1e17)?', {'y','n'});
+            vcdqual = ask_multichoice('Filter for bad VCDs (vcdFlag odd or VCD < 0)?', {'y','n'});
+            aw = ask_multichoice('Weight by areaweight?', {'y','n'});
+            start_date = ask_date('Enter the date for the beginning of the averaging period (yyyy-mm-dd)');
+            end_date = ask_date('Enter the end of the averaging period (yyyy-mm-dd)');
+        catch err
+            if strcmp(err.identifier, 'ask_multichoice:user_cancel')
+                return
+            else
+                rethrow(err)
+            end
+        end
+        
+        sdate = datenum(start_date);
+        edate = datenum(end_date);
+        cldbool = strcmp(clds,'y');
+        rowbool = strcmp(rowanom,'y');
+        columnbool = strcmp(vcdqual,'y');
+        awbool = strcmp(aw,'y');
+        
+        xl = [-87.1 -81.9];
+        yl = [31.9 35.6];
+        
+        hr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost';
+        hy_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';
+        mn_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';
+        switch new_apriori
+            case 'hourly'
+                np = hr_path;
+            case 'hybrid'
+                np = hy_path;
+            case 'monthly'
+                np = mn_path;
+        end
+        switch old_apriori
+            case 'hourly'
+                op = hr_path;
+            case 'hybrid'
+                op = hy_path;
+            case 'monthly'
+                op = mn_path;
+        end
+        F_new = dir(fullfile(np,'OMI*.mat'));
+        F_old = dir(fullfile(op,'OMI*.mat'));
+        if numel(F_new) ~= numel(F_old)
+            E.callError('wrong_nfiles','There are different numbers of old and new files')
+        end
+        
+        n = numel(F_old) + numel(F_new);
+        
+        amfmat_new = [];
+        cldmat_new = [];
+        awmat_new = [];
+        rowmat_new = [];
+        vcdmat_new = [];
+        first_time = true;
+        
+        if isDisplay
+            wb = waitbar(0,'Concatentaion progress');
+        end
+        for a=1:numel(F_new)
+            if isDisplay; waitbar(a/n); end
+            [s,e] = regexp(F_new(a).name,'\d\d\d\d\d\d\d\d');
+            fdate = datenum(F_new(a).name(s:e),'yyyymmdd');
+            if fdate >= sdate && fdate <= edate
+                N=load(fullfile(np,F_new(a).name));
+                OMI = N.OMI;
+                
+                if first_time
+                    xx = any(OMI(1).Longitude >= min(xl) & OMI(1).Longitude <= max(xl) & OMI(1).Latitude >= min(yl) & OMI(1).Latitude <= max(yl),2);
+                    yy = any(OMI(1).Longitude >= min(xl) & OMI(1).Longitude <= max(xl) & OMI(1).Latitude >= min(yl) & OMI(1).Latitude <= max(yl),1);
+                end
+                this_amf = cat(3,OMI.BEHRAMFTrop);
+                this_amf(this_amf < 1e-4) = nan;
+                amfmat_new = cat(3, amfmat_new, this_amf(xx,yy,:));
+                if cldbool
+                    this_cld = cat(3, OMI.CloudFraction);
+                    cldmat_new = cat(3,cldmat_new,this_cld(xx,yy,:));
+                end
+                if awbool
+                    this_aw = cat(3, OMI.Areaweight);
+                    awmat_new = cat(3,awmat_new,this_aw(xx,yy,:));
+                end
+                
+                if rowbool || columnbool
+                    this_colmat = cat(3, OMI.BEHRColumnAmountNO2Trop);
+                end
+                if rowbool
+                    this_xflags = cat(3, OMI.XTrackQualityFlags);
+                    this_rowmat = false(size(this_xflags));
+                    for b=1:numel(this_xflags)
+                        this_rowmat(b) = any(this_xflags{b}>0) || this_colmat(b) > 1e17;
+                    end
+                    rowmat_new = cat(3, rowmat_new,this_rowmat(xx,yy,:));
+                end
+                if columnbool
+                    this_vcdflags = cat(3, OMI.vcdQualityFlags);
+                    this_vcdmat = false(size(this_vcdflags));
+                    for b=1:nueml(this_vcdflags)
+                        this_vcdmat(b) = any(mod([omi.vcdQualityFlags{b}],2)~=0) || this_colmat(b) < 0;
+                    end
+                    vcdmat_new = cat(3, vcdmat_new, this_vcdmat(xx,yy,:));
+                end
+            end
+        end
+        
+        amfmat_old = [];
+        cldmat_old = [];
+        awmat_old = [];
+        rowmat_old = [];
+        vcdmat_old = [];
+        for a=1:numel(F_old)
+            if isDisplay; waitbar((a+numel(F_new))/n); end
+            [s,e] = regexp(F_old(a).name,'\d\d\d\d\d\d\d\d');
+            fdate = datenum(F_old(a).name(s:e),'yyyymmdd');
+            if fdate >= sdate && fdate <= edate
+                N=load(fullfile(op,F_old(a).name));
+                OMI = N.OMI;
+                this_amf = cat(3,OMI.BEHRAMFTrop);
+                this_amf(this_amf < 1e-4) = nan;
+                amfmat_old = cat(3, amfmat_old, this_amf(xx,yy,:));
+                if cldbool
+                    this_cld = cat(3, OMI.CloudFraction);
+                    cldmat_old = cat(3,cldmat_old,this_cld(xx,yy,:));
+                end
+                if awbool
+                    this_aw = cat(3, OMI.Areaweight);
+                    awmat_old = cat(3,awmat_old,this_aw(xx,yy,:));
+                end
+                if rowbool || columnbool
+                    this_colmat = cat(3, OMI.BEHRColumnAmountNO2Trop);
+                end
+                if rowbool
+                    this_xflags = cat(3, OMI.XTrackQualityFlags);
+                    this_rowmat = false(size(this_xflags));
+                    for b=1:numel(this_xflags)
+                        this_rowmat(b) = any(this_xflags{b}>0) || this_colmat(b) > 1e17;
+                    end
+                    rowmat_old = cat(3, rowmat_old,this_rowmat(xx,yy,:));
+                end
+                if columnbool
+                    this_vcdflags = cat(3, OMI.vcdQualityFlags);
+                    this_vcdmat = false(size(this_vcdflags));
+                    for b=1:nueml(this_vcdflags)
+                        this_vcdmat(b) = any(mod([omi.vcdQualityFlags{b}],2)~=0) || this_colmat(b) < 0;
+                    end
+                    vcdmat_old = cat(3, vcdmat_old, this_vcdmat(xx,yy,:));
+                end
+            end
+        end
+        if isDisplay
+            close(wb);
+        end
+        
+        if cldbool
+            amfmat_new(cldmat_new > 0.2) = nan;
+            amfmat_old(cldmat_old > 0.2) = nan;
+        end
+        if rowbool
+            amfmat_new(logical(rowmat_new)) = nan;
+            amfmat_old(logical(rowmat_old)) = nan;
+        end
+        if columnbool
+            amfmat_new(logical(vcdmat_new)) = nan;
+            amfmat_old(logical(vcdmat_old)) = nan;
+        end
+        if awbool
+            amfmean_new = nansum2(amfmat_new .* awmat_new, 3) ./ nansum2(awmat_new, 3);
+            amfmean_old = nansum2(amfmat_old .* awmat_old, 3) ./ nansum2(awmat_old, 3);
+        else
+            amfmean_new = nanmean(amfmat_new, 3);
+            amfmean_old = nanmean(amfmat_old, 3);
+        end
+        
+        lon = OMI(1).Longitude(xx,yy);
+        lat = OMI(1).Latitude(xx,yy);
+        
+        figure;
+        pcolor(lon, lat, (amfmean_new ./ amfmean_old - 1)*100);
+        shading flat
+        cb=colorbar;
+        cmax = max(abs(cb.Limits));
+        caxis([-cmax cmax]);
+        colormap('jet');
+        title('Percent diff');
+        
+        figure;
+        pcolor(lon, lat, amfmean_new);
+        shading flat
+        cb=colorbar;
+        colormap('jet');
+        title('New');
+        
+        figure;
+        pcolor(lon, lat, amfmean_new);
+        shading flat
+        cb=colorbar;
+        colormap('jet');
+        title('Old');
     end
 
     function plot_cloudfrac(date_in)
