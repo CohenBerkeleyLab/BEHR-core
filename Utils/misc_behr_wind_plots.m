@@ -30,6 +30,8 @@ switch lower(plttype)
         plot_changes_by_sector(varargin{:});
     case 'dif'
         plot_diff();
+    case 'dif-ts'
+        plot_pseduo_diff_timeser();
     case 'cld'
         plot_cloudfrac(varargin{1});
     case 'res'
@@ -667,18 +669,17 @@ end
         % Follow up if using BEHR: should we compare hybrid or hour-wise
         % data to the monthly average?
         if ~strcmpi(source,'wrf')
-            allowed_apriori = {'hourly','hybrid'};
-            apriori = ask_multichoice('Compare retrieval using the hourly or hybrid data to the monthly average?', allowed_apriori);
+            allowed_apriori = {'hourly','hybrid','monthly'};
+            apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly');
+            apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori);
         else 
-            apriori = 'hourly';
+            apriori_new = 'hourly';
+            apriori_base = 'monthly';
         end
         
-        % And if using the full retrieval (for now) do we want to use the
-        % fine or coarse WRF simulation?
-        if ismember(source,{'wrf','behr'})
-            allowed_res = {'f','c'};
-            res = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF a priori', allowed_res);
-        end
+        % Do we want to use the fine or coarse WRF simulation?
+        allowed_res = {'f','c'};
+        res = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF a priori', allowed_res);
         
         % Use the hour-average or instantaneous profiles?
         if strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'})) && strcmpi(res,'f')
@@ -857,18 +858,28 @@ end
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% LOAD DATA, CALCULATE QUANTITIES, AND PLOT %%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        if strcmpi(apriori,'hourly')
-            daily_file = fullfile(daily_path, daily_file_name);
-        else
-            daily_file = fullfile(hybrid_path, daily_file_name);
+        switch apriori_base
+            case 'monthly'
+                base_file = fullfile(monthly_path, monthly_file_name);
+            case 'hybrid'
+                base_file = fullfile(hybrid_path, daily_file_name);
+            case 'hourly'
+                base_file = fullfile(daily_path, daily_file_name);
         end
-        monthly_file = fullfile(monthly_path, monthly_file_name);
+        switch apriori_new
+            case 'monthly'
+                new_file = fullfile(monthly_path, monthly_file_name);
+            case 'hybrid'
+                new_file = fullfile(hybrid_path, daily_file_name);
+            case 'hourly'
+                new_file = fullfile(daily_path, daily_file_name);
+        end
         
         if strcmp(source,'wrf')
             
             
-            XLONG = ncread(daily_file, 'XLONG');
-            XLAT = ncread(daily_file, 'XLAT');
+            XLONG = ncread(new_file, 'XLONG');
+            XLAT = ncread(new_file, 'XLAT');
             
             xx = any(XLONG >= min(xl) & XLONG <= max(xl) & XLAT >= min(yl) & XLAT <= max(yl),2);
             yy = any(XLONG >= min(xl) & XLONG <= max(xl) & XLAT >= min(yl) & XLAT <= max(yl),1);
@@ -886,17 +897,17 @@ end
             xlon = XLONG(xx,yy,1);
             xlat = XLAT(xx,yy,1);
             
-            utchr = ncread(daily_file, 'utchr');
+            utchr = ncread(new_file, 'utchr');
             s = utchr == 19;
             
             if strcmpi(quantity, 'vcd')
             [xlon_pcol, xlat_pcol] = pcolor_pixel_corners(xlon,xlat);
             
-            daily_no2 = ncread(daily_file, 'no2_ndens'); %[NO2 in number density]
+            daily_no2 = ncread(new_file, 'no2_ndens'); %[NO2 in number density]
             daily_no2 = nanmean(daily_no2(xx,yy,:,s),4); % cut down to the hour we want. If there are multiple outputs, average them.
-            daily_zlev = ncread(daily_file, 'zlev'); % Thickness of each layer in meters
+            daily_zlev = ncread(new_file, 'zlev'); % Thickness of each layer in meters
             daily_zlev = nanmean(daily_zlev(xx,yy,:,s),4);
-            daily_tplev = find_wrf_tropopause(ncinfo(daily_file));
+            daily_tplev = find_wrf_tropopause(ncinfo(new_file));
             daily_tplev = floor(nanmean(daily_tplev(xx,yy,s),3));
             
             for a=1:size(daily_no2,1)
@@ -910,11 +921,11 @@ end
             
             daily_no2_columns = nansum2(daily_no2 .* (daily_zlev*100), 3);
             
-            monthly_no2 = ncread(monthly_file, 'no2_ndens'); %[NO2 in number density]
+            monthly_no2 = ncread(base_file, 'no2_ndens'); %[NO2 in number density]
             monthly_no2 = monthly_no2(xx,yy,:); % cut down to the hour we want
-            monthly_zlev = ncread(monthly_file, 'zlev'); % Thickness of each layer in meters
+            monthly_zlev = ncread(base_file, 'zlev'); % Thickness of each layer in meters
             monthly_zlev = monthly_zlev(xx,yy,:);
-            monthly_tplev = find_wrf_tropopause(ncinfo(monthly_file));
+            monthly_tplev = find_wrf_tropopause(ncinfo(base_file));
             monthly_tplev = monthly_tplev(xx,yy);
             
             for a=1:size(monthly_no2,1)
@@ -931,12 +942,16 @@ end
             switch diff_type
                 case 'a'
                     del = daily_no2_columns - monthly_no2_columns;
+                    cmap = C.blue_red_cmap;
                 case 'p'
                     del = (daily_no2_columns ./ monthly_no2_columns - 1)*100;
+                    cmap = C.blue_red_cmap;
                 case 'd'
                     del = daily_no2_columns;
+                    cmap = 'jet';
                 case 'm'
                     del = monthly_no2_columns;
+                    cmap = 'jet';
             end
             
             figure; pcolor(xlon_pcol, xlat_pcol, del);
@@ -944,7 +959,7 @@ end
             set(gca,'fontsize',20);
             xlim(xl);
             ylim(yl);
-            colormap('jet');
+            colormap(cmap);
 %             if strcmp(diff_type,'a')
 %                 cb.Label.String = '\Delta VCD_{NO_2} (molec. cm^{-2})';
 %             else
@@ -969,23 +984,21 @@ end
 %             end
             elseif strcmpi(quantity, 'wind')
                 if strcmpi(diff_type,'d')
-                    U = ncread(daily_file, 'U');
+                    U = ncread(new_file, 'U');
                     U = squeeze(nanmean(U(:,:,1,s),4));
-                    V = ncread(daily_file, 'V');
+                    V = ncread(new_file, 'V');
                     V = squeeze(nanmean(V(:,:,1,s),4));
-                    COSALPHA = ncread(daily_file, 'COSALPHA');
+                    COSALPHA = ncread(new_file, 'COSALPHA');
                     COSALPHA = COSALPHA(:,:,1); % should not change with time
-                    SINALPHA = ncread(daily_file, 'SINALPHA');
+                    SINALPHA = ncread(new_file, 'SINALPHA');
                     SINALPHA = SINALPHA(:,:,1);
                 elseif strcmpi(diff_type,'m')
-                    U = ncread(monthly_file, 'U');
+                    U = ncread(base_file, 'U');
                     U = squeeze(U(:,:,1));
-                    V = ncread(monthly_file, 'V');
+                    V = ncread(base_file, 'V');
                     V = squeeze(V(:,:,1));
-                    COSALPHA = ncread(monthly_file, 'COSALPHA');
-                    COSALPHA = COSALPHA(xx,yy);
-                    SINALPHA = ncread(monthly_file, 'SINALPHA');
-                    SINALPHA = SINALPHA(xx,yy);
+                    COSALPHA = ncread(base_file, 'COSALPHA');
+                    SINALPHA = ncread(base_file, 'SINALPHA');
                 end
                 [U_e, V_e] = wrf_winds_transform(U,V,COSALPHA,SINALPHA);
                 % want to cut these down only after they are unstaggered.
@@ -1024,11 +1037,11 @@ end
             end
         elseif ~isempty(regexp(source, 'behr', 'once'))
             if strcmp(source,'behr')
-                D = load(daily_file,'OMI');
-                M = load(monthly_file,'OMI');
-                
-                xx = any(D.OMI.Longitude >= min(xl) & D.OMI.Longitude <= max(xl) & D.OMI.Latitude >= min(yl) & D.OMI.Latitude <= max(yl),2);
-                yy = any(D.OMI.Longitude >= min(xl) & D.OMI.Longitude <= max(xl) & D.OMI.Latitude >= min(yl) & D.OMI.Latitude <= max(yl),2);
+                D = load(new_file,'OMI');
+                M = load(base_file,'OMI');
+                s = 2;
+                xx = any(D.OMI(s).Longitude >= min(xl) & D.OMI(s).Longitude <= max(xl) & D.OMI(s).Latitude >= min(yl) & D.OMI(s).Latitude <= max(yl),2);
+                yy = any(D.OMI(s).Longitude >= min(xl) & D.OMI(s).Longitude <= max(xl) & D.OMI(s).Latitude >= min(yl) & D.OMI(s).Latitude <= max(yl),1);
                 
                 D.OMI = omi_pixel_reject(D.OMI(s),'omi',0.2,'XTrackFlags');
                 %D.OMI = omi_pixel_reject(D.OMI(s),'modis',0.2,'XTrackFlags');
@@ -1036,8 +1049,8 @@ end
                 M.OMI = omi_pixel_reject(M.OMI(s),'omi',0.2,'XTrackFlags');
                 %M.OMI = omi_pixel_reject(M.OMI(s),'modis',0.2,'XTrackFlags');
                 
-                lon = D.OMI.Longitude(yy,xx);
-                lat = D.OMI.Latitude(yy,xx);
+                lon = D.OMI.Longitude(xx,yy);
+                lat = D.OMI.Latitude(xx,yy);
                 
                 if strcmp(quantity, 'amf')
                     D.OMI.BEHRAMFTrop(badpix) = nan;
@@ -1046,13 +1059,13 @@ end
                     monthly_value = M.OMI.BEHRAMFTrop(yy,xx);
                 else
                     D.OMI.BEHRColumnAmountNO2Trop(badpix) = nan;
-                    daily_value = D.OMI.BEHRColumnAmountNO2Trop(yy,xx);
+                    daily_value = D.OMI.BEHRColumnAmountNO2Trop(xx,yy);
                     M.OMI.BEHRColumnAmountNO2Trop(badpix) = nan;
-                    monthly_value = M.OMI.BEHRColumnAmountNO2Trop(yy,xx);
+                    monthly_value = M.OMI.BEHRColumnAmountNO2Trop(xx,yy);
                 end
             elseif strcmp(source,'pseudo-behr')
-                D = load(daily_file, 'Data');
-                M = load(monthly_file, 'Data');
+                D = load(new_file, 'Data');
+                M = load(base_file, 'Data');
                 
                 lon = squeeze(D.Data.Loncorn(1,:,:));
                 lat = squeeze(D.Data.Latcorn(1,:,:));
@@ -1071,24 +1084,27 @@ end
             switch diff_type
                 case 'a'
                     del = daily_value - monthly_value;
+                    cmap = C.blue_red_cmap;
                 case 'p'
                     del = (daily_value ./ monthly_value - 1) * 100;
+                    cmap = C.blue_red_cmap;
                 case 'd'
                     del = daily_value;
+                    cmap = 'jet';
                 case 'm'
                     del = monthly_value;
+                    cmap = 'jet';
             end
             
             figure; pcolor(lon, lat, del);
+            colormap(cmap);
             cb=colorbar;
-            set(gca,'fontsize',16);
+            cb.FontSize = 20;
+            set(gca,'fontsize',20);
             xlim(xl);
             ylim(yl);
-            if ~isempty(regexpi(source,'pseudo'))
-                colormap(C.blue_red_cmap);
-            else
-                colormap('jet');
-                shading flat
+            if isempty(regexpi(source,'pseudo'))
+                shading flat;
             end
             
         end
@@ -1109,9 +1125,9 @@ end
                     label_pt1 = '%\Delta';
                     label_unit = ''; % remove the unit if doing a percent difference
                 case 'd'
-                    label_pt1 = 'Daily';
+                    label_pt1 = '';
                 case 'm'
-                    label_pt1 = 'Monthly';
+                    label_pt1 = '';
             end
 
             cb.Label.String = strjoin({label_pt1, label_pt2, label_unit}, ' ');
@@ -1124,17 +1140,99 @@ end
                 else
                     p10 = (10^floor(log10(cm)));
                     cm = round(cm/p10)*p10;
-                    if strcmp(diff_type,'a')
+                    if ismember(diff_type,{'a','p'})
                         caxis([-cm cm]);
-                    else
+                    elseif strcmp(quantity,'vcd');
                         caxis([0 cm]);
                     end
                 end
             end
         end
-        l=line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color','k','linewidth',2);
-        legend(l,city_name);
+        if ischar(cmap) && strcmpi(cmap,'jet')
+            col = 'w';
+        else
+            col = 'k';
+        end
+        l=line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color',col,'linewidth',2);
+        leg=legend(l,city_name);
+        if ischar(cmap) && strcmpi(cmap,'jet')
+            leg.Color = 'k';
+            leg.TextColor = 'w';
+        end
 
+    end
+
+    function plot_pseduo_diff_timeser()
+        allowed_modes = {'box','dist','scatter','scatter-wbox','combo'};
+        plot_mode = ask_multichoice('Which type of plot do you want: box and whisker, by distance from Atlanta, a scatter, or a combo?', allowed_modes);
+        
+        city_lon = -84.39;
+        city_lat = 33.775;
+        
+        hourly_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+        F_hr = dir(fullfile(hourly_dir,'OMI*.mat'));
+        hybrid_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+        F_hy = dir(fullfile(hybrid_dir,'OMI*.mat'));
+        
+        if numel(F_hr) ~= numel(F_hy)
+            E.callError('unequal_num_files','There are not equal numbers of hourly and hybrid files');
+        end
+        
+        for a=1:numel(F_hr)
+            new = load(fullfile(hourly_dir, F_hr(a).name));
+            base = load(fullfile(hybrid_dir, F_hy(a).name));
+            del = (new.Data.BEHRAMFTrop ./ base.Data.BEHRAMFTrop - 1)*100;
+            if a == 1
+                delmat = nan(numel(del), numel(F_hr));
+                if strcmp(plot_mode, 'dist')
+                    distmat = nan(numel(del), numel(F_hr));
+                    dvec = nan(1, numel(F_hr));
+                end
+            end
+            delmat(:,a) = del(:);
+            
+            if ismember(plot_mode, {'scatter','scatter-wbox','dist','combo'})
+                for b=1:numel(del)
+                    distmat(b,a) = m_lldist([new.Data.Longitude(b), city_lon], [new.Data.Latitude(b), city_lat]);
+                end
+            end
+            [s,e] = regexp(F_hr(a).name,'\d\d\d\d\d\d\d\d');
+            dvec(a) = datenum(F_hr(a).name(s:e),'yyyymmdd');
+        end
+        
+        figure;
+        if strcmp(plot_mode,'box')
+            boxplot(delmat);
+            xlab = get(gca,'xtick');
+            set(gca,'xtick',[xlab(1), xlab(end)]);
+            set(gca,'xticklabels',{datestr(dvec(1),'yyyy-mm-dd'), datestr(dvec(end),'yyyy-mm-dd')});
+            ylabel('% difference full vs. hybrid');
+        elseif strcmp(plot_mode, 'dist')
+            dvec = repmat(dvec,size(delmat,1),1);
+            scatter(dvec(:), distmat(:), 16, delmat(:));
+        elseif strcmp(plot_mode, 'combo');
+            [distlabels, I] = sort(distmat(:,1));
+            boxplot(delmat(I,:)');
+            xlab = get(gca,'xtick');
+            set(gca,'xtick',[xlab(1), xlab(end)]);
+            set(gca,'xticklabels',[distlabels(1), distlabels(end)]);
+            xlabel('Pixel dist. from Atlanta (km)');
+            ylabel('% difference full vs. hybrid');
+        elseif ~isempty(regexp(plot_mode,'scatter', 'once'))
+            if strcmp(plot_mode,'scatter-wbox')
+                subplot(1,2,1);
+            end
+            scatter(distmat(:), delmat(:), 16, 'k');
+            xlabel('Distance from Atlanta (km)')
+            ylabel('% difference full vs. hybrid');
+            if strcmp(plot_mode,'scatter-wbox')
+                yl = get(gca,'ylim');
+                subplot(1,2,2)
+                boxplot(delmat(:));
+                ylim(yl);
+            end
+        end
+        set(gca,'fontsize',20)
     end
 
     function plot_cloudfrac(date_in)
