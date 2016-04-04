@@ -6,6 +6,7 @@
 % if you already have the line densities.
 
 %% calc wind speed/direction
+timemode='avg'; %instant or avg
 fpath = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR/hourly';
 F = dir(fullfile(fpath,'*.nc'));
 dnums = [];
@@ -14,7 +15,7 @@ for a=1:numel(F)
     dnums = cat(1,dnums, datenum(F(a).name(s:e),'yyyy-mm-dd'));
 end
 % Remove any days before June 10th - allow WRF spinup
-F = F(dnums >= datenum('2013-06-10'));
+F = F(dnums >= datenum('2013-06-01'));
 [XLON, XLAT, U, V, COSALPHA, SINALPHA, utchr] = read_wrf_vars(fpath, F, {'XLONG', 'XLAT', 'U', 'V', 'COSALPHA', 'SINALPHA', 'utchr'});
 % We can take just one 2D slice of lon, lat, cos, and sin because these do
 % not change in time. U and V we will take surface averaged over utchrs 19
@@ -25,13 +26,17 @@ for a=1:size(utchr,1)
         error('do_all_emg:utchr', 'Not all files have the same set of utc hours')
     end
 end
-tt = utchr(:,1) >= 19 & utchr(:,1) < 21;
+if strcmpi(timemode,'instant')
+    tt = find(utchr == 19,1,'first');
+else
+    tt = utchr(:,1) >= 19 & utchr(:,1) < 21;
+end
 XLON = XLON(:,:,1,1);
 XLAT = XLAT(:,:,1,1);
 COSALPHA = COSALPHA(:,:,1,1);
 SINALPHA = SINALPHA(:,:,1,1);
-Ubar = squeeze(nanmean(U(:,:,1,:,:),4));
-Vbar = squeeze(nanmean(V(:,:,1,:,:),4));
+Ubar = squeeze(nanmean(U(:,:,1,tt,:),4));
+Vbar = squeeze(nanmean(V(:,:,1,tt,:),4));
 [Ue, Ve] = wrf_winds_transform(Ubar, Vbar, COSALPHA, SINALPHA);
 [windvel, theta] = misc_behr_wind_plots('calcavgwind', XLON, XLAT, Ue, Ve, -84.39, 33.775);
 
@@ -51,10 +56,10 @@ coarse_mn_dir = 'SE US BEHR Monthly - No ghost - Coarse WRF';
 
 
 % loads theta and windvel
-load(fullfile(behr_work_dir,'Atlanta-Wind-Conditions-Long.mat'));
+load(fullfile(behr_work_dir,'Atlanta-Wind-Conditions-Long-UTC19-20.mat'));
 
-gtcrit = windvel >= 3.6 & (theta < -180 | theta > -135);
-ltcrit = windvel < 3.6 & (theta < -180 | theta > -135);
+gtcrit = windvel >= 3.6 & (theta < 0 | theta > 60);
+ltcrit = windvel < 3.6 & (theta < 0 | theta > 60);
 
 F = dir(fullfile(behr_work_dir, hybrid_dir, 'OMI_BEHR_*.mat'));
 fdnums = nan(size(F));
@@ -62,7 +67,7 @@ for a=1:numel(fdnums)
     [s,e] = regexp(F(a).name,'\d\d\d\d\d\d\d\d');
     fdnums(a) = datenum(F(a).name(s:e), 'yyyymmdd');
 end
-F = F(fdnums >= datenum('2013-06-10'));
+F = F(fdnums >= datenum('2013-06-01'));
 
 [no2x_hygt5, no2ld_hygt5, no2ldstd_hygt5, lon_hygt5, lat_hygt5, no2cd_hygt5] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool);
 [no2x_hylt5, no2ld_hylt5, no2ldstd_hylt5, lon_hylt5, lat_hylt5, no2cd_hylt5] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool);
