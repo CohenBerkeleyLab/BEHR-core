@@ -1400,6 +1400,7 @@ end
     function plot_behr_avg()
         allowed_apriori = {'hourly','hybrid','monthly'};
         try
+            quantity = ask_multichoice('Which quantity do you want to plot?',{'amf','vcd'});
             new_apriori = ask_multichoice(sprintf('Which a priori do you want to use as the "new" apriori?\n'), allowed_apriori, 'default', 'hybrid');
             old_apriori = ask_multichoice(sprintf('Which a priori do you want to use as the base apriori?\n'), allowed_apriori, 'default', 'monthly');
             clds = ask_multichoice('Filter by clouds?', {'y','n'});
@@ -1453,7 +1454,7 @@ end
         
         n = numel(F_old) + numel(F_new);
         
-        amfmat_new = [];
+        datamat_new = [];
         cldmat_new = [];
         awmat_new = [];
         rowmat_new = [];
@@ -1475,9 +1476,13 @@ end
                     xx = any(OMI(1).Longitude >= min(xl) & OMI(1).Longitude <= max(xl) & OMI(1).Latitude >= min(yl) & OMI(1).Latitude <= max(yl),2);
                     yy = any(OMI(1).Longitude >= min(xl) & OMI(1).Longitude <= max(xl) & OMI(1).Latitude >= min(yl) & OMI(1).Latitude <= max(yl),1);
                 end
-                this_amf = cat(3,OMI.BEHRAMFTrop);
-                this_amf(this_amf < 1e-4) = nan;
-                amfmat_new = cat(3, amfmat_new, this_amf(xx,yy,:));
+                if strcmpi(quantity,'amf')
+                    this_data = cat(3,OMI.BEHRAMFTrop);
+                    this_data(this_data < 1e-4) = nan;
+                elseif strcmpi(quantity,'vcd')
+                    this_data = cat(3,OMI.BEHRColumnAmountNO2Trop);
+                end
+                datamat_new = cat(3, datamat_new, this_data(xx,yy,:));
                 if cldbool
                     this_cld = cat(3, OMI.CloudFraction);
                     cldmat_new = cat(3,cldmat_new,this_cld(xx,yy,:));
@@ -1501,15 +1506,15 @@ end
                 if columnbool
                     this_vcdflags = cat(3, OMI.vcdQualityFlags);
                     this_vcdmat = false(size(this_vcdflags));
-                    for b=1:nueml(this_vcdflags)
-                        this_vcdmat(b) = any(mod([omi.vcdQualityFlags{b}],2)~=0) || this_colmat(b) < 0;
+                    for b=1:numel(this_vcdflags)
+                        this_vcdmat(b) = any(mod([this_vcdflags{b}],2)~=0) || this_colmat(b) < 0;
                     end
                     vcdmat_new = cat(3, vcdmat_new, this_vcdmat(xx,yy,:));
                 end
             end
         end
         
-        amfmat_old = [];
+        datamat_old = [];
         cldmat_old = [];
         awmat_old = [];
         rowmat_old = [];
@@ -1521,9 +1526,13 @@ end
             if fdate >= sdate && fdate <= edate
                 N=load(fullfile(op,F_old(a).name));
                 OMI = N.OMI;
-                this_amf = cat(3,OMI.BEHRAMFTrop);
-                this_amf(this_amf < 1e-4) = nan;
-                amfmat_old = cat(3, amfmat_old, this_amf(xx,yy,:));
+                if strcmpi(quantity,'amf')
+                    this_data = cat(3,OMI.BEHRAMFTrop);
+                    this_data(this_data < 1e-4) = nan;
+                elseif strcmpi(quantity,'vcd')
+                    this_data = cat(3,OMI.BEHRColumnAmountNO2Trop);
+                end
+                datamat_old = cat(3, datamat_old, this_data(xx,yy,:));
                 if cldbool
                     this_cld = cat(3, OMI.CloudFraction);
                     cldmat_old = cat(3,cldmat_old,this_cld(xx,yy,:));
@@ -1546,8 +1555,8 @@ end
                 if columnbool
                     this_vcdflags = cat(3, OMI.vcdQualityFlags);
                     this_vcdmat = false(size(this_vcdflags));
-                    for b=1:nueml(this_vcdflags)
-                        this_vcdmat(b) = any(mod([omi.vcdQualityFlags{b}],2)~=0) || this_colmat(b) < 0;
+                    for b=1:numel(this_vcdflags)
+                        this_vcdmat(b) = any(mod([this_vcdflags{b}],2)~=0) || this_colmat(b) < 0;
                     end
                     vcdmat_old = cat(3, vcdmat_old, this_vcdmat(xx,yy,:));
                 end
@@ -1558,23 +1567,23 @@ end
         end
         
         if cldbool
-            amfmat_new(cldmat_new > 0.2) = nan;
-            amfmat_old(cldmat_old > 0.2) = nan;
+            datamat_new(cldmat_new > 0.2) = nan;
+            datamat_old(cldmat_old > 0.2) = nan;
         end
         if rowbool
-            amfmat_new(logical(rowmat_new)) = nan;
-            amfmat_old(logical(rowmat_old)) = nan;
+            datamat_new(logical(rowmat_new)) = nan;
+            datamat_old(logical(rowmat_old)) = nan;
         end
         if columnbool
-            amfmat_new(logical(vcdmat_new)) = nan;
-            amfmat_old(logical(vcdmat_old)) = nan;
+            datamat_new(logical(vcdmat_new)) = nan;
+            datamat_old(logical(vcdmat_old)) = nan;
         end
         if awbool
-            amfmean_new = nansum2(amfmat_new .* awmat_new, 3) ./ nansum2(awmat_new, 3);
-            amfmean_old = nansum2(amfmat_old .* awmat_old, 3) ./ nansum2(awmat_old, 3);
+            amfmean_new = nansum2(datamat_new .* awmat_new, 3) ./ nansum2(awmat_new, 3);
+            amfmean_old = nansum2(datamat_old .* awmat_old, 3) ./ nansum2(awmat_old, 3);
         else
-            amfmean_new = nanmean(amfmat_new, 3);
-            amfmean_old = nanmean(amfmat_old, 3);
+            amfmean_new = nanmean(datamat_new, 3);
+            amfmean_old = nanmean(datamat_old, 3);
         end
         
         lon = OMI(1).Longitude(xx,yy);
