@@ -53,15 +53,17 @@ end
 if DEBUG_LEVEL > 1; fprintf('Adding folders\n'); end
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
-addpath(genpath('~/Documents/MATLAB/BEHR'))
-addpath(genpath('~/Documents/MATLAB/Classes'))
-addpath(genpath('~/Documents/MATLAB/Utils'))
+mpath = fileparts(mfilename('fullpath'));
+addpath(genpath(fullfile(mpath,'..')));
 
 
 % Add the paths needed to run on the cluster
 if onCluster;
     addpath(genpath('~/MATLAB/Classes'));
     addpath(genpath('~/MATLAB/Utils'));
+else
+    addpath(genpath(BEHR_paths('classes')));
+    addpath(genpath(BEHR_paths('utils')));
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -153,23 +155,20 @@ if onCluster
     
     
 else
-    %This is the directory where the final .mat file will be saved. This will
-    %need to be changed to match your machine and the files' location.
-    sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
+    %This is the directory where the final .mat file will be saved.
+    sp_mat_dir = BEHR_paths('sp_mat_dir');
     
     %This is the directory where the he5 files are saved.
-    omi_he5_dir = '/Volumes/share-sat/SAT/OMI/OMNO2';
+    omi_he5_dir = BEHR_paths('omno2_dir');
     
     %This is the directory where the MODIS myd06_L2*.hdf files are saved. It should include subfolders organized by year.
-    modis_myd06_dir = '/Volumes/share-sat/SAT/MODIS/MYD06_L2';
+    modis_myd06_dir = BEHR_paths('myd06_dir');
     
     %This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
-    modis_mcd43_dir = '/Volumes/share-sat/SAT/MODIS/MCD43C3';
+    modis_mcd43_dir = BEHR_paths('mcd43c3_dir');
     
     %This is the directory where the GLOBE data files and their headers (.hdr files) are saved.
-    %Do not include a trailing separator.
-    %globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
-    globe_dir = globepath; % a function that returns the GLOBE directory path
+    globe_dir = BEHR_paths('globe_dir');
 end
 
 

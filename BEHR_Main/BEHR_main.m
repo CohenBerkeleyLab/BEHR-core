@@ -40,10 +40,12 @@ end
 
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
-addpath(genpath('~/Documents/MATLAB/BEHR/Utils'))
+mpath = fileparts(mfilename('fullpath'));
+addpath(genpath(fullfile(mpath,'..','Utils')));
 
 
-% Add the paths needed to run on the cluster
+% Add the paths needed to run on the cluster. Modify these manually if
+% needed.
 if onCluster;
     addpath(genpath('~/MATLAB/Classes'));
     addpath(genpath('~/MATLAB/Utils'));
@@ -96,21 +98,21 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014';
+    behr_mat_dir = BEHR_paths('behr_mat_dir');
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
-    sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
+    sp_mat_dir = BEHR_paths('sp_mat_dir');
     
     %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
     %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
     %is the 'AMF_tools' folder.
-    amf_tools_path = '/Users/Josh/Documents/MATLAB/BEHR/AMF_tools';
+    amf_tools_path = BEHR_paths('amf_tools_dir');
 
     %This is the directory where the NO2 profiles are stored. This will
     %need to be changed to match your machine and the files' location.
     %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
-    no2_profile_path = '/Volumes/share-sat/SAT/BEHR/Monthly_NO2_Profiles';
+    no2_profile_path = BEHR_paths('no2_profile_path');
 end
 
 %Store paths to relevant files
