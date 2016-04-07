@@ -36,6 +36,8 @@ switch lower(plttype)
         plot_pseudo_diff_timeser();
     case 'db-avg'
         plot_behr_avg();
+    case 'pr-prof'
+        [varargout{1}, varargout{2}, varargout{3}, varargout{4}, varargout{5}, varargout{6}] = plot_pseudo_apriori(varargin{:});
     case 'cld'
         plot_cloudfrac(varargin{1});
     case 'res'
@@ -738,7 +740,11 @@ end
         % Follow up if using BEHR: should we compare hybrid or hour-wise
         % data to the monthly average?
         if ~strcmpi(source,'wrf')
-            allowed_apriori = {'hourly','hybrid','monthly'};
+            if strcmpi(source,'pseudo-behr')
+                allowed_apriori = {'hourly','hybrid','hybrid-avg','monthly'};
+            else
+                allowed_apriori = {'hourly','hybrid','monthly'};
+            end
             apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly');
             apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori);
         else 
@@ -889,6 +895,7 @@ end
                         if strcmpi(timemode,'avg')
                             daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost');
                             hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost');
+                            hybrid_avg_path = fullfile(workdir, 'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
                         else
                             daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Instantaneous');
                             hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Instantaneous');
@@ -897,6 +904,7 @@ end
                     case 'c'
                         daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Coarse WRF');
                         hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Coarse WRF');
+                        hybrid_avg_path = fullfile(workdir, 'Atlanta BEHR Avg Hybrid - No clouds - No ghost - Coarse WRF');
                         monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost - Coarse WRF');
                 end
         end
@@ -932,6 +940,8 @@ end
                 base_file = fullfile(monthly_path, monthly_file_name);
             case 'hybrid'
                 base_file = fullfile(hybrid_path, daily_file_name);
+            case 'hybrid-avg'
+                base_file = fullfile(hybrid_avg_path, daily_file_name);
             case 'hourly'
                 base_file = fullfile(daily_path, daily_file_name);
         end
@@ -1237,7 +1247,7 @@ end
     end
 
     function plot_pseudo_diff_timeser()
-        allowed_diffs = {'hr-hy','hy-mn','hr-mn','all'};
+        allowed_diffs = {'hr-hy','hy-mn','hr-mn','hy-avg','all'};
         diff_mode = ask_multichoice('Which difference to consider; hourly vs hybrid or hybrid vs monthly?', allowed_diffs);
         if ~strcmpi(diff_mode,'all')
             allowed_modes = {'box','dist','scatter-dist','scatter-dist-wbox','scatter-angle','scatter-angle-wbox','pcolor','pcolor-med','combo'};
@@ -1258,6 +1268,11 @@ end
                 new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
                 old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                F_old = dir(fullfile(old_dir,'OMI*.mat'));
+            case 'hy-avg'
+                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                F_new = dir(fullfile(new_dir,'OMI*.mat'));
+                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hr-mn'
                 new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
@@ -1611,6 +1626,91 @@ end
         cb=colorbar;
         colormap('jet');
         title('Old');
+    end
+
+    function [new_apriori, base_apriori, new_pres, base_pres, lon, lat] = plot_pseudo_apriori(new_apriori, base_apriori)
+        plottype = ask_multichoice('What type of plot to make?',{'slice','profshape'});
+        if strcmpi(plottype, 'profshape')
+            while true
+                indstr = input('Enter the indicies to plot the profiles for: ', 's');
+                indcell = strsplit(indstr,' ');
+                if numel(indcell)==2
+                    inds = zeros(size(indcell));
+                    for a=1:numel(inds)
+                        inds(a) = str2double(indcell{a});
+                    end
+                    break
+                else
+                    fprintf('Must be two numbers separated by a space. Try again.\n');
+                end
+            end
+        end
+        
+        if nargin < 1
+            allowed_apriori={'hourly','hybrid','monthly'};
+            new_case = ask_multichoice('Which apriori is the new case?',allowed_apriori,'default','hybrid');
+            base_case = ask_multichoice('Which apriori is the base case?',allowed_apriori,'default','monthly');
+            start_date = ask_date('Enter the start date');
+            end_date = ask_date('Enter the end date');
+        end
+        hourly_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+        hybrid_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+        monthly_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+        
+        switch new_case
+            case 'hourly'
+                new_path = hourly_path;
+            case 'hybrid'
+                new_path = hybrid_path;
+            case 'monthly'
+                new_path = monthly_path;
+        end
+        switch base_case
+            case 'hourly'
+                base_path = hourly_path;
+            case 'hybrid'
+                base_path = hybrid_path;
+            case 'monthly'
+                base_path = monthly_path;
+        end
+        
+        if nargin < 1
+            [new_apriori, new_pres, loncorn, latcorn] = concat_files(new_path,'OMI*.mat',start_date,end_date,{'Data','BEHRNO2apriori'; 'Data','BEHRPressureLevels'; 'Data','Loncorn'; 'Data','Latcorn'});
+            [base_apriori, base_pres] = concat_files(base_path,'OMI*.mat',start_date,end_date,{'Data','BEHRNO2apriori'; 'Data', 'BEHRPressureLevels'});
+        end
+
+        
+        % use latcorn to get the pixels in the right place when plotting
+        % with pcolor.
+        lon = squeeze(loncorn(1,:,:,1));
+        lat = squeeze(latcorn(1,:,:,1));
+        if strcmpi(plottype,'slice')
+            
+
+            mean_new = permute(nanmean(new_apriori,4),[2 3 1]);
+            mean_base = permute(nanmean(base_apriori,4),[2 3 1]);
+
+            plot_slice_gui(mean_new - mean_base, lon, lat, 'New - base');
+            plot_slice_gui(reldiff(mean_new, mean_base)*100, lon, lat, 'Per. diff. new - base')
+        else
+            profs_new = squeeze(new_apriori(:,inds(1),inds(2),:));
+            pres_new = squeeze(new_pres(:,inds(1),inds(2),:));
+            profs_base = squeeze(base_apriori(:,inds(1),inds(2),:));
+            pres_base = squeeze(base_pres(:,inds(1),inds(2),:));
+            
+            figure;
+            for a=1:size(profs_new,2)
+                l_new=line(profs_new(:,a),pres_new(:,a),'color',[0.5 0.5 0.5]);
+            end
+            for a=1:size(profs_base,2)
+                l_base=line(profs_base(:,a),pres_base(:,a),'color','r','linewidth',1);
+            end
+            l_new_mean = line(nanmean(profs_new,2), nanmean(pres_new,2), 'color', 'k', 'linewidth', 2, 'linestyle', '--');
+            l_base_mean = line(nanmean(profs_base,2), nanmean(pres_base,2), 'color', 'y', 'linewidth', 2, 'linestyle', '--');
+            set(gca,'ydir','reverse','fontsize',18);
+            legend([l_new; l_new_mean; l_base; l_base_mean],{'New profiles','Mean new','Base profiles','Mean base'})
+            title(sprintf('Profiles at %s',mat2str(inds)));
+        end
     end
 
     function plot_cloudfrac(date_in)
@@ -2097,5 +2197,70 @@ end
         end
     end
 
+    
+
 end
 
+function varargout = concat_files(fpath,fpattern,start_date,end_date,fields,fieldinds)
+% Will handle file concatenation. fpath should be the path to the files and
+% fpattern the pattern of the files to concatenate. Start and end date are
+% the first and last date to concatenate. fields should be a cell array of
+% the necessary fields as strings to get at the data in the files, and
+% fieldinds the scalar indicies for any intervening fields. So if in each
+% file, you want Data.TraceGases.NO2, fields should be
+% {'Data','TraceGases','NO2'} and if you need to specify
+% Data(2).TraceGases(1).NO2, fieldinds should be [2 1]. If you want to load
+% multiple fields, specified each as a row of fields. If some rows have
+% more elements, fill the shorter rows with empty spaces, but always make
+% the final variable the last entry.
+F = dir(fullfile(fpath,fpattern));
+n = numel(F);
+
+sdate = datenum(start_date);
+edate = datenum(end_date);
+
+E=JLLErrors;
+
+if ~iscellstr(fields)
+    E.badinput('fields must be a cell array of strings')
+end
+
+if ~exist('fieldinds','var')
+    fieldinds = ones(size(fields)-[0 1]);
+elseif numel(fieldinds) ~= (numel(fields)-1)
+    E.numelMismatch('fields','fieldinds');
+end
+
+if isDisplay
+    wb = waitbar(0,'Concatenation progress');
+end
+
+varargout = cell(1,nargout);
+for a=1:n
+    if isDisplay
+        waitbar(a/n)
+    end
+    [s,e] = regexp(F(a).name,'\d\d\d\d\d\d\d\d');
+    fdate = datenum(F(a).name(s:e),'yyyymmdd');
+    if fdate >= sdate && fdate <= edate
+        D = load(fullfile(fpath,F(a).name));
+        for b=1:nargout
+            var = D;
+            for f=1:size(fields,2)
+                if isempty(fields{b,f})
+                    continue
+                elseif f < size(fields,2)
+                    var = var.(fields{b,f})(fieldinds(b,f));
+                else
+                    var = var.(fields{b,f});
+                end
+            end
+            varargout{b} = cat(ndims(var)+1, varargout{b}, var);
+        end
+    end
+end
+
+if isDisplay
+    close(wb)
+end
+end

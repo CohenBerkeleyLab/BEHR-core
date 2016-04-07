@@ -21,6 +21,11 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %       startdate as 1-Jan-2015, this will operate on all files after
 %       1-Jan-2015)
 %
+%       'newdim' - boolean, defaults to false. When true, each variable will
+%       be concatenated along a new dimension (so a 2D variable will be
+%       concatenated along the third dimension, a 3D one along the fourth).
+%       When false, they will be concatenated in the along track dimension.
+%
 %       'DEBUG_LEVEL' - set to 0 to suppress debugging messages, defaults
 %       to 1.
 %
@@ -46,6 +51,7 @@ p=inputParser;
 p.addParameter('prefix','',@ischar);
 p.addParameter('startdate','');
 p.addParameter('enddate','');
+p.addParameter('newdim',false);
 p.addParameter('DEBUG_LEVEL',1,@(x) (isnumeric(x) && isscalar(x)));
 
 p.parse(varargin{:});
@@ -54,6 +60,7 @@ pout = p.Results;
 prefix = pout.prefix;
 startdate = pout.startdate;
 enddate = pout.enddate;
+newdim = pout.newdim;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 if isempty(startdate)
@@ -86,6 +93,10 @@ end
 
 if startdate > enddate
     E.badinput('startdate is later than enddate.')
+end
+
+if ~isscalar(newdim) || (~islogical(newdim) && ~isnumeric(newdim))
+    E.badinput('The parameter newdim must be understood as a scalar logical.')
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -125,7 +136,16 @@ for a=1:numel(F)
         end
         
         for c=1:numel(Data)
-            varargout{b} = cat(1, varargout{b}, Data(c).(datafields{b})(:));
+            if newdim
+                n = ndims(Data(c).(datafields{b}));
+                varargout{b} = cat(n+1, varargout{b}, Data(c).(datafields{b}));
+            elseif ~newdim && ismatrix(Data(c).(datafields{b}))
+                varargout{b} = cat(1, varargout{b}, Data(c).(datafields{b}));
+            elseif ~newdim && ~ismatrix(Data(c).(datafields{b}))
+                varargout{b} = cat(2, varargout{b}, Data(c).(datafields{b}));
+            else
+                E.notimplemented(sprintf('concat case: newdim = %d and ndims = %d',newdim,ndims(Data(c).(datafields{b}))));
+            end
         end
     end
 end
