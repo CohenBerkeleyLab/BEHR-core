@@ -38,6 +38,10 @@ switch lower(plttype)
         plot_behr_avg();
     case 'pr-prof'
         [varargout{1}, varargout{2}, varargout{3}, varargout{4}, varargout{5}, varargout{6}] = plot_pseudo_apriori(varargin{:});
+    case 'full-prof'
+        varargout{1} = plot_full_apriori();
+    case 'full-prof-diff'
+        full_apriori_avg_diff(varargin{:});
     case 'cld'
         plot_cloudfrac(varargin{1});
     case 'res'
@@ -1255,6 +1259,8 @@ end
         else
             plot_mode = 'box-comp';
         end
+        start_date = ask_date('Enter the start date');
+        end_date = ask_date('Enter the end date');
         city_lon = -84.39;
         city_lat = 33.775;
         
@@ -1297,8 +1303,13 @@ end
         end
         
         if strcmpi(diff_mode,'all')
+            F_hr = files_in_dates(F_hr,start_date,end_date);
+            F_hy = files_in_dates(F_hy,start_date,end_date);
+            F_mn = files_in_dates(F_mn,start_date,end_date);
             n = numel(F_hy);
         else
+            F_new = files_in_dates(F_new,start_date,end_date);
+            F_old = files_in_dates(F_old,start_date,end_date);
             n = numel(F_new);
         end
         
@@ -2093,6 +2104,242 @@ end
         end
     end
 
+    function avg_prof = plot_full_apriori()
+        prof_type = ask_multichoice('Plot concentrations or shape factors?',{'conc','shape'},'default','conc');
+        apriori_type = ask_multichoice('Use monthly or hybrid profiles?',{'monthly','hybrid','hourly'});
+        quad_bool = ask_multichoice('Divide into quadrants?',{'y','n'});
+        dist_limit = ask_number('Only use pixels within x km of Atlanta? 0 if no','default',0,'testfxn',@(x)x>=0,'testmsg','Value must be >= 0');
+        size_lim_type = ask_multichoice('Limit pixel size by',{'vza','row','none'});
+        switch size_lim_type
+            case 'vza'
+                lim_crit = ask_number('Enter the maximum VZA to use (0 <= x <= 90)','testfxn',@(x) x>=0 && x<=90);
+            case 'row'
+                lim_crit = ask_number('How many rows to exclude from the edge?','testfxn',@(x) x>0);
+            case 'none'
+                lim_crit = [];
+        end
+        start_date = ask_date('Enter the start date');
+        end_date = ask_date('Enter the ending date');
+        
+        quad_bool = strcmpi(quad_bool,'y');
+        
+        omi_clds_vec = [];
+        apriori_mat = [];
+        pres_mat = [];
+        quadrant_vec = [];
+        
+        domain_x = [-87.1, -81.9];
+        domain_y = [31.9, 35.6];
+        
+        city_lon = -84.39;
+        city_lat = 33.775;
+        
+        switch apriori_type
+            case 'monthly'
+                behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';
+            case 'hybrid'
+                behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';
+            case 'hourly'
+                behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost';
+        end
+        behr_files = dir(fullfile(behr_path,'OMI*.mat'));
+        behr_files = files_in_dates(behr_files, start_date, end_date);
+        
+        % Will describe the filtering conditions
+        titlestr = apriori_type;
+        switch size_lim_type
+            case 'vza'
+                titlestr = sprintf('%s, VZA < %f',titlestr,lim_crit);
+            case 'row'
+                titlestr = sprintf('%s, excl. %g edge rows', titlestr,lim_crit);
+        end
+        if dist_limit > 0
+            titlestr = sprintf('%s, w/i %g km', titlestr, dist_limit);
+        end
+        
+        if isDisplay
+            wb=waitbar(0,'Loading files');
+        end
+        for f=1:numel(behr_files)
+            if isDisplay
+                waitbar(f/numel(behr_files));
+            end
+            D = load(fullfile(behr_path,behr_files(f).name));
+            Data = D.Data;
+            for s=1:numel(Data)
+                minloncorn = squeeze(min(Data(s).Loncorn,[],1));
+                maxloncorn = squeeze(max(Data(s).Loncorn,[],1));
+                minlatcorn = squeeze(min(Data(s).Latcorn,[],1));
+                maxlatcorn = squeeze(max(Data(s).Latcorn,[],1));
+                pp = minloncorn >= domain_x(1) & maxloncorn <= domain_x(2) & minlatcorn >= domain_y(1) & maxlatcorn <= domain_y(2);
+                if sum(pp) < 1; 
+                    continue
+                end
+                
+                omi_clouds_in = Data(s).CloudFraction(pp);
+                apriori_in = Data(s).BEHRNO2apriori(:,pp);
+                pres_in = Data(s).BEHRPressureLevels(:,pp);
+                lon_in = Data(s).Longitude(pp);
+                lat_in = Data(s).Latitude(pp);
+                
+                xx = true(size(lon_in));
+                
+                switch size_lim_type
+                    case 'vza'
+                        vza = Data(s).ViewingZenithAngle(pp);
+                        xx(vza > lim_crit) = false;
+                        if f==1
+                            
+                        end
+                    case 'row'
+                        row = Data(s).Row(pp);
+                        xx(row < lim_crit | row > 59-lim_crit) = false;
+                end
+
+                if dist_limit > 0
+                    dist_in = zeros(size(lon_in));
+                    for a=1:numel(lon_in)
+                        dist_in(a) = m_lldist([city_lon, lon_in(a)], [city_lat, lat_in(a)]);
+                    end
+                    xx(dist_in > dist_limit) = false;
+                end
+                
+                % Cut down for distance and pixel size
+                if sum(xx) == 0
+                    continue
+                end
+                
+                omi_clouds_in(~xx) = [];
+                apriori_in(:,~xx) = [];
+                pres_in(:,~xx) = [];
+                lon_in(~xx) = [];
+                lat_in(~xx) = [];
+           
+                if quad_bool
+                    angle_in = atan2d(lat_in - city_lat, lon_in - city_lon);
+                    quadrant_in = size(angle_in);
+                    quadrant_in(angle_in >= 0 & angle_in < 90) = 1;
+                    quadrant_in(angle_in >= 90) = 2;
+                    quadrant_in(angle_in <= -90) = 3;
+                    quadrant_in(angle_in > -90 & angle_in < 0) = 4;
+                else
+                    quadrant_in = ones(size(lon_in));
+                end
+                
+                omi_clds_vec = cat(1, omi_clds_vec, omi_clouds_in(:));
+                apriori_mat = cat(2, apriori_mat, apriori_in);
+                pres_mat = cat(2, pres_mat, pres_in);
+                quadrant_vec = cat(1, quadrant_vec, quadrant_in(:));
+            end
+        end
+        
+        if isDisplay
+            close(wb)
+        end
+        
+        if strcmpi(prof_type,'shape')
+            if isDisplay
+                wb=waitbar(0,'Calculating shape factor');
+            end
+            for a=1:size(apriori_mat,2)
+                if isDisplay
+                    waitbar(a/size(apriori_mat,2))
+                end
+                vcd = integPr2(apriori_mat(:,a), pres_mat(:,a), pres_mat(1,a));
+                apriori_mat(:,a) = apriori_mat(:,a) / vcd;
+            end
+            if isDisplay
+                close(wb)
+            end
+        end
+        
+        if quad_bool
+            q = 4;
+            quad_names = {'NE','NW','SW','SE'};
+        else
+            q = 1;
+            quad_names = {'All'};
+        end
+        
+        nbins = 5;
+        cldfn=cell(1,nbins);
+        cld_ll = nan(1,nbins);
+        cld_ul = nan(1,nbins);
+        clddiv = 1.0/nbins;
+        for a=0:nbins-1;
+            for b=1:q
+                figure;
+                cld_ll(a+1) = a*clddiv;
+                cld_ul(a+1) = (a+1)*clddiv;
+                xx = omi_clds_vec >= cld_ll(a+1) & omi_clds_vec <= cld_ul(a+1) & quadrant_vec == b; % quadrant_in will be all ones if not sorting by quadrant.
+                this_apriori = apriori_mat(:,xx);
+                this_pres = pres_mat(:,xx);
+                for c=1:size(this_pres,2)
+                    line(this_apriori(:,c)*1e9, this_pres(:,c), 'color', [0.5 0.5 0.5]);
+                end
+                cldfn{a+1} = sprintf('cld%d',a*2);
+                avg_prof.(cldfn{a+1}).(quad_names{b}).x = nanmean(this_apriori,2)*1e9;
+                avg_prof.(cldfn{a+1}).(quad_names{b}).y = nanmean(this_pres,2);
+                line(nanmean(this_apriori,2)*1e9, nanmean(this_pres,2), 'color','r','linewidth',3);
+                switch prof_type
+                    case 'shape'
+                        xlabel('Shape factor');
+                    otherwise
+                        xlabel('[NO_2] (ppbv)');
+                end
+                ylabel('Pres (hPa)');
+                set(gca,'fontsize',16);
+                set(gca,'ydir','reverse');
+                if quad_bool
+                    title(sprintf('%s, between %.1f and %.1f (%s quadrant)',titlestr,cld_ll(a+1),cld_ul(a+1),quad_names{b}));
+                else
+                    title(sprintf('%s, between %.1f and %.1f',titlestr,cld_ll(a+1),cld_ul(a+1)));
+                end
+            end
+        end
+        
+        for b=1:q
+            figure;
+            hold on
+            lstr = cell(1,nbins);
+            for a=1:nbins
+                plot(avg_prof.(cldfn{a}).(quad_names{b}).x,avg_prof.(cldfn{a}).(quad_names{b}).y,'linewidth',2);
+                lstr{a} = sprintf('Clds %.1g-%.1g',cld_ll(a),cld_ul(a));
+            end
+            legend(lstr{:});
+            set(gca,'ydir','reverse');
+            title(sprintf('%s, avg. prof (%s quadrant)',titlestr,quad_names{b}));
+        end
+    end
+    
+    function full_apriori_avg_diff(hycld, mncld, relbool)
+        % Takes the structure output from the plot_full_apriori() function
+        % and plots the difference in profile shape or concentration at
+        % each level.
+        if ~exist('relbool','var')
+            relbool = false;
+        end
+        
+        cld_fns = fieldnames(hycld);
+        quad_fns = fieldnames(hycld.(cld_fns{1}));
+        
+        for a=1:numel(quad_fns)
+            figure;
+            for b=1:numel(cld_fns)
+                subplot(1,numel(cld_fns),b);
+                y = hycld.(cld_fns{b}).(quad_fns{a}).y;
+                if relbool
+                    del = reldiff(hycld.(cld_fns{b}).(quad_fns{a}).x, mncld.(cld_fns{b}).(quad_fns{a}).x);
+                else
+                    del = hycld.(cld_fns{b}).(quad_fns{a}).x - mncld.(cld_fns{b}).(quad_fns{a}).x;
+                end
+                plot(del, y, 'k','linewidth',2);
+                set(gca,'ydir','reverse')
+                title(cld_fns{b});
+            end
+            suptitle(quad_fns{a});
+        end
+    end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% OTHER FUNCTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2198,6 +2445,34 @@ end
     end
 
     
+
+end
+
+function files = files_in_dates(files, start_date, end_date)
+% Will remove files outside of the given date range. Dates can be as
+% datenumbers or strings. Right now assumes the date in the filename is
+% yyyymmdd or yyyy-mm-dd
+E = JLLErrors;
+
+file_dates = nan(size(files));
+for a=1:numel(files)
+    [s,e] = regexp(files(a).name,'\d\d\d\d\d\d\d\d');
+    if ~isempty(s)
+        file_dates(a) = datenum(files(a).name(s:e),'yyyymmdd');
+    else
+        [s,e] = regexp(files(a).name,'\d\d\d\d-\d\d-\d\d');
+        if isempty(s)
+            E.callError('unknown_date_format','Cannot find the file''s date in the file name')
+        end
+        file_dates(a) = datenum(files(a).name(s:e),'yyyy-mm-dd');
+    end
+end
+
+sdate = datenum(start_date);
+edate = datenum(end_date);
+
+xx = file_dates >= sdate & file_dates <= edate;
+files = files(xx);
 
 end
 
