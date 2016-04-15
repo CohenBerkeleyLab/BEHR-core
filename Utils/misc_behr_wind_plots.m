@@ -38,14 +38,18 @@ switch lower(plttype)
         plot_behr_avg();
     case 'pr-prof'
         [varargout{1}, varargout{2}, varargout{3}, varargout{4}, varargout{5}, varargout{6}] = plot_pseudo_apriori(varargin{:});
-    case 'full-prof'
-        varargout{1} = plot_full_apriori();
+    case 'ens-prof'
+        varargout{1} = plot_ens_apriori();
     case 'full-prof-diff'
         full_apriori_avg_diff(varargin{:});
     case 'cld'
         plot_cloudfrac(varargin{1});
     case 'res'
         plot_diff_resolutions();
+    case 'cat-cld-bins'
+        varargout{1} = cat_cloud_frac_bins(varargin{:});
+    case 'del-shape-vcd'
+        del_shape_vs_vcd();
     otherwise
         fprintf('plttype not recognized\n');
 end
@@ -1251,11 +1255,11 @@ end
     end
 
     function plot_pseudo_diff_timeser()
-        allowed_diffs = {'hr-hy','hy-mn','hr-mn','hy-avg','all'};
+        allowed_diffs = {'hr-hy','hy-mn','hr-mn','hy-avg','avg-mn','all'};
         diff_mode = ask_multichoice('Which difference to consider; hourly vs hybrid or hybrid vs monthly?', allowed_diffs);
         if ~strcmpi(diff_mode,'all')
-            allowed_modes = {'box','dist','scatter-dist','scatter-dist-wbox','scatter-angle','scatter-angle-wbox','pcolor','pcolor-med','combo'};
-            plot_mode = ask_multichoice('Which type of plot do you want:', allowed_modes);
+            allowed_modes = {'box','dist','scatter-dist','scatter-dist-wbox','scatter-angle','scatter-angle-wbox','pcolor','pcolor-med','pcolor-apri','pcolor-apri-stdp','combo'};
+            plot_mode = ask_multichoice(sprintf('Which type of plot do you want:\n'), allowed_modes);
         else
             plot_mode = 'box-comp';
         end
@@ -1282,6 +1286,11 @@ end
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hr-mn'
                 new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                F_new = dir(fullfile(new_dir,'OMI*.mat'));
+                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                F_old = dir(fullfile(old_dir,'OMI*.mat'));
+            case 'avg-mn'
+                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
                 old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
@@ -1333,7 +1342,29 @@ end
             else
                 new = load(fullfile(new_dir, F_new(a).name));
                 base = load(fullfile(old_dir, F_old(a).name));
-                del = (new.Data.BEHRAMFTrop ./ base.Data.BEHRAMFTrop - 1)*100;
+                if ~isempty(regexp(plot_mode,'pcolor-apri','once'))
+                    new_prof = new.Data.BEHRNO2apriori;
+                    base_prof = base.Data.BEHRNO2apriori;
+                    if strcmpi(plot_mode,'pcolor-apri-stdp')
+                        std_p = BEHR_std_pres;
+                        new_pres = new.Data.BEHRPressureLevels;
+                        new_prof_tmp = nan(size(new_prof)-[2 0 0]);
+                        base_pres = base.Data.BEHRPressureLevels;
+                        base_prof_tmp = nan(size(base_prof)-[2 0 0]);
+                        for b=1:numel(new.Data.Longitude)
+                            xx = ismember(new_pres(:,b),std_p);
+                            new_prof_tmp(:,b) = new_prof(xx,b);
+                            xx = ismember(base_pres(:,b),std_p);
+                            base_prof_tmp(:,b) = base_prof(xx,b);
+                        end
+                        new_prof = new_prof_tmp;
+                        base_prof = base_prof_tmp;
+                    end
+                    del = new_prof - base_prof;
+                    del = squeeze(nansum2(del,1));
+                else
+                    del = (new.Data.BEHRAMFTrop ./ base.Data.BEHRAMFTrop - 1)*100;
+                end
                 if a == 1
                     delmat = nan(numel(del), numel(F_new));
                     if strcmp(plot_mode, 'dist')
@@ -1359,13 +1390,15 @@ end
             close(wb);
         end
         
+        
+        
         figure;
         if strcmp(plot_mode,'box')
             boxplot(delmat);
             xlab = get(gca,'xtick');
             set(gca,'xtick',[xlab(1), xlab(end)]);
             set(gca,'xticklabels',{datestr(dvec(1),'yyyy-mm-dd'), datestr(dvec(end),'yyyy-mm-dd')});
-            ylabel('% difference full vs. hybrid');
+            ylabel('% difference AMF');
         elseif strcmp(plot_mode, 'dist')
             dvec = repmat(dvec,size(delmat,1),1);
             scatter(dvec(:), distmat(:), 16, delmat(:));
@@ -1376,7 +1409,7 @@ end
             set(gca,'xtick',[xlab(1), xlab(end)]);
             set(gca,'xticklabels',[distlabels(1), distlabels(end)]);
             xlabel('Pixel dist. from Atlanta (km)');
-            ylabel('% difference full vs. hybrid');
+            ylabel('% difference AMF');
         elseif ~isempty(regexp(plot_mode,'scatter', 'once'))
             if ~isempty(regexp(plot_mode,'dist','once'))
                 scatter(distmat(:), delmat(:), 16, 'k');
@@ -1393,6 +1426,13 @@ end
                 ylim(yl);
             end
         elseif ~isempty(regexp(plot_mode, 'pcolor', 'once'))
+            if ~isempty(regexp(plot_mode,'pcolor-apri','once'))
+                cbstr1 = 'column sum abs difference apriori';
+                cbstr2 = '1\sigma sum \Delta apriori';
+            else
+                cbstr1 = 'Mean %\Delta AMF';
+                cbstr2 = '1\sigma %\Delta AMF';
+            end
             if strcmpi(plot_mode,'pcolor-med')
                 delmatmean = reshape(nanmedian(delmat,2), size(new.Data.Longitude));
             else
@@ -1402,7 +1442,7 @@ end
             pcolor(squeeze(new.Data.Loncorn(1,:,:)),squeeze(new.Data.Latcorn(1,:,:)),delmatmean);
             set(gca,'fontsize',20);
             cb=colorbar;
-            cb.Label.String = 'Mean %\Delta AMF';
+            cb.Label.String = cbstr1;
             cb.FontSize = 20;
             cmax = max(abs(cb.Limits));
             caxis([-cmax, cmax]);
@@ -1411,7 +1451,7 @@ end
             figure; 
             pcolor(squeeze(new.Data.Loncorn(1,:,:)),squeeze(new.Data.Latcorn(1,:,:)),delmatstd);
             cb=colorbar;
-            cb.Label.String = '1\sigma %\Delta AMF';
+            cb.Label.String = cbstr2;
             cb.FontSize = 20;
             caxis([0 max(cb.Limits)]);
             colormap('jet')
@@ -1641,6 +1681,8 @@ end
 
     function [new_apriori, base_apriori, new_pres, base_pres, lon, lat] = plot_pseudo_apriori(new_apriori, base_apriori)
         plottype = ask_multichoice('What type of plot to make?',{'slice','profshape'});
+        shape_bool = ask_multichoice('Convert to shape factor?',{'y','n'});
+        shape_bool = strcmpi(shape_bool,'y');
         if strcmpi(plottype, 'profshape')
             while true
                 indstr = input('Enter the indicies to plot the profiles for: ', 's');
@@ -1658,14 +1700,17 @@ end
         end
         
         if nargin < 1
-            allowed_apriori={'hourly','hybrid','monthly'};
+            allowed_apriori={'hourly','hybrid','hybrid-avg','monthly'};
             new_case = ask_multichoice('Which apriori is the new case?',allowed_apriori,'default','hybrid');
             base_case = ask_multichoice('Which apriori is the base case?',allowed_apriori,'default','monthly');
+            std_p_bool = ask_multichoice('Use only the standard pressures?',{'y','n'});
+            std_p_bool = strcmpi(std_p_bool,'y');
             start_date = ask_date('Enter the start date');
             end_date = ask_date('Enter the end date');
         end
         hourly_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
         hybrid_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+        avg_hybrid_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
         monthly_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
         
         switch new_case
@@ -1673,6 +1718,8 @@ end
                 new_path = hourly_path;
             case 'hybrid'
                 new_path = hybrid_path;
+            case 'hybrid-avg'
+                new_path = avg_hybrid_path;
             case 'monthly'
                 new_path = monthly_path;
         end
@@ -1681,15 +1728,33 @@ end
                 base_path = hourly_path;
             case 'hybrid'
                 base_path = hybrid_path;
+            case 'hybrid-avg'
+                base_path = avg_hybrid_path;
             case 'monthly'
                 base_path = monthly_path;
         end
         
         if nargin < 1
-            [new_apriori, new_pres, loncorn, latcorn] = concat_files(new_path,'OMI*.mat',start_date,end_date,{'Data','BEHRNO2apriori'; 'Data','BEHRPressureLevels'; 'Data','Loncorn'; 'Data','Latcorn'});
-            [base_apriori, base_pres] = concat_files(base_path,'OMI*.mat',start_date,end_date,{'Data','BEHRNO2apriori'; 'Data', 'BEHRPressureLevels'});
+            [new_apriori, new_pres, loncorn, latcorn, new_terpres] = concat_files(new_path,'OMI*.mat',start_date,end_date,{'Data','BEHRNO2apriori'; 'Data','BEHRPressureLevels'; 'Data','Loncorn'; 'Data','Latcorn'; 'Data','GLOBETerpres'});
+            [base_apriori, base_pres, base_terpres] = concat_files(base_path,'OMI*.mat',start_date,end_date,{'Data','BEHRNO2apriori'; 'Data', 'BEHRPressureLevels'; 'Data','GLOBETerpres'});
         end
-
+        
+        if std_p_bool
+            [new_apriori, new_pres] = remove_interp_pres(new_apriori, new_pres);
+            [base_apriori, base_pres] = remove_interp_pres(base_apriori, base_pres);
+        end
+        
+        if shape_bool
+            sz = size(new_apriori);
+            for a=1:prod(sz(2:end))
+                vcd = integPr2(new_apriori(:,a), new_pres(:,a), new_terpres(a)); 
+                new_apriori(:,a) = new_apriori(:,a) / vcd;
+            end
+            for a=1:prod(sz(2:end))
+                vcd = integPr2(base_apriori(:,a), base_pres(:,a), base_terpres(a)); 
+                base_apriori(:,a) = base_apriori(:,a) / vcd;
+            end
+        end
         
         % use latcorn to get the pixels in the right place when plotting
         % with pcolor.
@@ -2104,57 +2169,83 @@ end
         end
     end
 
-    function avg_prof = plot_full_apriori()
+    function avg_prof = plot_ens_apriori()
         prof_type = ask_multichoice('Plot concentrations or shape factors?',{'conc','shape'},'default','conc');
-        apriori_type = ask_multichoice('Use monthly or hybrid profiles?',{'monthly','hybrid','hourly'});
-        quad_bool = ask_multichoice('Divide into quadrants?',{'y','n'});
-        dist_limit = ask_number('Only use pixels within x km of Atlanta? 0 if no','default',0,'testfxn',@(x)x>=0,'testmsg','Value must be >= 0');
-        size_lim_type = ask_multichoice('Limit pixel size by',{'vza','row','none'});
-        switch size_lim_type
+        sw_bool = ask_multichoice('Convolve with scattering weights?',{'y','n'});
+        sw_bool = strcmpi(sw_bool,'y');
+        ret_type = ask_multichoice('Which retrieval?',{'full','pseudo'});
+        if strcmpi(ret_type,'full')
+            allowed_apriori = {'monthly','hybrid','hourly'};
+        elseif strcmpi(ret_type,'pseudo')
+            allowed_apriori = {'monthly','hybrid','hourly','hybrid-avg'};
+        end
+        stdP_only_bool = ask_multichoice('Use only the standard pressures?',{'y','n'});
+        stdP_only_bool = strcmpi(stdP_only_bool,'y');
+        apriori_type = ask_multichoice('Which apriori profiles?',allowed_apriori);
+        options.quad_bool = ask_multichoice('Divide into quadrants?',{'y','n'});
+        options.dist_limit = ask_number('Only use pixels within x km of Atlanta? 0 if no','default',0,'testfxn',@(x)x>=0,'testmsg','Value must be >= 0');
+        options.size_lim_type = ask_multichoice('Limit pixel size by',{'vza','row','none'});
+        switch options.size_lim_type
             case 'vza'
-                lim_crit = ask_number('Enter the maximum VZA to use (0 <= x <= 90)','testfxn',@(x) x>=0 && x<=90);
+                options.lim_crit = ask_number('Enter the maximum VZA to use (0 <= x <= 90)','testfxn',@(x) x>=0 && x<=90);
             case 'row'
-                lim_crit = ask_number('How many rows to exclude from the edge?','testfxn',@(x) x>0);
+                options.lim_crit = ask_number('How many rows to exclude from the edge?','testfxn',@(x) x>0);
             case 'none'
-                lim_crit = [];
+                options.lim_crit = [];
         end
         start_date = ask_date('Enter the start date');
         end_date = ask_date('Enter the ending date');
         
-        quad_bool = strcmpi(quad_bool,'y');
+        options.quad_bool = strcmpi(options.quad_bool,'y');
         
         omi_clds_vec = [];
         apriori_mat = [];
         pres_mat = [];
+        sw_mat = [];
+        terpres_vec = [];
         quadrant_vec = [];
         
-        domain_x = [-87.1, -81.9];
-        domain_y = [31.9, 35.6];
+        domain.x = [-87.1, -81.9];
+        domain.y = [31.9, 35.6];
         
-        city_lon = -84.39;
-        city_lat = 33.775;
+        options.center_lon = -84.39;
+        options.center_lat = 33.775;
         
-        switch apriori_type
-            case 'monthly'
-                behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';
-            case 'hybrid'
-                behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';
-            case 'hourly'
-                behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost';
+        switch ret_type
+            case 'full'
+                switch apriori_type
+                    case 'monthly'
+                        behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';
+                    case 'hybrid'
+                        behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';
+                    case 'hourly'
+                        behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost';
+                end
+            case 'pseudo'
+                switch apriori_type
+                    case 'monthly'
+                        behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                    case 'hybrid'
+                        behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                    case 'hourly'
+                        behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                    case 'hybrid-avg'
+                        behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
+                end
         end
         behr_files = dir(fullfile(behr_path,'OMI*.mat'));
         behr_files = files_in_dates(behr_files, start_date, end_date);
         
         % Will describe the filtering conditions
         titlestr = apriori_type;
-        switch size_lim_type
+        switch options.size_lim_type
             case 'vza'
-                titlestr = sprintf('%s, VZA < %f',titlestr,lim_crit);
+                titlestr = sprintf('%s, VZA < %f',titlestr,options.lim_crit);
             case 'row'
-                titlestr = sprintf('%s, excl. %g edge rows', titlestr,lim_crit);
+                titlestr = sprintf('%s, excl. %g edge rows', titlestr,options.lim_crit);
         end
-        if dist_limit > 0
-            titlestr = sprintf('%s, w/i %g km', titlestr, dist_limit);
+        if options.dist_limit > 0
+            titlestr = sprintf('%s, w/i %g km', titlestr, options.dist_limit);
         end
         
         if isDisplay
@@ -2167,68 +2258,23 @@ end
             D = load(fullfile(behr_path,behr_files(f).name));
             Data = D.Data;
             for s=1:numel(Data)
-                minloncorn = squeeze(min(Data(s).Loncorn,[],1));
-                maxloncorn = squeeze(max(Data(s).Loncorn,[],1));
-                minlatcorn = squeeze(min(Data(s).Latcorn,[],1));
-                maxlatcorn = squeeze(max(Data(s).Latcorn,[],1));
-                pp = minloncorn >= domain_x(1) & maxloncorn <= domain_x(2) & minlatcorn >= domain_y(1) & maxlatcorn <= domain_y(2);
-                if sum(pp) < 1; 
-                    continue
+                [in, quadrant_in] = subset_BEHR_pixels(Data(s), domain.x, domain.y, options);
+                omi_clouds_in = Data(s).CloudFraction(in);
+                apriori_in = Data(s).BEHRNO2apriori(:,in);
+                pres_in = Data(s).BEHRPressureLevels(:,in);
+                sw_in = Data(s).BEHRScatteringWeights(:,in);
+                terpres_in = Data(s).GLOBETerpres(in);
+                
+                if stdP_only_bool
+                    [apriori_in] = remove_interp_pres(apriori_in, pres_in);
+                    [sw_in, pres_in] = remove_interp_pres(sw_in, pres_in);
                 end
-                
-                omi_clouds_in = Data(s).CloudFraction(pp);
-                apriori_in = Data(s).BEHRNO2apriori(:,pp);
-                pres_in = Data(s).BEHRPressureLevels(:,pp);
-                lon_in = Data(s).Longitude(pp);
-                lat_in = Data(s).Latitude(pp);
-                
-                xx = true(size(lon_in));
-                
-                switch size_lim_type
-                    case 'vza'
-                        vza = Data(s).ViewingZenithAngle(pp);
-                        xx(vza > lim_crit) = false;
-                        if f==1
-                            
-                        end
-                    case 'row'
-                        row = Data(s).Row(pp);
-                        xx(row < lim_crit | row > 59-lim_crit) = false;
-                end
-
-                if dist_limit > 0
-                    dist_in = zeros(size(lon_in));
-                    for a=1:numel(lon_in)
-                        dist_in(a) = m_lldist([city_lon, lon_in(a)], [city_lat, lat_in(a)]);
-                    end
-                    xx(dist_in > dist_limit) = false;
-                end
-                
-                % Cut down for distance and pixel size
-                if sum(xx) == 0
-                    continue
-                end
-                
-                omi_clouds_in(~xx) = [];
-                apriori_in(:,~xx) = [];
-                pres_in(:,~xx) = [];
-                lon_in(~xx) = [];
-                lat_in(~xx) = [];
-           
-                if quad_bool
-                    angle_in = atan2d(lat_in - city_lat, lon_in - city_lon);
-                    quadrant_in = size(angle_in);
-                    quadrant_in(angle_in >= 0 & angle_in < 90) = 1;
-                    quadrant_in(angle_in >= 90) = 2;
-                    quadrant_in(angle_in <= -90) = 3;
-                    quadrant_in(angle_in > -90 & angle_in < 0) = 4;
-                else
-                    quadrant_in = ones(size(lon_in));
-                end
-                
+  
                 omi_clds_vec = cat(1, omi_clds_vec, omi_clouds_in(:));
                 apriori_mat = cat(2, apriori_mat, apriori_in);
                 pres_mat = cat(2, pres_mat, pres_in);
+                sw_mat = cat(2, sw_mat, sw_in);
+                terpres_vec = cat(1, terpres_vec, terpres_in);
                 quadrant_vec = cat(1, quadrant_vec, quadrant_in(:));
             end
         end
@@ -2245,7 +2291,7 @@ end
                 if isDisplay
                     waitbar(a/size(apriori_mat,2))
                 end
-                vcd = integPr2(apriori_mat(:,a), pres_mat(:,a), pres_mat(1,a));
+                vcd = integPr2(apriori_mat(:,a), pres_mat(:,a), terpres_vec(a));
                 apriori_mat(:,a) = apriori_mat(:,a) / vcd;
             end
             if isDisplay
@@ -2253,7 +2299,11 @@ end
             end
         end
         
-        if quad_bool
+        if sw_bool
+            apriori_mat = apriori_mat .* sw_mat;
+        end
+        
+        if options.quad_bool
             q = 4;
             quad_names = {'NE','NW','SW','SE'};
         else
@@ -2290,7 +2340,7 @@ end
                 ylabel('Pres (hPa)');
                 set(gca,'fontsize',16);
                 set(gca,'ydir','reverse');
-                if quad_bool
+                if options.quad_bool
                     title(sprintf('%s, between %.1f and %.1f (%s quadrant)',titlestr,cld_ll(a+1),cld_ul(a+1),quad_names{b}));
                 else
                     title(sprintf('%s, between %.1f and %.1f',titlestr,cld_ll(a+1),cld_ul(a+1)));
@@ -2302,13 +2352,26 @@ end
             figure;
             hold on
             lstr = cell(1,nbins);
+            
+            overall_avg_x = [];
+            overall_avg_y = [];
+            
             for a=1:nbins
                 plot(avg_prof.(cldfn{a}).(quad_names{b}).x,avg_prof.(cldfn{a}).(quad_names{b}).y,'linewidth',2);
+                overall_avg_x = cat(2, overall_avg_x, avg_prof.(cldfn{a}).(quad_names{b}).x);
+                overall_avg_y = cat(2, overall_avg_y, avg_prof.(cldfn{a}).(quad_names{b}).y);
                 lstr{a} = sprintf('Clds %.1g-%.1g',cld_ll(a),cld_ul(a));
             end
             legend(lstr{:});
             set(gca,'ydir','reverse');
             title(sprintf('%s, avg. prof (%s quadrant)',titlestr,quad_names{b}));
+            
+            figure;
+            plot(overall_avg_x, overall_avg_y, 'k-', 'linewidth', 2);
+            set(gca,'ydir','reverse');
+            title(sprintf('%s, overall avg. prof (%s quadrant)',titlestr,quad_names{b}));
+            avg_prof.Overall.(quad_names{b}).x = overall_avg_x;
+            avg_prof.Overall.(quad_names{b}).y = overall_avg_y;
         end
     end
     
@@ -2322,23 +2385,313 @@ end
         
         cld_fns = fieldnames(hycld);
         quad_fns = fieldnames(hycld.(cld_fns{1}));
+        quad_avg_hy_x = cell(1,4);
+        quad_avg_hy_y = cell(1,4);
+        quad_avg_mn_x = cell(1,4);
+        %quad_avg_mn_y = cell(1,4);
         
         for a=1:numel(quad_fns)
             figure;
             for b=1:numel(cld_fns)
+                % store the average profiles for each cloud subdivision
+                quad_avg_hy_x{a} = cat(2,quad_avg_hy_x{a},hycld.(cld_fns{b}).(quad_fns{a}).x);
+                quad_avg_hy_y{a} = cat(2,quad_avg_hy_y{a},hycld.(cld_fns{b}).(quad_fns{a}).y);
+                quad_avg_mn_x{a} = cat(2,quad_avg_mn_x{a},mncld.(cld_fns{b}).(quad_fns{a}).x);
+                %quad_avg_mn_y{a} = cat(2,quad_avg_mn_y{a},mncld.(cld_fns{b}).(quad_fns{a}).y);
+                
                 subplot(1,numel(cld_fns),b);
+                hy_x = nanmean(hycld.(cld_fns{b}).(quad_fns{a}).x,2);
+                mn_x = nanmean(mncld.(cld_fns{b}).(quad_fns{a}).x,2);
                 y = hycld.(cld_fns{b}).(quad_fns{a}).y;
                 if relbool
-                    del = reldiff(hycld.(cld_fns{b}).(quad_fns{a}).x, mncld.(cld_fns{b}).(quad_fns{a}).x);
+                    del = reldiff(hy_x, mn_x)*100;
                 else
-                    del = hycld.(cld_fns{b}).(quad_fns{a}).x - mncld.(cld_fns{b}).(quad_fns{a}).x;
+                    del = hy_x - mn_x;
                 end
                 plot(del, y, 'k','linewidth',2);
                 set(gca,'ydir','reverse')
                 title(cld_fns{b});
             end
             suptitle(quad_fns{a});
+            
+            % plot the overall average, if it's not in the structure
+            % already
+            if ~ismember('Overall',cld_fns)
+                hy_x = nanmean(quad_avg_hy_x{a},2);
+                hy_y = nanmean(quad_avg_hy_y{a},2);
+                mn_x = nanmean(quad_avg_mn_x{a},2);
+                if relbool
+                    del = reldiff(hy_x, mn_x);
+                    xstr = 'Rel. difference';
+                else
+                    del = hy_x - mn_x;
+                    xstr = 'Abs. difference';
+                end
+                figure;
+                plot(del, hy_y, 'k-','linewidth',2);
+                set(gca,'ydir','reverse')
+                xlabel(xstr);
+                ylabel('Pressure (hPa)');
+                title(sprintf('%s - avg over all cldfrac',quad_fns{a}));
+            end
         end
+    end
+
+    function del_shape_vs_vcd()
+        % Get the paths for the desired retrievals
+        [new_path, base_path, ret_type, new_ret, base_ret] = return_paths();
+        
+        % For pseudo retrievals, we can plot the changes for a single
+        % pixel, since it's a fixed grid.
+        if strcmpi(ret_type,'pseudo')
+            inds = input('Enter index values to plot for one pixel, or leave blank to subset: ','s');
+        else
+            inds = '';
+        end
+        
+        if isempty(inds)
+            % If not doing one pixel, give the user the chance to subset the
+            % pixels.
+            subset_bool = true;
+            options = subset_BEHR_pixels();
+            quadrant = ask_multichoice('Which quadrant to plot for? (This will override the previous quandrant answer.)',{'NE','NW','SW','SE','All','Don''t divide'},'list',true);
+            if strcmpi(quadrant,'Don''t divide')
+                options.quad_bool = false;
+            else
+                options.quad_bool = true;
+            end
+        else
+            % Parse the indicies into a 2-element vector
+            subset_bool = false;
+            inds = str2double(strsplit(inds));
+            if numel(inds) ~= 2
+                E.badinput('Input should be two numbers separated by a space')
+            end
+        end
+        
+        % Plot a scatter plot of %change in shape factor vs. abs. change in
+        % VCD for each level, or a histogram of those changes.
+        plot_type = ask_multichoice('Which plot type?',{'scatter','hist','cumdist'});
+        if strcmpi(plot_type,'scatter')
+            allowed_vars = {'shape','vcd','conc','amf'};
+            x_var = ask_multichoice(sprintf('Plot %%delta shape, delta VCD, %%delta [NO_2] or %%delta AMF? on x-axis?'),allowed_vars);
+            y_var = ask_multichoice('And on the y-axis?', allowed_vars(~ismember(allowed_vars, x_var)));
+        else
+            x_var = 'vcd';
+            y_var = 'shape';
+        end
+        start_date = ask_date('Enter the starting date');
+        end_date = ask_date('Enter the ending date');
+        
+        domain_lonlim = [-87.1 -81.9];
+        domain_latlim = [31.9 35.6];
+        
+        F_new = files_in_dates(dir(fullfile(new_path, 'OMI*.mat')),start_date,end_date);
+        F_base = files_in_dates(dir(fullfile(base_path, 'OMI*.mat')),start_date,end_date);
+        
+        if numel(F_new) ~= numel(F_base)
+            E.sizeMismatch('F_new','F_base');
+        end
+        
+        apriori_new_mat = [];
+        pres_new_mat = [];
+        amf_new_vec = [];
+        terpres_new_vec = [];
+        
+        apriori_base_mat = [];
+        pres_base_mat = [];
+        amf_base_vec = [];
+        terpres_base_vec = [];
+        
+        quad_vec = [];
+        
+        for a=1:numel(F_new)
+            N = load(fullfile(new_path,F_new(a).name),'Data');
+            B = load(fullfile(base_path,F_base(a).name),'Data');
+            if numel(N.Data) ~= numel(B.Data)
+                E.sizeMismatch('N.Data','B.Data');
+            end
+            for s=1:numel(N.Data)
+                apriori_new = N.Data(s).BEHRNO2apriori;
+                pres_new = N.Data(s).BEHRPressureLevels;
+                amf_new = N.Data(s).BEHRAMFTrop;
+                terpres_new = N.Data(s).GLOBETerpres;
+        
+                [apriori_new, pres_new] = remove_interp_pres(apriori_new, pres_new);
+                
+                apriori_base = B.Data(s).BEHRNO2apriori;
+                pres_base = B.Data(s).BEHRPressureLevels;
+                amf_base = B.Data(s).BEHRAMFTrop;
+                terpres_base = B.Data(s).GLOBETerpres;
+        
+                [apriori_base, pres_base] = remove_interp_pres(apriori_base, pres_base);
+                
+                % Assume that both the new and old Data struct have the
+                % same pixels.
+                if subset_bool
+                    [in, quads] = subset_BEHR_pixels(N.Data, domain_lonlim, domain_latlim, options);
+                    
+                    apriori_new_mat = cat(2, apriori_new_mat, apriori_new(:,in));
+                    pres_new_mat = cat(2, pres_new_mat, pres_new(:,in));
+                    amf_new_vec = cat(1, amf_new_vec, amf_new(in));
+                    terpres_new_vec = cat(1, terpres_new_vec, terpres_new(in));
+                    
+                    apriori_base_mat = cat(2, apriori_base_mat, apriori_base(:,in));
+                    pres_base_mat = cat(2, pres_base_mat, pres_base(:,in));
+                    amf_base_vec = cat(1, amf_base_vec, amf_base(in));
+                    terpres_base_vec = cat(1, terpres_base_vec, terpres_base(in));
+                    quad_vec = cat(1, quad_vec, quads(:));
+                else
+                    apriori_new_mat = cat(2, apriori_new_mat, apriori_new(:,inds(1),inds(2)));
+                    pres_new_mat = cat(2, pres_new_mat, pres_new(:,inds(1),inds(2)));
+                    amf_new_vec = cat(2, amf_new_vec, amf_new(inds(1),inds(2)));
+                    terpres_new_vec = cat(2, terpres_new_vec, terpres_new(inds(1),inds(2)));
+                    
+                    apriori_base_mat = cat(2, apriori_base_mat, apriori_base(:,inds(1),inds(2)));
+                    pres_base_mat = cat(2, pres_base_mat, pres_base(:,inds(1),inds(2)));
+                    amf_base_vec = cat(2, amf_base_vec, amf_base(inds(1),inds(2)));
+                    terpres_base_vec = cat(2, terpres_base_vec, terpres_base(inds(1),inds(2)));
+                    quad_vec = cat(1, quad_vec,1); % if plotting one pixel, just make it a default quad number so that all of them are accepted during plotting
+                end
+                
+            end
+        end
+        % Compute the VCDs, simultaneously converting to shape factors.
+        vcd_new_vec = nan(size(terpres_new_vec));
+        apriori_new_shape_mat = nan(size(apriori_new_mat));
+        for a=1:numel(vcd_new_vec)
+            vcd_new_vec(a) = integPr2(apriori_new_mat(:,a), pres_new_mat(:,a), terpres_new_vec(a));
+            apriori_new_shape_mat(:,a) = apriori_new_mat(:,a) / vcd_new_vec(a);
+        end
+        vcd_base_vec = nan(size(terpres_base_vec));
+        apriori_base_shape_mat = nan(size(apriori_new_mat));
+        for a=1:numel(vcd_base_vec)
+            vcd_base_vec(a) = integPr2(apriori_base_mat(:,a), pres_base_mat(:,a), terpres_base_vec(a));
+            apriori_base_shape_mat(:,a) = apriori_base_mat(:,a) / vcd_base_vec(a);
+        end
+        
+        % Set which quadrants to make plots for
+        quad_names = {'NE','NW','SW','SE'};
+        if ~subset_bool
+            q1 = 1;
+            q2 = 1;
+        elseif strcmpi(quadrant,'All')
+            q1 = 1;
+            q2 = 4;
+        elseif strcmpi(quadrant,'Don''t divide')
+            % the quadrants vector will just be all 1s if the data wasn't
+            % subset into quadrants.
+            quad_names = {'All quadrants'};
+            q1 = 1;
+            q2 = 1;
+        else
+            q1 = find(strcmpi(quadrant,quad_names));
+            q2 = q1;
+        end
+        
+        std_p = BEHR_std_pres;
+        for q=q1:q2
+            xx = quad_vec == q;
+            if any(ismember({'shape','conc'},{x_var,y_var}))
+                n = size(apriori_new_mat,1);
+            else
+                n=1;
+            end
+            for a=1:n
+                delvcd = vcd_new_vec(xx) - vcd_base_vec(xx);
+                vcdstr = '\Delta a priori VCD';
+                delconc = reldiff(apriori_new_mat(a,xx), apriori_base_mat(a,xx), true)*100;
+                concstr = '%\Delta a priori [NO_2]';
+                delamf = reldiff(amf_new_vec(xx), amf_base_vec(xx), true)*100;
+                amfstr = '%\Delta AMF';
+                delshape = reldiff(apriori_new_shape_mat(a,xx), apriori_base_shape_mat(a,xx),true)*100;
+                shapestr = '%\Delta a priori shape factor';
+                switch x_var
+                    case 'vcd'
+                        delx = delvcd;
+                        xstr = vcdstr;
+                    case 'conc'
+                        delx = delconc;
+                        xstr = concstr;
+                    case 'amf'
+                        delx = delamf;
+                        xstr = amfstr;
+                    case 'shape'
+                        delx = delshape;
+                        xstr = shapestr;
+                end
+                switch y_var
+                    case 'vcd'
+                        dely = delvcd;
+                        ystr = vcdstr;
+                    case 'conc'
+                        dely = delconc;
+                        ystr = concstr;
+                    case 'amf'
+                        dely = delamf;
+                        ystr = amfstr;
+                    case 'shape'
+                        dely = delshape;
+                        ystr = shapestr;
+                end
+                if all(isnan(dely)) || all(isnan(delx));
+                    continue
+                end
+                figure;
+                switch plot_type
+                    case 'scatter'
+                        scatter(delx, dely);
+                        xlabel(xstr);
+                        ylabel(ystr);
+                        xl = get(gca,'xlim');
+                        l(1) = line(xl, repmat(nanmean(dely),1,2), 'color','k','linewidth',2,'linestyle','--');
+                        l(2) = line(xl, repmat(nanmedian(dely),1,2),'color','b','linewidth',2,'linestyle',':');
+                        legend(l',{'Mean','Median'});
+                    case 'hist'
+                        hist(dely,20)
+                        xlabel(ystr);
+                        yl = get(gca,'ylim');
+                        l = line(repmat(nanmean(dely),1,2),yl,'color','k','linewidth',2,'linestyle','--');
+                        legend(l,'Mean');
+                    case 'cumdist'
+                        cumdist(dely,20,'color','b','linewidth',3)
+                        xlabel(ystr);
+                        yl = get(gca,'ylim');
+                        l = line(repmat(nanmean(dely),1,2),yl,'color','k','linewidth',2,'linestyle','--');
+                        legend(l,'Mean');
+                end
+                if n>1
+                    title(sprintf('%s vs %s, %d hPa - %s', new_ret, base_ret, std_p(a), quad_names{q}));
+                else
+                    title(sprintf('%s vs %s - %s', new_ret, base_ret, quad_names{q}));
+                end
+            end
+            if ismember(plot_type,{'hist','cumdist'})
+                figure;
+                switch plot_type
+                    case 'hist'
+                        hist(delx,20)
+                    case 'cumdist'
+                        cumdist(delx,20,'color','b','linewidth',3)
+                end
+                xlabel('Abs. \Delta VCD new - base');
+                l = line(repmat(nanmean(delx),1,2),yl,'color','k','linewidth',2,'linestyle','--');
+                legend(l,'Mean');
+                title('Absdiff VCD');
+            
+            end
+        end
+        
+        % Plot the pixel in question so we know where we are
+        if ~subset_bool
+            lon = squeeze(N.Data.Loncorn(1,:,:));
+            lat = squeeze(N.Data.Latcorn(1,:,:));
+            location = zeros(size(lon));
+            location(inds(1), inds(2)) = 1;
+            figure; pcolor(lon,lat,location);
+            line(-84.39,33.775,'marker','p','markersize',20,'color','k','linestyle','none')
+        end
+        
     end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% OTHER FUNCTIONS %%%%%
@@ -2445,7 +2798,20 @@ end
     end
 
     
-
+    function avg_prof = cat_cloud_frac_bins(avg_prof)
+        cldfn = fieldnames(avg_prof);
+        quad_names = fieldnames(avg_prof.(cldfn{1}));
+        for b=1:numel(quad_names)
+            overall_avg_x = [];
+            overall_avg_y = [];
+            for a=1:numel(cldfn)
+                overall_avg_x = cat(2, overall_avg_x, avg_prof.(cldfn{a}).(quad_names{b}).x);
+                overall_avg_y = cat(2, overall_avg_y, avg_prof.(cldfn{a}).(quad_names{b}).y);
+            end
+            avg_prof.Overall.(quad_names{b}).x = overall_avg_x;
+            avg_prof.Overall.(quad_names{b}).y = overall_avg_y;
+        end
+    end
 end
 
 function files = files_in_dates(files, start_date, end_date)
@@ -2537,5 +2903,103 @@ end
 
 if isDisplay
     close(wb)
+end
+end
+
+function utchrs = parse_apriori_mode(ap_mode)
+% Returns a matrix of the UTC hours defined in the BEHRaprioriMode field
+% Pass the string from that field as the input or one element of the Data
+% structure
+
+E = JLLErrors;
+
+if isstruct(ap_mode)
+    if ~isscalar(ap_mode)
+        E.badinput('Only pass one element of the Data structure if given as input');
+    elseif ~isfield(ap_mode,'BEHRaprioriMode')
+        E.badinput('Input structure does not have the field BEHRaprioriMode');
+    else
+        ap_mode = ap_mode.BEHRaprioriMode;
+    end
+elseif ~ischar(ap_mode)
+    E.badinput('ap_mode must either be a scalar structure containing the field BEHRaprioriMode or the string contained in the field');
+end
+
+s = regexp(ap_mode,'[');
+e = regexp(ap_mode,']');
+utchrs = eval(ap_mode(s:e));
+
+end
+
+function [apriori_cut, pres_cut] = remove_interp_pres(apriori, pres)
+% Removes non-standard pressure levels (added by interpolation during
+% integPr2)
+E=JLLErrors;
+sz = size(apriori);
+if any(sz ~= size(pres))
+    E.sizeMismatch('apriori','pres')
+end
+std_P = BEHR_std_pres;
+apriori_cut = nan([numel(std_P),sz(2:end)]);
+pres_cut = nan([numel(std_P),sz(2:end)]);
+for a=1:prod(sz(2:end))
+    xx = ismember(pres(:,a),std_P);
+    apriori_cut(:,a) = apriori(xx,a);
+    pres_cut(:,a) = pres(xx,a);
+end
+end
+
+function [new_path, base_path, ret_type, new_apriori, base_apriori] = return_paths()
+ret_type = ask_multichoice('Which retrieval?',{'full','pseudo'});
+if strcmpi(ret_type,'full')
+    allowed_apriori = {'monthly','hybrid','hourly'};
+elseif strcmpi(ret_type,'pseudo')
+    allowed_apriori = {'monthly','hybrid','hourly','hybrid-avg'};
+end
+
+% so that there's something to return in any case
+new_path = '';
+base_path = '';
+new_apriori = '';
+base_apriori = '';
+
+for a=1:min(nargout,2) % if no second output is requested, don't ask for a "new" and "base" case, only ask for one case.
+    if a==1 && nargout == 1
+        casestr = '?';
+    elseif a==1
+        casestr = ' for the new case?';
+    elseif a==2
+        casestr = ' for the base case?';
+    end
+    apriori_type = ask_multichoice(sprintf('Which apriori to use%s',casestr),allowed_apriori);
+    switch ret_type
+        case 'full'
+            switch apriori_type
+                case 'monthly'
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';
+                case 'hybrid'
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';
+                case 'hourly'
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost';
+            end
+        case 'pseudo'
+            switch apriori_type
+                case 'monthly'
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                case 'hybrid'
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                case 'hourly'
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                case 'hybrid-avg'
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
+            end
+    end
+    if a==1
+        new_path = this_path;
+        new_apriori = apriori_type;
+    else
+        base_path = this_path;
+        base_apriori = apriori_type;
+    end
 end
 end
