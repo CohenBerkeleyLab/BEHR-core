@@ -31,7 +31,7 @@ switch lower(plttype)
     case 'sectors'
         plot_changes_by_sector(varargin{:});
     case 'dif'
-        plot_diff();
+        plot_diff(varargin{:});
     case 'dif-ts'
         plot_pseudo_diff_timeser();
     case 'db-avg'
@@ -731,19 +731,46 @@ end
 
     end
 
-    function plot_diff()
-        % This function uses no input, instead it will ask a series of
+    function plot_diff(options)
+        % This function can use no input, instead it will ask a series of
         % questions to decide what plots to make.  This is used to make
         % difference pcolor plots of WRF-Chem VCDs or BEHR VCDs or AMFs.
+        %
+        % If given input in the form of the structure "options" it will
+        % only ask the necessary questions to fill in the missing options.
+        % Options can have the following fields:
+        %   source (wrf, behr, pseudo-behr)
+        %   apriori_base (hourly, hybrid, monthly)
+        %   apriori_new (hourly, hybrid, monthly)
+        %   res (f, c)
+        %   timemode (avg, instant)
+        %   quantity (vcd, amf, wind)
+        %   coarsen (integer > 0)
+        %   diff_type (a, p, d, m)
+        %   city (Atlanta, Birmingham, Montgomery)
+        %   date_in (valid datestring)
         
         %%%%%%%%%%%%%%%%%
         %%%%% INPUT %%%%%
         %%%%%%%%%%%%%%%%%
         
+        if exist('options','var') && ~isstruct(options)
+            E.badinput('OPTIONS must be a structure (if given)');
+        elseif ~exist('options','var')
+            options = struct;
+        end
+        
         % First question: WRF or BEHR. pseudo-BEHR is the one where I used
         % the same set of pixels each day.
         allowed_sources = {'wrf','behr','pseudo-behr'};
-        source = ask_multichoice('Which source will you be using?', allowed_sources);
+        if ~isfield(options,'source')
+            source = ask_multichoice('Which source will you be using?', allowed_sources);
+        else
+            if ~ismember(options.source, allowed_sources)
+                E.badinput('options.source must be one of %s',strjoin(allowed_sources,', '))
+            end
+            source = options.source;
+        end
         
         % Follow up if using BEHR: should we compare hybrid or hour-wise
         % data to the monthly average?
@@ -753,8 +780,16 @@ end
             else
                 allowed_apriori = {'hourly','hybrid','monthly'};
             end
-            apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly');
-            apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori);
+            if any(~isfield(options,{'apriori_base','apriori_new'}))
+                apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly');
+                apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori);
+            else
+                if any(~ismember({options.apriori_base, options.apriori_new}, allowed_apriori))
+                    E.badinput('options.apriori_base and options.apriori_new must be one of %s',strjoin(allowed_apriori,', '))
+                end
+                apriori_base = options.apriori_base;
+                apriori_new = options.apriori_new;
+            end
         else 
             apriori_new = 'hourly';
             apriori_base = 'monthly';
@@ -762,90 +797,116 @@ end
         
         % Do we want to use the fine or coarse WRF simulation?
         allowed_res = {'f','c'};
-        res = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF a priori', allowed_res);
+        if ~isfield(options,'res')
+            res = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF a priori', allowed_res);
+        else
+            if ~ismember(options.res, allowed_res)
+                E.badinput('options.res must be one of %s',strjoin(allowed_res,', '))
+            end
+            res = options.res;
+        end
         
         % Use the hour-average or instantaneous profiles?
         if strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'})) && strcmpi(res,'f')
             allowed_timemode = {'avg','instant'};
-            timemode = ask_multichoice('Use profiles averaged over an hour or instantaneous at the top of the hour?', allowed_timemode);
+            if ~isfield(options,'timemode')
+                timemode = ask_multichoice('Use profiles averaged over an hour or instantaneous at the top of the hour?', allowed_timemode);
+            else
+                if ~ismember(options.timemode, allowed_timemode)
+                    E.badinput('options.timemode must be one of %s',strjoin(allowed_timemode,', '))
+                end
+                timemode = options.timemode;
+            end
         else
             timemode = 'avg';
         end
         
-        % Second question: which city. Expandable.
-        city_index = 1; % hold over from old code.
-%         allowed_cities = {'Atlanta'};
-%         n_cities = numel(allowed_cities);
-%         while true
-%             fprintf('Which city should we focus on?\n')
-%             for a=1:n_cities
-%                 fprintf('\t%d - %s\n', a, allowed_cities{a});
-%             end
-%             city_index = str2double(input('Enter the number of your selection: ','s'));
-%             if isnan(city_index) || city_index < 1 || city_index > n_cities
-%                 fprintf('You must choose a number between 1 and %d, or press Ctrl+C to cancel\n', n_cities);
-%             else
-%                 break
-%             end
-%         end
-        
-        % Third question: which quantity. WRF has VCD and winds. Full BEHR
+        % Which quantity. WRF has VCD and winds. Full BEHR
         % has VCDs or AMFs. Pseudo-behr only has AMFs.
         coarsen = 1;
         switch source
             case 'wrf'
                 allowed_quantities = {'vcd','wind'};
-                quantity = ask_multichoice('Which source will you be using?', allowed_quantities);
-                if strcmp(quantity,'wind')
-                    while true
-                        u_ans = input('Do you want to average winds together? Enter an integer of 1 if not, or greater if yes (default 1): ', 's');
-                        if ~isempty(u_ans)
-                            coarsen = str2double(u_ans);
-                        else
-                            coarsen = 1;
-                        end
-                        if ~isnan(coarsen)
-                            break
-                        else
-                            fprintf('Value not recognized. Try again\n');
-                        end
+                if ~isfield(options,'quantity')
+                    quantity = ask_multichoice('Which source will you be using?', allowed_quantities);
+                else
+                    if ~ismember(options.quantity, allowed_quantities)
+                        E.badinput('options.quantity must be one of %s',strjoin(allowed_quantities,', '))
                     end
+                    quantity = options.quantity;
                 end
             case 'behr'
                 allowed_quantities = {'amf','vcd'};
-                quantity = ask_multichoice('Which source will you be using?', allowed_quantities);
+                if ~isfield(options,'quantity')
+                    quantity = ask_multichoice('Which source will you be using?', allowed_quantities);
+                else
+                    if ~ismember(options.quantity, allowed_quantities)
+                        E.badinput('options.quantity must be one of %s',strjoin(allowed_quantities,', '))
+                    end
+                    quantity = options.quantity;
+                end
             otherwise
                 quantity = 'amf';
         end
         
-%         % Follow up only if doing VCDs: which ghost column to use? 
-%         if ~isempty(regexpi(source,'behr'))
-%             allowed_ghosts = {'none','new','old'};
-%             q_str = sprintf('Which ghost column correction do you want to use? %s: ', strjoin(allowed_ghosts, ', '));
-%             while true 
-%                 ghost = lower(input(q_str, 's'));
-%                 if ~ismember(ghost, allowed_ghosts)
-%                     fprintf('You must select one of the allowed choices. Try again, or press Ctrl+C to cancel\n');
-%                 else
-%                     break
-%                 end
-%             end
-%         else
-%             ghost = 'old';
-%         end
+        % Give the option to make winds coarser so the arrows aren't so
+        % small
+        if strcmp(quantity,'wind')
+            coarse_test = @(x) mod(x,1) == 0 && x > 0;
+            if ~isfield(options,'coarsen')
+                coarsen = ask_number('Do you want to average winds together? Enter an integer of 1 if not, or greater if yes','default',1,'testfxn',coarse_test,'testmsg','Must be an integer >= 1');
+            else
+                if ~coarse_test(options.coarsen)
+                    E.badinput('options.coarsen must be an integer of 1 or greater')
+                end
+                coarsen = options.coarsen;
+            end
+        end
         
         % Fourth, is this a percent or absolute difference?
         if strcmpi(quantity,'wind')
             allowed_diff = {'d','m'};
-            diff_type = ask_multichoice('Do you want the daily or monthly winds?', allowed_diff);
+            ask_str = 'Do you want the daily or monthly winds?';
+            
         else
             allowed_diff = {'a','p','d','m'};
-            diff_type = ask_multichoice('Do you want absolute or percent differences, or just the daily or monthly values?', allowed_diff);
+            ask_str = 'Do you want absolute or percent differences, or just the daily or monthly values?';
+        end
+        if ~isfield(options,'diff_type')
+            diff_type = ask_multichoice(ask_str, allowed_diff);
+        else
+            if ~ismember(options.diff_type, allowed_diff)
+                E.badinput('options.diff_type must be one of %s',strjoin(allowed_diff,', '))
+            end
+            diff_type = options.diff_type;
         end
         
+        % Which city to focus on?
+        allowed_cities = {'Atlanta','Birmingham','Montgomery'};
+        if ~isfield(options,'city')
+            city = ask_multichoice('Which city to focus on?',allowed_cities,'list',true,'default','Atlanta');
+        else
+            if ~ismember(options.city, allowed_cities)
+                E.badinput('options.city must be one of %s',strjoin(allowed_cities,', '))
+            end
+            city = options.city;
+        end
         
         % Lastly, we need a date
-        date_in = ask_date('Enter the date to compare, using a format datenum can parse');
+        if ~isfield(options,'date_in')
+            date_in = ask_date('Enter the date to compare, using a format datenum can parse');
+        else
+            try
+                datenum(options.date_in)
+            catch err
+                if strcmpi(err.identifier,'MATLAB:datenum:ConvertDateString')
+                    E.badinput('options.date_in must be a valid date string')
+                else
+                    rethrow(err);
+                end
+            end
+            date_in = options.date_in;
+        end
 
         
         %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -924,21 +985,26 @@ end
             monthly_file_name = sprintf(monthly_file_name_spec, year(date_in), month(date_in), day(date_in));
         end
         
-        % Plot x and y limits. Only varies by city.
-        city_xlims = {[-87.1 -82]};
-        city_ylims = {[31.9 35.5]};
-        
-        xl = city_xlims{city_index};
-        yl = city_ylims{city_index};
-        
-        % City lon and lat center. Obviously only varies by city.
-        all_city_lons = [-84.39];
-        all_city_lats = [33.775];
-        all_city_names = {'Atlanta'};
-        
-        city_lon = all_city_lons(city_index);
-        city_lat = all_city_lats(city_index);
-        city_name = all_city_names{city_index};
+        switch city
+            case 'Atlanta'
+                xl = [-87.1 -82];
+                yl = [31.9 35.5];
+                city_lon = -84.39;
+                city_lat = 33.775;
+            case 'Birmingham'
+                xl = [-88 -85.5];
+                yl = [33 34.5];
+                city_lon = -86.80;
+                city_lat = 33.52;
+            case 'Montgomery'
+                xl = [-87 -85];
+                yl = [31.5 33];
+                city_lon = -86.3;
+                city_lat = 32.37;
+            otherwise
+                E.notimplemented('city = %s',city);
+        end
+        city_name = city;
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% LOAD DATA, CALCULATE QUANTITIES, AND PLOT %%%%%
@@ -972,14 +1038,13 @@ end
             yy = any(XLONG >= min(xl) & XLONG <= max(xl) & XLAT >= min(yl) & XLAT <= max(yl),1);
             xx = squeeze(xx(:,:,1));
             yy = squeeze(yy(:,:,1));
-            if strcmpi(res,'c')
-                % add a few more in the coarse version b/c it can miss some
-                % edges
-                xx = find(xx);
-                xx = (min(xx)-2):(max(xx)+2);
-                yy = find(yy);
-                yy = (min(yy)-2):(max(yy)+2);
-            end
+
+            % add a few more to fill out the edges
+            xx = find(xx);
+            xx = (min(xx)-2):(max(xx)+2);
+            yy = find(yy);
+            yy = (min(yy)-2):(max(yy)+2);
+
             
             xlon = XLONG(xx,yy,1);
             xlat = XLAT(xx,yy,1);
@@ -1240,14 +1305,14 @@ end
 %                 end
             end
         end
-        if ischar(cmap) && strcmpi(cmap,'jet')
+        if ~strcmpi(quantity,'wind') && ischar(cmap) && strcmpi(cmap,'jet')
             col = 'w';
         else
             col = 'k';
         end
         l=line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color',col,'linewidth',2);
         leg=legend(l,city_name);
-        if ischar(cmap) && strcmpi(cmap,'jet')
+        if ~strcmpi(quantity,'wind') && ischar(cmap) && strcmpi(cmap,'jet')
             leg.Color = 'k';
             leg.TextColor = 'w';
         end
