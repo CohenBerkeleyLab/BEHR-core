@@ -6,6 +6,7 @@ function [ varargout ] = misc_behr_wind_plots( plttype, varargin )
 E = JLLErrors;
 
 C=load('blue_red_cmap');
+C2=load('four_color_cmap.mat');
 
 switch lower(plttype)
     case 'windfield'
@@ -50,6 +51,8 @@ switch lower(plttype)
         varargout{1} = cat_cloud_frac_bins(varargin{:});
     case 'del-shape-vcd'
         del_shape_vs_vcd();
+    case 'mag-delvcd'
+        mag_delvcd_stats();
     otherwise
         fprintf('plttype not recognized\n');
 end
@@ -861,6 +864,9 @@ end
                 end
                 coarsen = options.coarsen;
             end
+            plot_wind_arrow = false;
+        else
+            plot_wind_arrow = strcmpi(ask_multichoice('Plot an arrow indicating wind direction over the city?',{'y','n'}),'y');
         end
         
         % Fourth, is this a percent or absolute difference?
@@ -987,20 +993,25 @@ end
         
         switch city
             case 'Atlanta'
-                xl = [-87.1 -82];
+                %xl = [-86 -82];
+                %yl = [32.5 35.5];
+                xl = [-87.1 -81.9];
                 yl = [31.9 35.5];
                 city_lon = -84.39;
                 city_lat = 33.775;
+                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta-Wind-Conditions-1900UTC.mat';
             case 'Birmingham'
                 xl = [-88 -85.5];
                 yl = [33 34.5];
                 city_lon = -86.80;
                 city_lat = 33.52;
+                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Birmingham-Wind-Conditions-1900UTC.mat';
             case 'Montgomery'
                 xl = [-87 -85];
                 yl = [31.5 33];
                 city_lon = -86.3;
                 city_lat = 32.37;
+                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Montgomery-Wind-Conditions-1900UTC.mat';
             otherwise
                 E.notimplemented('city = %s',city);
         end
@@ -1053,87 +1064,65 @@ end
             s = utchr == 19;
             
             if strcmpi(quantity, 'vcd')
-            [xlon_pcol, xlat_pcol] = pcolor_pixel_corners(xlon,xlat);
-            
-            daily_no2 = ncread(new_file, 'no2_ndens'); %[NO2 in number density]
-            daily_no2 = nanmean(daily_no2(xx,yy,:,s),4); % cut down to the hour we want. If there are multiple outputs, average them.
-            daily_zlev = ncread(new_file, 'zlev'); % Thickness of each layer in meters
-            daily_zlev = nanmean(daily_zlev(xx,yy,:,s),4);
-            daily_tplev = find_wrf_tropopause(ncinfo(new_file));
-            daily_tplev = floor(nanmean(daily_tplev(xx,yy,s),3));
-            
-            for a=1:size(daily_no2,1)
-                for b=1:size(daily_no2,2)
-                    tp = daily_tplev(a,b);
-                    if tp > 0 % tp is given -1 if the tropopause algorithm cannot find a tropopause
-                        daily_no2(a,b,tp:end) = nan;
+                [xlon_pcol, xlat_pcol] = pcolor_pixel_corners(xlon,xlat);
+                
+                daily_no2 = ncread(new_file, 'no2_ndens'); %[NO2 in number density]
+                daily_no2 = nanmean(daily_no2(xx,yy,:,s),4); % cut down to the hour we want. If there are multiple outputs, average them.
+                daily_zlev = ncread(new_file, 'zlev'); % Thickness of each layer in meters
+                daily_zlev = nanmean(daily_zlev(xx,yy,:,s),4);
+                daily_tplev = find_wrf_tropopause(ncinfo(new_file));
+                daily_tplev = floor(nanmean(daily_tplev(xx,yy,s),3));
+                
+                for a=1:size(daily_no2,1)
+                    for b=1:size(daily_no2,2)
+                        tp = daily_tplev(a,b);
+                        if tp > 0 % tp is given -1 if the tropopause algorithm cannot find a tropopause
+                            daily_no2(a,b,tp:end) = nan;
+                        end
                     end
                 end
-            end
-            
-            daily_no2_columns = nansum2(daily_no2 .* (daily_zlev*100), 3);
-            
-            monthly_no2 = ncread(base_file, 'no2_ndens'); %[NO2 in number density]
-            monthly_no2 = monthly_no2(xx,yy,:); % cut down to the hour we want
-            monthly_zlev = ncread(base_file, 'zlev'); % Thickness of each layer in meters
-            monthly_zlev = monthly_zlev(xx,yy,:);
-            monthly_tplev = find_wrf_tropopause(ncinfo(base_file));
-            monthly_tplev = monthly_tplev(xx,yy);
-            
-            for a=1:size(monthly_no2,1)
-                for b=1:size(monthly_no2,2)
-                    tp = monthly_tplev(a,b);
-                    if tp > 0 % tp is given -1 if the tropopause algorithm cannot find a tropopause
-                        monthly_no2(a,b,tp:end) = nan;
+                
+                daily_no2_columns = nansum2(daily_no2 .* (daily_zlev*100), 3);
+                
+                monthly_no2 = ncread(base_file, 'no2_ndens'); %[NO2 in number density]
+                monthly_no2 = monthly_no2(xx,yy,:); % cut down to the hour we want
+                monthly_zlev = ncread(base_file, 'zlev'); % Thickness of each layer in meters
+                monthly_zlev = monthly_zlev(xx,yy,:);
+                monthly_tplev = find_wrf_tropopause(ncinfo(base_file));
+                monthly_tplev = monthly_tplev(xx,yy);
+                
+                for a=1:size(monthly_no2,1)
+                    for b=1:size(monthly_no2,2)
+                        tp = monthly_tplev(a,b);
+                        if tp > 0 % tp is given -1 if the tropopause algorithm cannot find a tropopause
+                            monthly_no2(a,b,tp:end) = nan;
+                        end
                     end
                 end
-            end
+                
+                monthly_no2_columns = nansum2(monthly_no2 .* (monthly_zlev*100), 3);
+                
+                switch diff_type
+                    case 'a'
+                        del = daily_no2_columns - monthly_no2_columns;
+                        cmap = C.blue_red_cmap;
+                    case 'p'
+                        del = (daily_no2_columns ./ monthly_no2_columns - 1)*100;
+                        cmap = C.blue_red_cmap;
+                    case 'd'
+                        del = daily_no2_columns;
+                        cmap = 'jet';
+                    case 'm'
+                        del = monthly_no2_columns;
+                        cmap = 'jet';
+                end
             
-            monthly_no2_columns = nansum2(monthly_no2 .* (monthly_zlev*100), 3);
-            
-            switch diff_type
-                case 'a'
-                    del = daily_no2_columns - monthly_no2_columns;
-                    cmap = C.blue_red_cmap;
-                case 'p'
-                    del = (daily_no2_columns ./ monthly_no2_columns - 1)*100;
-                    cmap = C.blue_red_cmap;
-                case 'd'
-                    del = daily_no2_columns;
-                    cmap = 'jet';
-                case 'm'
-                    del = monthly_no2_columns;
-                    cmap = 'jet';
-            end
-            
-            figure; pcolor(xlon_pcol, xlat_pcol, del);
-            cb=colorbar;
-            set(gca,'fontsize',20);
-            xlim(xl);
-            ylim(yl);
-            colormap(cmap);
-%             if strcmp(diff_type,'a')
-%                 cb.Label.String = '\Delta VCD_{NO_2} (molec. cm^{-2})';
-%             else
-%                 cb.Label.String = '%\Delta VCD_{NO_2}';
-%             end
-%             l=line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color','k','linewidth',2);
-%             legend(l, city_name);
-%             if strcmp(diff_type,'a')
-%                 cm = max(abs(del(:)));
-%                 p10 = (10^floor(log10(cm)));
-%                 cm = round(cm/p10)*p10;
-%                 caxis([-cm cm]);
-%             elseif strcmp(diff_type,'p')
-%                 cm = max(abs(del(:)));
-%                 cm = round(cm/10)*10;
-%                 caxis([-cm cm]);
-%             else
-%                 cm = max(abs(del(:)));
-%                 p10 = (10^floor(log10(cm)));
-%                 cm = round(cm/p10)*p10;
-%                 caxis([0 cm]);
-%             end
+                figure; pcolor(xlon_pcol, xlat_pcol, del);
+                cb=colorbar;
+                set(gca,'fontsize',20);
+                xlim(xl);
+                ylim(yl);
+                colormap(cmap);
             elseif strcmpi(quantity, 'wind')
                 if strcmpi(diff_type,'d')
                     U = ncread(new_file, 'U');
@@ -1189,31 +1178,34 @@ end
             end
         elseif ~isempty(regexp(source, 'behr', 'once'))
             if strcmp(source,'behr')
-                D = load(new_file,'OMI');
-                M = load(base_file,'OMI');
+                D = load(new_file,'Data');
+                M = load(base_file,'Data');
                 s = 2;
-                xx = any(D.OMI(s).Longitude >= min(xl) & D.OMI(s).Longitude <= max(xl) & D.OMI(s).Latitude >= min(yl) & D.OMI(s).Latitude <= max(yl),2);
-                yy = any(D.OMI(s).Longitude >= min(xl) & D.OMI(s).Longitude <= max(xl) & D.OMI(s).Latitude >= min(yl) & D.OMI(s).Latitude <= max(yl),1);
+                minloncorn = squeeze(min(D.Data(s).Loncorn,[],1));
+                maxloncorn = squeeze(max(D.Data(s).Loncorn,[],1));
+                minlatcorn = squeeze(min(D.Data(s).Latcorn,[],1));
+                maxlatcorn = squeeze(max(D.Data(s).Latcorn,[],1));
+                % Get any pixel even slightly in the domain.
+                xx = any(maxloncorn >= min(xl) & minloncorn <= max(xl) & maxlatcorn >= min(yl) & minlatcorn <= max(yl),2);
+                yy = any(maxloncorn >= min(xl) & minloncorn <= max(xl) & maxlatcorn >= min(yl) & minlatcorn <= max(yl),1);
                 
-                D.OMI = omi_pixel_reject(D.OMI(s),'omi',0.2,'XTrackFlags');
-                %D.OMI = omi_pixel_reject(D.OMI(s),'modis',0.2,'XTrackFlags');
-                badpix = D.OMI.Areaweight == 0;
-                M.OMI = omi_pixel_reject(M.OMI(s),'omi',0.2,'XTrackFlags');
-                %M.OMI = omi_pixel_reject(M.OMI(s),'modis',0.2,'XTrackFlags');
+                D_badpix = find_bad_pixels(D.Data(s));
+                M_badpix = find_bad_pixels(M.Data(s));
+                badpix = D_badpix | M_badpix;
                 
-                lon = D.OMI.Longitude(xx,yy);
-                lat = D.OMI.Latitude(xx,yy);
+                lon = squeeze(D.Data(s).Loncorn(1,xx,yy));
+                lat = squeeze(D.Data(s).Latcorn(1,xx,yy));
                 
                 if strcmp(quantity, 'amf')
-                    D.OMI.BEHRAMFTrop(badpix) = nan;
-                    daily_value = D.OMI.BEHRAMFTrop(xx,yy);
-                    M.OMI.BEHRAMFTrop(badpix) = nan;
-                    monthly_value = M.OMI.BEHRAMFTrop(xx,yy);
+                    D.Data(s).BEHRAMFTrop(badpix) = nan;
+                    daily_value = D.Data(s).BEHRAMFTrop(xx,yy);
+                    M.Data(s).BEHRAMFTrop(badpix) = nan;
+                    monthly_value = M.Data(s).BEHRAMFTrop(xx,yy);
                 else
-                    D.OMI.BEHRColumnAmountNO2Trop(badpix) = nan;
-                    daily_value = D.OMI.BEHRColumnAmountNO2Trop(xx,yy);
-                    M.OMI.BEHRColumnAmountNO2Trop(badpix) = nan;
-                    monthly_value = M.OMI.BEHRColumnAmountNO2Trop(xx,yy);
+                    D.Data(s).BEHRColumnAmountNO2Trop(badpix) = nan;
+                    daily_value = D.Data(s).BEHRColumnAmountNO2Trop(xx,yy);
+                    M.Data(s).BEHRColumnAmountNO2Trop(badpix) = nan;
+                    monthly_value = M.Data(s).BEHRColumnAmountNO2Trop(xx,yy);
                 end
             elseif strcmp(source,'pseudo-behr')
                 D = load(new_file, 'Data');
@@ -1236,10 +1228,10 @@ end
             switch diff_type
                 case 'a'
                     del = daily_value - monthly_value;
-                    cmap = C.blue_red_cmap;
+                    cmap = C2.four_color_cmap;
                 case 'p'
                     del = (daily_value ./ monthly_value - 1) * 100;
-                    cmap = C.blue_red_cmap;
+                    cmap = C2.four_color_cmap;
                 case 'd'
                     del = daily_value;
                     cmap = 'jet';
@@ -1255,9 +1247,6 @@ end
             set(gca,'fontsize',20);
             xlim(xl);
             ylim(yl);
-            if isempty(regexpi(source,'pseudo'))
-                shading flat;
-            end
             
         end
         
@@ -1291,31 +1280,26 @@ end
                 else
                     caxis([0 cm]);
                 end
-%                 if strcmp(diff_type,'p')
-%                     cm = round(cm/10)*10;
-%                     caxis([-cm cm]);
-%                 else
-%                     p10 = (10^floor(log10(cm)));
-%                     cm = round(cm/p10)*p10;
-%                     if ismember(diff_type,{'a','p'})
-%                         caxis([-cm cm]);
-%                     elseif strcmp(quantity,'vcd');
-%                         caxis([0 cm]);
-%                     end
-%                 end
             end
         end
-        if ~strcmpi(quantity,'wind') && ischar(cmap) && strcmpi(cmap,'jet')
-            col = 'w';
-        else
-            col = 'k';
+        
+        % Plot the wind arrow over the city if requested
+        if plot_wind_arrow
+            W = load(windfile);
+            dd = W.dnums == datenum(date_in);
+            theta = W.theta(dd);
+            alon = [city_lon-0.5*cosd(theta), city_lon+0.5*cosd(theta)];
+            alat = [city_lat-0.5*sind(theta), city_lat+0.5*sind(theta)];
+            % Move the arrow off the city a little bit.
+            alon = alon + 0.25*cosd(theta+90);
+            alat = alat + 0.25*sind(theta+90);
+            
+            draw_arrow(alon, alat, 'linewidth', 3, 'color', 'k','maxheadsize',0.75);
         end
+        
+        col='k';
         l=line(city_lon, city_lat, 'linestyle','none', 'marker','p','markersize',18,'color',col,'linewidth',2);
         leg=legend(l,city_name);
-        if ~strcmpi(quantity,'wind') && ischar(cmap) && strcmpi(cmap,'jet')
-            leg.Color = 'k';
-            leg.TextColor = 'w';
-        end
 
     end
 
@@ -1524,6 +1508,7 @@ end
             delmat_final = reshape(delmat,[],3);
             boxplot(delmat_final)
             set(gca,'xticklabels',{'Hybrid daily vs. monthly','Full daily vs. monthly','Full vs. hybrid daily'})
+            line(1:3, nanmean(delmat_final,1), 'color', 'k','marker','o','markersize',16,'linestyle','none');
         end
         set(gca,'fontsize',20)
     end
@@ -2758,6 +2743,204 @@ end
         end
         
     end
+
+    function mag_delvcd_stats
+        % This function will make plots representing how the frequency and
+        % magnitude of changes around each of the three cities.
+        %
+        % Couple modes of operation: first, straight-up plot the
+        % distribution of change values as boxplot or histogram. Second,
+        % count the number of days where the change exceeds some value.
+        % Third, count the days but make a polar plot of the percent of
+        % days exceeding that value divided into quadrants or eighths, and
+        % not counting days with no valid data in that quadrant.
+        op_mode = ask_multichoice('Which plot to make?',{'boxplot','hist','count','polar'});
+        [new_path, base_path] = return_paths;
+        
+        
+        city_names = {'Atlanta','Birmingham','Montgomery'};
+        city_lons = [   -84.39,...  %Atlanta
+                        -86.80,...  %Birmingham
+                        -86.30  ];  %Montgomery
+        city_lats = [   33.775,...  %Atlanta
+                        33.52,...   %Birmingham
+                        32.37];     %Montgomery
+        city_xl =   [   -87.1, -82;...
+                        -88, -85.5;...
+                        -87, -85];
+        city_yl =   [   31.9, 35.5;...
+                        33, 34.5;...
+                        31.5, 33];
+        
+        % Subset BEHR options            
+        opts.quad_bool = false;
+        opts.dist_limit = 50; %km
+        opts.size_lim_type = 'none';
+        opts.lim_crit = [];
+        % center_lon and _lat will be set for each city.
+        
+        %%%%% DATA PREP %%%%%
+        
+        if ismember(op_mode,{'boxplot','hist'})
+            % For the boxplot and histogram, since we're looking at pixel
+            % over all days, just concatenate the data.
+            [lon, lat, loncorn, latcorn, cldfrac, vcdflag, xtrackflag, vcd_new, amf_new] = cat_sat_data(new_path,...
+                {'Longitude','Latitude','Loncorn','Latcorn','CloudFraction','vcdQualityFlags','XTrackQualityFlags','BEHRColumnAmountNO2Trop','BEHRAMFTrop'},'prefix','OMI_BEHR','DEBUG_LEVEL','visual');
+            [vcd_base, amf_base] = cat_sat_data(base_path,{'BEHRColumnAmountNO2Trop','BEHRAMFTrop'},'prefix','OMI_BEHR','DEBUG_LEVEL','visual');
+            
+            absdiff = vcd_new - vcd_base;
+            DataNew.Longitude = lon;
+            DataNew.Latitude = lat;
+            DataNew.Loncorn = loncorn;
+            DataNew.Latcorn = latcorn;
+            DataNew.CloudFraction = cldfrac;
+            DataNew.vcdQualityFlags = vcdflag;
+            DataNew.XTrackQualityFlags = xtrackflag;
+            DataNew.BEHRColumnAmountNO2Trop = vcd_new;
+            
+            DataBase.Longitude = lon;
+            DataBase.Latitude = lat;
+            DataBase.Loncorn = loncorn;
+            DataBase.Latcorn = latcorn;
+            DataBase.CloudFraction = cldfrac;
+            DataBase.vcdQualityFlags = vcdflag;
+            DataBase.XTrackQualityFlags = xtrackflag;
+            DataBase.BEHRColumnAmountNO2Trop = vcd_base;
+            
+            badpix_new = find_bad_pixels(DataNew);
+            badpix_new(amf_new == 1e-6) = true; % remove pixels that have the minimum value AMF
+            badpix_base = find_bad_pixels(DataBase);
+            badpix_base(amf_base == 1e-6) = true;
+            
+            absdiff(badpix_new | badpix_base) = nan;
+            city_diffs = cell(size(city_names));
+            for c=1:numel(city_names)
+                opts.center_lon = city_lons(c);
+                opts.center_lat = city_lats(c);
+                in = subset_BEHR_pixels(DataNew, city_xl(c,:), city_yl(c,:), opts);
+                city_diffs{c} = absdiff(in);
+            end
+        elseif strcmpi(op_mode,'count')
+            % For count we need to load each day, reject any bad pixels,
+            % subset the data to what we want, and see for how many days
+            % are relatively clear and have changes > 1e15.
+            dnums=datenum('2013-06-01'):datenum('2013-08-30');
+            city_logs = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
+            city_npix = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
+            city_npixclr = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
+            city_ndays_someclear = zeros(size(city_names));
+            city_minchange = zeros(size(city_names));
+            city_maxchange = zeros(size(city_names));
+            for d=1:numel(dnums)
+                % concatenate each day's swaths
+                prefix = sprintf('OMI_BEHR_%s',datestr(dnums(d),'yyyymmdd'));
+                [lon, lat, loncorn, latcorn, cldfrac, vcdflag, xtrackflag, vcd_new, amf_new] = cat_sat_data(new_path,...
+                    {'Longitude','Latitude','Loncorn','Latcorn','CloudFraction','vcdQualityFlags','XTrackQualityFlags','BEHRColumnAmountNO2Trop','BEHRAMFTrop'},'prefix',prefix,'DEBUG_LEVEL',0);
+                [vcd_base, amf_base] = cat_sat_data(base_path,{'BEHRColumnAmountNO2Trop','BEHRAMFTrop'},'prefix',prefix,'DEBUG_LEVEL',0);
+                
+                DataNew.Longitude = lon;
+                DataNew.Latitude = lat;
+                DataNew.Loncorn = loncorn;
+                DataNew.Latcorn = latcorn;
+                DataNew.CloudFraction = cldfrac;
+                DataNew.vcdQualityFlags = vcdflag;
+                DataNew.XTrackQualityFlags = xtrackflag;
+                DataNew.BEHRColumnAmountNO2Trop = vcd_new;
+                
+                DataBase.Longitude = lon;
+                DataBase.Latitude = lat;
+                DataBase.Loncorn = loncorn;
+                DataBase.Latcorn = latcorn;
+                DataBase.CloudFraction = cldfrac;
+                DataBase.vcdQualityFlags = vcdflag;
+                DataBase.XTrackQualityFlags = xtrackflag;
+                DataBase.BEHRColumnAmountNO2Trop = vcd_base;
+                
+                badpix_new = find_bad_pixels(DataNew);
+                badpix_new(amf_new == 1e-6) = true; % remove pixels that have the minimum value AMF
+                badpix_base = find_bad_pixels(DataBase);
+                badpix_base(amf_base == 1e-6) = true;
+                
+                absdiff = vcd_new - vcd_base;
+                absdiff(badpix_new | badpix_base) = nan;
+                
+                for c=1:numel(city_names)
+                    opts.center_lon = city_lons(c);
+                    opts.center_lat = city_lats(c);
+                    in = subset_BEHR_pixels(DataNew, city_xl(c,:), city_yl(c,:), opts);
+                    
+                    % Are any pixels above the single pixel uncertainty for
+                    % change in VCD?
+                    city_logs{c}(d) = any(abs(absdiff(in)) >= 1e15);
+                    % If all the pixels were bad, then this day is probably
+                    % falling in the row anomaly, but it could be heavily
+                    % clouded. In either case, it shouldn't be counted as
+                    % part of the statistics b/c we can't see any pixels!
+                    city_ndays_someclear(c) = city_ndays_someclear(c) + ~all(isnan(absdiff(in)));
+                    % These will give us information about how many pixels
+                    % were clear
+                    city_npix{c}(d) = numel(in);
+                    city_npixclr{c}(d) = sum(~isnan(absdiff(in)));
+                    % Update the max and min changes
+                    city_maxchange(c) = max([city_maxchange(c), max(absdiff(in))]);
+                    city_minchange(c) = min([city_minchange(c), min(absdiff(in))]);
+                end
+            end
+        end
+        
+        %%%%%% PLOTTING %%%%%
+        
+        switch op_mode
+            case 'boxplot'
+                % Case 1: make a boxplot for each city
+                city_diff_for_box = padcat(2, city_diffs{:});
+                figure;
+                boxplot(city_diff_for_box, city_names);
+                ylabel('\Delta VCD');
+                set(gca,'fontsize',16)
+            case 'hist'
+                figure;
+                for c=1:numel(city_names)
+                    subplot(numel(city_names),1,c);
+                    hist(city_diffs{c},20);
+                    xlabel('\Delta VCD');
+                    title(city_names{c});
+                    set(gca,'fontsize',14);
+                end
+            case 'count'
+                % making a table this time 
+                tabcell = cell(numel(city_names), 6);
+                varnames = cell(1,6);
+                for c=1:numel(city_names)
+                    fracclr = city_npixclr{c} ./ city_npix{c};
+                    
+                    varnames{1,1} = 'NumDaysDVCDGT1e15';
+                    tabcell{c,1} = sum(city_logs{c});
+                    
+                    varnames{1,2} = 'MinChange';
+                    tabcell{c,2} = city_minchange(c);
+                    varnames{1,3} = 'MaxChange';
+                    tabcell{c,3} = city_maxchange(c);
+                    
+                    varnames{1,4} = 'NumDaysWithGT0percentClearPix';
+                    tabcell{c,4} = city_ndays_someclear(c);
+                    varnames{1,5} = 'FracDaysGT50percentClearChange';
+                    tabcell{c,5} = sum(fracclr > 0.5 & city_logs{c})/sum(fracclr > 0.5);
+                    varnames{1,6} = 'FracDaysGT80percentClearChange';
+                    tabcell{c,6} = sum(fracclr > 0.8 & city_logs{c})/sum(fracclr > 0.8);
+                    
+                    dVCDStats.dVCD_logical.(city_names{c}) = city_logs{c};
+                    dVCDStats.npix.(city_names{c}) = city_npix{c};
+                    dVCDStats.npixclr.(city_names{c}) = city_npixclr{c};
+                end
+                
+                dVCDStats.table = cell2table(tabcell,'VariableNames',varnames,'RowNames',city_names);
+                putvar(dVCDStats);
+        end
+        
+    end
+        
+    
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% OTHER FUNCTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3067,4 +3250,8 @@ for a=1:min(nargout,2) % if no second output is requested, don't ask for a "new"
         base_apriori = apriori_type;
     end
 end
+end
+
+function badpix = find_bad_pixels(Data)
+badpix = Data.CloudFraction > 0.2 | Data.XTrackQualityFlags ~= 0 | mod(Data.vcdQualityFlags,2) ~= 0 | Data.BEHRColumnAmountNO2Trop < 0 | Data.BEHRColumnAmountNO2Trop > 1e17;
 end

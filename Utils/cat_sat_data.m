@@ -27,7 +27,7 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %       When false, they will be concatenated in the along track dimension.
 %
 %       'DEBUG_LEVEL' - set to 0 to suppress debugging messages, defaults
-%       to 1.
+%       to 1. Set to 'visual' to use the waitbar dialogue.
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 10 Sept 2015
 
@@ -52,7 +52,7 @@ p.addParameter('prefix','',@ischar);
 p.addParameter('startdate','');
 p.addParameter('enddate','');
 p.addParameter('newdim',false);
-p.addParameter('DEBUG_LEVEL',1,@(x) (isnumeric(x) && isscalar(x)));
+p.addParameter('DEBUG_LEVEL',1,@(x) (ischar(x) || isnumeric(x) && isscalar(x)));
 
 p.parse(varargin{:});
 pout = p.Results;
@@ -62,6 +62,19 @@ startdate = pout.startdate;
 enddate = pout.enddate;
 newdim = pout.newdim;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
+
+wbbool = false;
+if ischar(DEBUG_LEVEL)
+    if strcmpi(DEBUG_LEVEL, 'visual')
+        if isDisplay
+            wbbool = true;
+            DEBUG_LEVEL = 0;
+        end
+    else
+        warning('Only the string ''visual'' for DEBUG_LEVEL will trigger the use of the waitbar.')
+        DEBUG_LEVEL = 1;
+    end
+end
 
 if isempty(startdate)
     startdate = 0;
@@ -117,6 +130,10 @@ varargout = cell(1,numel(datafields));
 % variable, look for the datafields given, and add their data to the output
 % which will be one long column vector.
 
+if wbbool
+    wb = waitbar(0,sprintf('Concatenating %s*.mat',strrep(prefix,'_','\_')));
+end
+
 for a=1:numel(F)
     [s,e] = regexp(F(a).name, '\d\d\d\d\d\d\d\d');
     filedate = datenum(F(a).name(s:e), 'yyyymmdd');
@@ -128,6 +145,8 @@ for a=1:numel(F)
     
     if DEBUG_LEVEL > 0
         fprintf('Loading file %s...\n',F(a).name);
+    elseif wbbool
+        waitbar(a/numel(F));
     end
     
     for b=1:numel(datafields)
@@ -148,6 +167,10 @@ for a=1:numel(F)
             end
         end
     end
+end
+
+if wbbool
+    close(wb);
 end
 
 end

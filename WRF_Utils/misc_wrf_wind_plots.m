@@ -6,7 +6,7 @@ E = JLLErrors;
 wrf_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US';
 
 if ~exist('plttype','var')
-    allowed_plots = {'wrf_wind-cld','wrf-sat-cld','wrf-var-corr','3dvar-v-cld'};
+    allowed_plots = {'wrf_wind-cld','wrf-sat-cld','wrf-var-corr','3dvar-v-cld','nonlin-nox','wrf_stats','pick-rxns','org-react'};
     plttype = ask_multichoice('Select a plot type',allowed_plots,'list',true);
 end
 
@@ -19,8 +19,16 @@ switch plttype
         wrf_var_corr();
     case '3dvar-v-cld'
         var3D_vs_cld(varargin{:});
+    case 'nonlin-nox'
+        nonlin_nox();
     case 'match2behr'
         [varargout{1}, varargout{2}, varargout{3}] = wrf_match_to_behr(varargin{:});
+    case 'wrf_stats'
+        varargout{1} = wrf_cell_stats(varargin{:});
+    case 'pick-rxns'
+        pick_wrf_rxns();
+    case 'org-react'
+        [varargout{1}, varargout{2}] = calc_total_org_react();
 end
 
     function wrf_wind_cld_corr
@@ -81,7 +89,7 @@ end
             [s,e] = regexp(behr_files(a).name,'\d\d\d\d\d\d\d\d');
             behr_dates(a) = datenum(behr_files(a).name(s:e),'yyyymmdd');
         end
-        wrf_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR/hourly-new';
+        wrf_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR/hourly';
         wrf_files = dir(fullfile(wrf_path,'WRF*.nc'));
         wrf_dates = nan(size(wrf_files));
         for a=1:numel(wrf_dates)
@@ -351,6 +359,101 @@ end
         end
     end
 
+    function nonlin_nox
+        % Will plot [OH] vs. [NOx] for all three cities in the SE region
+        % I'm considering for the wind effects paper. This will hopefully
+        % tell me something about whether Montgomery and Birmingham are
+        % more sensitive to NOx concentrations in WRF than Atlanta is.
+        radius = ask_number('Radius in WRF grid cells to consider (1 will use a 3x3 subset)', 'default', 0, 'testfxn', @(x) x>=0);
+        model_layers = ask_number('How many model layers to consider?', 'default', 1, 'testfxn', @(x) x>=1);
+        unit = ask_multichoice('Plot in mixing ratio or number density?',{'mr','nd'},'default','mr');
+        
+        city_names = {'Atlanta','Birmingham','Montgomery','Background'};
+        city_lons = [   -84.39,...  %Atlanta
+                        -86.80,...  %Birmingham
+                        -86.30,...  %Montgomery
+                        -83.00];    %Background
+        city_lats = [   33.775,...  %Atlanta
+                        33.52,...   %Birmingham
+                        32.37,...   %Montgomery
+                        32.25];     %Background
+        city_xx = cell(size(city_lons));
+        city_yy = cell(size(city_lons));
+        
+        F = dir(fullfile(wrf_path,'wrfout*'));
+        first_time = true;
+        
+        city_oh = cell(size(city_lons));
+        city_nox = cell(size(city_lons));
+        for c=1:numel(city_lons)
+            city_oh{c} = nan(size(F));
+            city_nox{c} = nan(size(F));
+        end
+        
+        if isDisplay
+            wb = waitbar(0, 'Loading files');
+        end
+        
+        for a=1:numel(F)
+            if isDisplay
+                waitbar(a/numel(F));
+            end
+            wrfname = fullfile(wrf_path,F(a).name);
+            % restrict to after 1 June (treat end of May as spinup)
+            [s,e] = regexp(F(a).name,'\d\d\d\d-\d\d-\d\d');
+            if datenum(F(a).name(s:e),'yyyy-mm-dd') < datenum('2013-06-01')
+                continue
+            end
+            
+            if first_time
+                % Assume that all the files have the same lat/lon grid as
+                % each other so that we can just find the cities once.
+                first_time = false;
+                xlon = ncread(wrfname,'XLONG');
+                xlat = ncread(wrfname,'XLAT');
+                for c=1:numel(city_lons)
+                    inds = find_nearest_gridpoint(city_lons(c), city_lats(c), xlon, xlat);
+                    city_xx{c} = inds(1)-radius:inds(1)+radius;
+                    city_yy{c} = inds(2)-radius:inds(2)+radius;
+                end
+            end
+            
+            OH = ncread(wrfname,'ho')*1e3; % ppm -> ppb
+            NO = ncread(wrfname,'no')*1e3; % ppm -> ppb
+            NO2 = ncread(wrfname,'no2')*1e3; %ppm -> ppb
+            % Calculate [OH] and [NOx] in number density.
+            if strcmpi(unit, 'nd')
+                ndens_air = calculate_wrf_air_ndens(wrfname);
+                OH = OH .* 1e-9 .* ndens_air; % ppb -> number density
+                NO = NO .* 1e-9 .* ndens_air; % ppb -> number density
+                NO2 = NO2 .* 1e-9 .* ndens_air; %ppb -> number density
+            end
+            % Subset for each city
+            for c=1:numel(city_lons)
+                oh_subset = OH(city_xx{c}, city_yy{c}, 1:model_layers);
+                city_oh{c}(a) = nanmean(oh_subset(:));
+                
+                no_subset = NO(city_xx{c}, city_yy{c}, 1:model_layers);
+                no2_subset = NO2(city_xx{c}, city_yy{c}, 1:model_layers);
+                city_nox{c}(a) = nanmean(no_subset(:) + no2_subset(:));
+            end
+            
+        end
+        
+        if isDisplay
+            close(wb)
+        end
+        
+        % Make the plots
+        for c=1:numel(city_lons)
+            figure;
+            scatter(city_nox{c}, city_oh{c}, 32, 'k');
+            title(sprintf('%1$s (%2$d x %2$d x %3$d)',city_names{c},radius*2+1,model_layers));
+            xlabel('[NO_x] (molec. cm^{-3})');
+            ylabel('[OH] (molec. cm^{-3})');
+            set(gca,'fontsize',16);
+        end
+    end
     %%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%% DATA FUNCTIONS %%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -483,5 +586,244 @@ end
             close(wb);
         end
     end
+
+    function wrfstats = wrf_cell_stats(options)
+        % This function will calculate statistics on all requested WRF
+        % variables for the desired date range and UTC time.
+        if ~exist('options','var') || ~isfield(options,'subset_lon') || ~isfield(options,'subset_lat')
+            fprintf('Pixels can be subset by the nearest to a lat/lon or within a domain.\n')
+            fprintf('For the next two questions, entering one number will find the grid cell nearest that point\n')
+            fprintf('and two numbers will treat that as a domain.\n')
+            sub_lon = ask_number('Enter the longitude criteria','testfxn',@(x) numel(x)<=2 && all(x >= -180) && all(x <= 180),'testmsg','Must be one or two values between -180 and +180');
+            sub_lat = ask_number('Enter the longitude criteria','testfxn',@(x) numel(x)<=2 && all(x >= -180) && all(x <= 180),'testmsg','Must be one or two values between -180 and +180');
+        else
+            sub_lon = options.subset_lon;
+            sub_lat = options.subset_lat;
+        end
+        
+        if ~exist('options','var') || ~isfield(options,'model_layers')
+            model_layers = ask_number('What model layers to consider?', 'testfxn', @(x) numel(x)==2 && x(1) <= x(2) && all(mod(x,1) == 0), 'testmsg', 'You must enter a 2-element vector of integers with the smaller value first');
+        else
+            model_layers = options.model_layers;
+        end
+        model_layers = min(model_layers):max(model_layers);
+        
+        if ~exist('options','var') || ~isfield(options,'wrf_vars');
+            wrf_vars_names = strsplit(input('Enter the WRF variables to compute statistics for, separated by spaces: ', 's'));
+        else
+            if iscellstr(options.wrf_vars)
+                wrf_vars_names = options.wrf_vars;
+            else
+                wrf_vars_names = strsplit(options.wrf_vars);
+            end
+        end
+        
+        if ~exist('options','var') || ~isfield(options,'utc_hr')
+            utc_hr = ask_number('Enter the UTC hour to consider','testfxn',@(x) isscalar(x) && x>=0 && x<=23);
+        else
+            utc_hr = options.utc_hr;
+        end
+        
+        if ~exist('options','var') || ~isfield(options, 'start_date') || ~isfield(options, 'start_date')
+            start_date = ask_date('Enter the starting date');
+            end_date = ask_date('Enter the ending_date');
+        else
+            start_date = options.start_date;
+            end_date = options.end_date;
+        end
+        
+        %%%% GET FILES AND READ %%%%%
+        wrf_pattern = sprintf('wrfout_*_%02d-00-00',utc_hr);
+        F = dir(fullfile(wrf_path,wrf_pattern));
+        F = files_in_dates(F, start_date, end_date);
+        
+        wrf_vars = cell(size(wrf_vars_names));
+        [wrf_vars{:}] = read_wrf_vars(wrf_path,F,wrf_vars_names);
+        [xlon, xlat] = read_wrf_vars(wrf_path,F(1),{'XLONG','XLAT'});
+        
+        % Subset by finding one pixel or all grid cells in the domain
+        % (later if needed)
+        if isscalar(sub_lon) && isscalar(sub_lat)
+            [~,mi] = min(sqrt((xlon(:) - sub_lon).^2) + sqrt((xlat(:) - sub_lat).^2));
+            [mix, miy] = ind2sub(size(xlon),mi);
+        elseif xor(isscalar(sub_lon), isscalar(sub_lat))
+            E.badinput('sub_lon and sub_lat must be both scalar or not')
+        else 
+            E.notimplemented('subsetting by domain')
+        end
+        
+        % Prep the output structure.
+        substruct = struct('mean',0,'stddev',0,'median',0,'quartiles',[0 0],'percentile_1090',[0 0],'minmax',[0 0],'units','');
+        wrfstats = make_empty_struct_from_cell(wrf_vars_names, substruct);
+        
+        % Go through each variable; slice as necessary, then compute the
+        % stats. Also read the unit
+        for a=1:numel(wrf_vars)
+            if size(wrf_vars{a},3) > 1
+                this_slice = reshape(wrf_vars{a}(mix,miy,model_layers,:),[],1);
+            else
+                this_slice = reshape(wrf_vars{a}(mix,miy,1,:),[],1);
+            end
+            wrfstats.(wrf_vars_names{a}).mean = nanmean(this_slice);
+            wrfstats.(wrf_vars_names{a}).stddev = nanstd(this_slice);
+            wrfstats.(wrf_vars_names{a}).median = nanmedian(this_slice);
+            wrfstats.(wrf_vars_names{a}).quartiles = quantile(this_slice,[0.25 0.75]);
+            wrfstats.(wrf_vars_names{a}).percentile_1090 = quantile(this_slice, [0.1 0.9]);
+            wrfstats.(wrf_vars_names{a}).minmax = [min(this_slice), max(this_slice)];
+            wrfstats.(wrf_vars_names{a}).units = ncreadatt(fullfile(wrf_path,(F(1).name)),wrf_vars_names{a},'units');
+        end
+    end
+
+    function varargout = pick_wrf_rxns()
+        % This will choose a subset of the reactions defined in the
+        % r2smh.eqn file.
+        %
+        subset_type = ask_multichoice('Which subset of rxns would you like?',{'NO+RO2','One species'},'list',true);
+        if strcmpi(subset_type,'One species')
+            spec_name = input('    Enter the species name to look for: ', 's');
+            spec_side = ask_multichoice('    Which side of the reaction should it be on?',{'Products','Reactants','Either'});
+        end
+        % If output requested, we will be saving the products, reactants,
+        % and rate constant functions for each reaction.
+        if nargout > 0
+            save_bool = true;
+            prod_out = {};
+            react_out = {};
+            k_out = {};
+        else
+            save_bool = 0;
+        end
+        
+        eqn_file = '/Users/Josh/Documents/MATLAB/BEHR/WRF_Utils/Models/R2SMH/r2smh.eqn';
+        fid = fopen(eqn_file);
+        tline = fgetl(fid);
+        while ischar(tline)
+            if ismember('#',tline) || ~isempty(regexp(tline,'JUNK','once'))
+            else
+                [products, ~, reactants, ~, rate_fxn] = read_wrf_mech_line(tline);
+                % Get reactions of organics with NO to produce NO2. This
+                % will let us calculate organic reactivity down the road.
+                switch lower(subset_type)
+                    case 'no+ro2'
+                        eqn_bool = ismember('NO',reactants) && ismember('NO2',products) && ~any(ismember({'O3','O3P','HO2','NO3','M'},reactants));
+                    case 'one species'
+                        switch lower(spec_side)
+                            case 'products'
+                                eqn_bool = ismember(spec_name, products);
+                            case 'reactants'
+                                eqn_bool = ismember(spec_name, reactants);
+                            case 'either'
+                                eqn_bool = ismember(spec_name, products) || ismember(spec_name, reactants);
+                        end
+                end
+                if eqn_bool
+                    if save_bool
+                        prod_out{end+1} = products;
+                        react_out{end+1} = reactants;
+                        k_out{end+1} = rate_fxn(298, 2e19); % evaluate for typical surface conditions.
+                    else
+                        fprintf('%s\n',tline);
+                    end
+                end
+            end
+            tline = fgetl(fid);
+        end
+        
+        if save_bool
+            varargout{1} = prod_out;
+            varargout{2} = react_out;
+            varargout{3} = k_out;
+        end
+    end
+
+    function [total_org_reactivity, total_react_uncert] = calc_total_org_react()
+        E=JLLErrors;
+        % This will calculate the total organic reactivity for the
+        % requested city.
+        city_name = ask_multichoice('Which city to calculate for?',{'Atlanta','Birmingham','Montgomery'},'list',true');
+        [city_lon, city_lat] = return_city_info(city_name);
+        [~, all_react, all_rates] = pick_wrf_rxns;
+        
+        % Go through all the reactants and extract the names of the organic
+        % compounts.
+        org_cmpds = {};
+        for a=1:numel(all_react)
+            xx = ~strcmpi('NO',all_react{a});
+            org_cmpds = cat(2, org_cmpds, all_react{a}(xx));
+        end
+        
+        % Get the statistics on the concentration of each organic compound
+        opts.subset_lon = city_lon;
+        opts.subset_lat = city_lat;
+        opts.model_layers = [1 1];
+        opts.wrf_vars = lower(org_cmpds); % in the output, the chemical compounds are usually in lower case
+        opts.utc_hr = 19;
+        opts.start_date = '2013-06-01';
+        opts.end_date = '2013-06-30';
+        
+        wrfstats = wrf_cell_stats(opts);
+        
+        % Now go through and match up concentrations, converting them from
+        % ppm or ppmv to molec./cm^3.
+        org_conc = nan(size(org_cmpds));
+        org_std = nan(size(org_cmpds));
+        for a=1:numel(org_cmpds)
+            org_name = lower(org_cmpds{a});
+            if ~ismember(wrfstats.(org_name).units, 'ppm','ppmv')
+                E.notimplemented(sprintf('Conversion from unit %s to molec./cm^3',wrfstats.(org_name).units));
+            end
+            org_conc(a) = wrfstats.(org_name).mean * 1e-6 * 2e19;
+            org_std(a) = wrfstats.(org_name).stddev * 1e-6 * 2e19;
+        end
+        
+        % Sum up organic reactivity and calculate its uncertainty in
+        % quadrature based on the spread of the data.
+        total_org_reactivity = nansum2(org_conc .* all_rates);
+        total_react_uncert = sqrt(nansum2((org_std .* all_rates).^2));
+    end
 end
 
+function files = files_in_dates(files, start_date, end_date)
+% Will remove files outside of the given date range. Dates can be as
+% datenumbers or strings. Right now assumes the date in the filename is
+% yyyymmdd or yyyy-mm-dd
+E = JLLErrors;
+
+file_dates = nan(size(files));
+for a=1:numel(files)
+    [s,e] = regexp(files(a).name,'\d\d\d\d\d\d\d\d');
+    if ~isempty(s)
+        file_dates(a) = datenum(files(a).name(s:e),'yyyymmdd');
+    else
+        [s,e] = regexp(files(a).name,'\d\d\d\d-\d\d-\d\d');
+        if isempty(s)
+            E.callError('unknown_date_format','Cannot find the file''s date in the file name')
+        end
+        file_dates(a) = datenum(files(a).name(s:e),'yyyy-mm-dd');
+    end
+end
+
+sdate = datenum(start_date);
+edate = datenum(end_date);
+
+xx = file_dates >= sdate & file_dates <= edate;
+files = files(xx);
+
+end
+
+function [city_lon, city_lat] = return_city_info(city_name)
+switch lower(city_name)
+    case 'atlanta'
+        city_lon = -84.39;
+        city_lat = 33.775;
+    case 'birmingham'
+        city_lon = -86.80;
+        city_lat = 33.52;
+    case 'montgomery'
+        city_lon = -86.30;
+        city_lat = 32.37;
+    otherwise
+        E=JLLErrors;
+        E.badinput('%s not recognized as a city',city_name);
+end
+end

@@ -6,7 +6,9 @@
 % if you already have the line densities.
 
 %% calc wind speed/direction
-timemode='avg'; %instant or avg
+timemode='hour'; %instant, hour, or avg
+city = 'Montgomery'; %Atlanta, Birmingham, or Montgomery
+
 fpath = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR/hourly';
 F = dir(fullfile(fpath,'*.nc'));
 dnums = [];
@@ -14,9 +16,10 @@ for a=1:numel(F)
     [s,e] = regexp(F(a).name, '\d\d\d\d-\d\d-\d\d');
     dnums = cat(1,dnums, datenum(F(a).name(s:e),'yyyy-mm-dd'));
 end
-% Remove any days before June 10th - allow WRF spinup
+% Remove any days before June 1st - allow WRF spinup
 F = F(dnums >= datenum('2013-06-01'));
-[XLON, XLAT, U, V, COSALPHA, SINALPHA, utchr] = read_wrf_vars(fpath, F, {'XLONG', 'XLAT', 'U', 'V', 'COSALPHA', 'SINALPHA', 'utchr'});
+dnums = dnums(dnums >= datenum('2013-06-01'));
+[XLON, XLAT, U, V, COSALPHA, SINALPHA, utchr] = read_wrf_vars(fpath, F, {'XLONG', 'XLAT', 'U', 'V', 'COSALPHA', 'SINALPHA', 'utchr'},false,0);
 % We can take just one 2D slice of lon, lat, cos, and sin because these do
 % not change in time. U and V we will take surface averaged over utchrs 19
 % and 20 as these are closest to OMI overpass at Atlanta (13-14 local time)
@@ -27,7 +30,9 @@ for a=1:size(utchr,1)
     end
 end
 if strcmpi(timemode,'instant')
-    tt = find(utchr == 19,1,'first');
+    tt = find(utchr(:,1) == 19,1,'first');
+elseif strcmpi(timemode,'hour')
+    tt = utchr(:,1) == 19;
 else
     tt = utchr(:,1) >= 19 & utchr(:,1) < 21;
 end
@@ -35,15 +40,38 @@ XLON = XLON(:,:,1,1);
 XLAT = XLAT(:,:,1,1);
 COSALPHA = COSALPHA(:,:,1,1);
 SINALPHA = SINALPHA(:,:,1,1);
-Ubar = squeeze(nanmean(U(:,:,1,tt,:),4));
-Vbar = squeeze(nanmean(V(:,:,1,tt,:),4));
+% Lu 2015 used winds across the bottom 500 m or so
+Ubar = squeeze(nanmean(nanmean(U(:,:,1:5,tt,:),3),4));
+Vbar = squeeze(nanmean(nanmean(V(:,:,1:5,tt,:),3),4));
 [Ue, Ve] = wrf_winds_transform(Ubar, Vbar, COSALPHA, SINALPHA);
-[windvel, theta] = misc_behr_wind_plots('calcavgwind', XLON, XLAT, Ue, Ve, -84.39, 33.775);
 
+switch city
+    case 'Atlanta'
+        city_lon = -84.39; city_lat = 33.775;
+    case 'Birmingham'
+        city_lon = -86.80; city_lat = 33.52;
+    case 'Montgomery'
+        city_lon = -86.3; city_lat = 32.37;
+    otherwise
+        error('emg:city','City %s not recognized',city);
+end
+
+[windvel, theta] = misc_behr_wind_plots('calcavgwind', XLON, XLAT, Ubar, Vbar, city_lon, city_lat);
 %% gen line densities
 fprintf('Calculating line densities\n');
-city_lon = -84.39;
-city_lat = 33.755;
+if ~exist('city','var')
+    city = 'Atlanta';
+end
+switch city
+    case 'Atlanta'
+        wind_file = 'Atlanta-Wind-Conditions-1900UTC.mat';
+    case 'Birmingham'
+        wind_file = 'Birmingham-Wind-Conditions-1900UTC.mat';
+    case 'Montgomery'
+        wind_file = 'Montgomery-Wind-Conditions-1900UTC.mat';
+    otherwise
+        error('emg:city','City %s not recognized',city);
+end
 
 interp_bool = false;
 box = [1 2 0.5 0.5]; %[0.5 2 0.5 0.5];
@@ -55,11 +83,11 @@ monthly_dir = 'SE US BEHR Monthly - No ghost';
 coarse_mn_dir = 'SE US BEHR Monthly - No ghost - Coarse WRF';
 
 
-% loads theta and windvel
-load(fullfile(behr_work_dir,'Atlanta-Wind-Conditions-Long-UTC19-20.mat'));
+% loads theta and windvel plus city lat and lon
+load(fullfile(behr_work_dir,wind_file));
 
-gtcrit = windvel >= 3.6 & (theta < 0 | theta > 60);
-ltcrit = windvel < 3.6 & (theta < 0 | theta > 60);
+gtcrit = windvel >= 3.7;% & (theta < 0 | theta > 60);
+ltcrit = windvel < 3.7;% & (theta < 0 | theta > 60);
 
 F = dir(fullfile(behr_work_dir, hybrid_dir, 'OMI_BEHR_*.mat'));
 fdnums = nan(size(F));
@@ -69,12 +97,18 @@ for a=1:numel(fdnums)
 end
 F = F(fdnums >= datenum('2013-06-01'));
 
-[no2x_hygt5, no2ld_hygt5, no2ldstd_hygt5, lon_hygt5, lat_hygt5, no2cd_hygt5] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool);
-[no2x_hylt5, no2ld_hylt5, no2ldstd_hylt5, lon_hylt5, lat_hylt5, no2cd_hylt5] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool);
-[no2x_mngt5, no2ld_mngt5, no2ldstd_mngt5, lon_mngt5, lat_mngt5, no2cd_mngt5] = calc_line_density(fullfile(behr_work_dir, monthly_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool);
-[no2x_mnlt5, no2ld_mnlt5, no2ldstd_mnlt5, lon_mnlt5, lat_mnlt5, no2cd_mnlt5] = calc_line_density(fullfile(behr_work_dir, monthly_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool);
-[no2x_mn108gt5, no2ld_mn108gt5, no2ldstd_mn108gt5, lon_mn108gt5, lat_mn108gt5, no2cd_mn108gt5] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool);
-[no2x_mn108lt5, no2ld_mn108lt5, no2ldstd_mn108lt5, lon_mn108lt5, lat_mn180lt5, no2cd_mn108lt5] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool);
+fprintf('Fast hybrid\n')
+[no2x_hygt5, no2ld_hygt5, no2ldstd_hygt5, lon_hygt5, lat_hygt5, no2cd_hygt5] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+fprintf('Slow hybrid\n')
+[no2x_hylt5, no2ld_hylt5, no2ldstd_hylt5, lon_hylt5, lat_hylt5, no2cd_hylt5] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+fprintf('Fast monthly\n')
+[no2x_mngt5, no2ld_mngt5, no2ldstd_mngt5, lon_mngt5, lat_mngt5, no2cd_mngt5] = calc_line_density(fullfile(behr_work_dir, monthly_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+fprintf('Slow monthly\n')
+[no2x_mnlt5, no2ld_mnlt5, no2ldstd_mnlt5, lon_mnlt5, lat_mnlt5, no2cd_mnlt5] = calc_line_density(fullfile(behr_work_dir, monthly_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+fprintf('Fast coarse monthly\n')
+[no2x_mn108gt5, no2ld_mn108gt5, no2ldstd_mn108gt5, lon_mn108gt5, lat_mn108gt5, no2cd_mn108gt5] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+fprintf('Slow coarse monthly\n')
+[no2x_mn108lt5, no2ld_mn108lt5, no2ldstd_mn108lt5, lon_mn108lt5, lat_mn180lt5, no2cd_mn108lt5] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
 
 %% Basic fitting
 fprintf('Doing simple fitting of the line densities\n');
