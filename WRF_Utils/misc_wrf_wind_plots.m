@@ -6,7 +6,7 @@ E = JLLErrors;
 wrf_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US';
 
 if ~exist('plttype','var')
-    allowed_plots = {'wrf_wind-cld','wrf-sat-cld','wrf-var-corr','3dvar-v-cld','nonlin-nox','wrf_stats','pick-rxns','org-react'};
+    allowed_plots = {'wrf_wind-cld','wrf-sat-cld','wrf-var-corr','3dvar-v-cld','nonlin-nox','wrf_stats','pick-rxns','mean-react','daily-react','sum-emis'};
     plttype = ask_multichoice('Select a plot type',allowed_plots,'list',true);
 end
 
@@ -27,10 +27,18 @@ switch plttype
         varargout{1} = wrf_cell_stats(varargin{:});
     case 'pick-rxns'
         pick_wrf_rxns();
-    case 'org-react'
-        [varargout{1}, varargout{2}] = calc_total_org_react();
+    case 'mean-react'
+        [varargout{1}, varargout{2}] = calc_mean_total_react();
+    case 'daily-react'
+        [varargout{1}, varargout{2}, varargout{3}, varargout{4}] = calc_daily_total_reactivity();
+    case 'sum-emis'
+        varargout{1} = compute_wrf_emis();
 end
 
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%% PLOTTING FUNCTION %%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
     function wrf_wind_cld_corr
         sdate = datenum(ask_date('Enter the starting date'));
         edate = datenum(ask_date('Enter the ending date'));
@@ -454,6 +462,7 @@ end
             set(gca,'fontsize',16);
         end
     end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%% DATA FUNCTIONS %%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -674,14 +683,21 @@ end
         end
     end
 
-    function varargout = pick_wrf_rxns()
+    function varargout = pick_wrf_rxns(subset_type)
         % This will choose a subset of the reactions defined in the
         % r2smh.eqn file.
         %
-        subset_type = ask_multichoice('Which subset of rxns would you like?',{'NO+RO2','One species'},'list',true);
-        if strcmpi(subset_type,'One species')
-            spec_name = input('    Enter the species name to look for: ', 's');
-            spec_side = ask_multichoice('    Which side of the reaction should it be on?',{'Products','Reactants','Either'});
+        allowed_subsets = {'NO+RO2','VOC+OH','One species'};
+        if ~exist('subset_type','var')
+            subset_type = ask_multichoice('Which subset of rxns would you like?',allowed_subsets,'list',true);
+            if strcmpi(subset_type,'One species')
+                spec_name = input('    Enter the species name to look for: ', 's');
+                spec_side = ask_multichoice('    Which side of the reaction should it be on?',{'Products','Reactants','Either'});
+            end
+        else
+            if ~ismember(lower(subset_type), lower(allowed_subsets));
+                E.badinput('If given, SUBSET_TYPE must be one of : %s',strjoin(allowed_subsets,', '));
+            end
         end
         % If output requested, we will be saving the products, reactants,
         % and rate constant functions for each reaction.
@@ -694,7 +710,8 @@ end
             save_bool = 0;
         end
         
-        eqn_file = '/Users/Josh/Documents/MATLAB/BEHR/WRF_Utils/Models/R2SMH/r2smh.eqn';
+        homedir = getenv('HOME');
+        eqn_file = fullfile(homedir,'Documents','MATLAB','WRF_Parsing','R2SMH','r2smh.eqn');
         fid = fopen(eqn_file);
         tline = fgetl(fid);
         while ischar(tline)
@@ -706,6 +723,8 @@ end
                 switch lower(subset_type)
                     case 'no+ro2'
                         eqn_bool = ismember('NO',reactants) && ismember('NO2',products) && ~any(ismember({'O3','O3P','HO2','NO3','M'},reactants));
+                    case 'voc+oh'
+                        eqn_bool = ismember('HO',reactants) && ~any(ismember({'O3','M','HO2','H2O2','NO','HONO','NO2','HNO3','NO3','HNO4','SO2'},reactants));
                     case 'one species'
                         switch lower(spec_side)
                             case 'products'
@@ -736,19 +755,27 @@ end
         end
     end
 
-    function [total_org_reactivity, total_react_uncert] = calc_total_org_react()
-        E=JLLErrors;
+    function [reactivity, react_uncert] = calc_mean_total_react()
         % This will calculate the total organic reactivity for the
         % requested city.
-        city_name = ask_multichoice('Which city to calculate for?',{'Atlanta','Birmingham','Montgomery'},'list',true');
+        city_name = ask_multichoice('Which city to calculate for?',{'Atlanta','Birmingham','Montgomery'},'list',true);
         [city_lon, city_lat] = return_city_info(city_name);
-        [~, all_react, all_rates] = pick_wrf_rxns;
+        r_type = ask_multichoice('Which type of reactivity to calculate for?',{'NO+RO2','VOC+OH'},'list',true);
+        
+        
+        [~, all_react, all_rates] = pick_wrf_rxns('NO+RO2');
         
         % Go through all the reactants and extract the names of the organic
         % compounts.
         org_cmpds = {};
+        switch lower(r_type)
+            case 'no+ro2'
+                rej_react = 'NO';
+            case 'voc+oh'
+                rej_react = 'HO';
+        end
         for a=1:numel(all_react)
-            xx = ~strcmpi('NO',all_react{a});
+            xx = ~strcmpi(rej_react,all_react{a});
             org_cmpds = cat(2, org_cmpds, all_react{a}(xx));
         end
         
@@ -778,8 +805,146 @@ end
         
         % Sum up organic reactivity and calculate its uncertainty in
         % quadrature based on the spread of the data.
-        total_org_reactivity = nansum2(org_conc .* all_rates);
-        total_react_uncert = sqrt(nansum2((org_std .* all_rates).^2));
+        reactivity = nansum2(org_conc .* all_rates);
+        react_uncert = sqrt(nansum2((org_std .* all_rates).^2));
+    end
+
+    function [reactivity, reactivity_uncer, speciated_reactivity, species_rates] = calc_daily_total_reactivity()
+        % This will calculate the total organic reactivity for the
+        % requested city.
+        city_name = ask_multichoice('Which city to calculate for?',{'Atlanta','Birmingham','Montgomery'},'list',true);
+        [city_lon, city_lat] = return_city_info(city_name);
+        r_type = ask_multichoice('Which type of reactivity to calculate for?',{'NO+RO2','VOC+OH'},'list',true);
+        start_date = ask_date('Enter the starting date');
+        end_date = ask_date('Enter the ending date');
+        
+        
+        [~, all_react, all_rates] = pick_wrf_rxns(r_type);
+        all_rates = cell2mat(all_rates);
+        % Go through all the reactants and extract the names of the organic
+        % compounds. Also remove those not available in the output file.
+        org_cmpds = {};
+        W = dir(fullfile(wrf_path,'wrfout*'));
+        wi = ncinfo(fullfile(wrf_path, W(1).name));
+        wrf_vars = {wi.Variables.Name};
+        
+        switch lower(r_type)
+            case 'no+ro2'
+                rej_react = 'NO';
+            case 'voc+oh'
+                rej_react = 'HO';
+        end
+        for a=1:numel(all_react)
+            xx = ~strcmpi(rej_react,all_react{a});
+            if sum(xx) > 1
+                E.notimplemented('3 body reactions')
+            end
+            this_voc = lower(all_react{a}(xx));
+            if ismember(upper(this_voc), wrf_vars)
+                if ~ismember(this_voc, wrf_vars)
+                    this_voc = upper(this_voc);
+                else
+                    E.callError('multiple species','The species %s can be found as both upper and lower case in a wrfout file');
+                end
+            elseif ~ismember(this_voc, wrf_vars)
+                fprintf('\t %s is not available in wrfout\n', this_voc)
+                continue
+            end
+            org_cmpds = cat(2, org_cmpds, this_voc);
+        end
+        u_org_cmpds = unique(org_cmpds);
+        
+        % Get the statistics on the concentration of each organic compound
+        opts.subset_lon = city_lon;
+        opts.subset_lat = city_lat;
+        opts.model_layers = [1 1];
+        opts.wrf_vars = u_org_cmpds;
+        opts.utc_hr = 19;
+        
+        dvec = datenum(start_date):datenum(end_date);
+        reactivity = nan(size(dvec));
+        reactivity_uncer = nan(size(dvec));
+        
+        speciated_reactivity = make_empty_struct_from_cell(u_org_cmpds, zeros(size(dvec)));
+        species_rates = make_empty_struct_from_cell(u_org_cmpds, 0);
+        
+        for d=1:numel(dvec)
+            opts.start_date = datestr(dvec(d));
+            opts.end_date = datestr(dvec(d));
+            wrfstats = wrf_cell_stats(opts);
+            
+            % Now go through and match up concentrations, converting them from
+            % ppm or ppmv to molec./cm^3.
+            org_conc = nan(size(org_cmpds));
+            org_std = nan(size(org_cmpds));
+            for a=1:numel(org_cmpds)
+                org_name = org_cmpds{a};
+                if ~ismember(wrfstats.(org_name).units, {'ppm','ppmv'})
+                    if isempty(wrfstats.(org_name).units)
+                        if d==1
+                            warning('No units for %s, assuming to be in PPM',org_name)
+                        end
+                    else
+                        E.notimplemented(sprintf('Conversion from unit %s to molec./cm^3',wrfstats.(org_name).units));
+                    end
+                end
+                org_conc(a) = wrfstats.(org_name).mean * 1e-6 * 2e19;
+                org_std(a) = wrfstats.(org_name).stddev * 1e-6 * 2e19;
+                speciated_reactivity.(org_name)(d) = speciated_reactivity.(org_name)(d) + org_conc(a) * all_rates(a);
+                if d == 1
+                    species_rates.(org_name) = species_rates.(org_name) + all_rates(a);
+                end
+            end
+            
+            reactivity(d) = nansum2(org_conc .* all_rates);
+            reactivity_uncer(d) = sqrt(nansum2( (org_std .* all_rates).^2 ));
+        end
+    end
+
+    function emis = compute_wrf_emis
+    % This will add up the emissions from the two large enough cities in
+    % the domain: both by assuming a simple 50 km radius and using
+    % find_plume to identify emissions above a given threshold.
+    
+    city_names = {'Atlanta','Birmingham'};
+    substruct = struct('within50km',0,'floodfill',0,'units','mol NO h^{-1}');
+    emis = make_empty_struct_from_cell(city_names, substruct);
+    % Emissions in WRF do not change by day, so just load one file at 1900
+    % UTC.
+    F = dir(fullfile(wrf_path,'wrfout*_19-00*'));
+    [xlon, xlat, e_no] = read_wrf_vars(wrf_path, F(1), {'XLONG','XLAT','E_NO'});
+    e_no = squeeze(nansum2(e_no,3));
+    
+    % Options for subsetting for the 50 km approach
+    options.quad_bool = false;
+    options.dist_limit = 50;
+    
+    [xloncorn, xlatcorn] = wrf_grid_corners(xlon,xlat);
+    earth_ellip = referenceEllipsoid('wgs84','kilometers');
+    for c=1:numel(city_names)
+        [city_lon, city_lat] = return_city_info(city_names{c});
+        options.center_lon = city_lon;
+        options.center_lat = city_lat;
+        in = subset_WRF_grid_cells(xlon,xlat,[-88 -80],[30 36], options);
+        city_loncorn = xloncorn(:,in);
+        city_latcorn = xlatcorn(:,in);
+        city_areas = nan(1,numel(in));
+        for a=1:numel(in)
+            city_areas(a) = areaint(city_latcorn(:,a), city_loncorn(:,a), earth_ellip);
+        end
+        
+        emis.(city_names{c}).within50km = nansum2(e_no(in) .* city_areas');
+        
+        in = find_plume(e_no, xlon, xlat, 50, city_lon, city_lat);
+        city_loncorn = xloncorn(:,in);
+        city_latcorn = xlatcorn(:,in);
+        city_areas = nan(1,sum(in(:)));
+        for a=1:numel(city_areas)
+            city_areas(a) = areaint(city_latcorn(:,a), city_loncorn(:,a), earth_ellip);
+        end
+        emis.(city_names{c}).floodfill = nansum2(e_no(in) .* city_areas');
+    end
+    
     end
 end
 
