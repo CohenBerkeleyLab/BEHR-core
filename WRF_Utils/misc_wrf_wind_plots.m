@@ -6,7 +6,7 @@ E = JLLErrors;
 wrf_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US';
 
 if ~exist('plttype','var')
-    allowed_plots = {'wrf_wind-cld','wrf-sat-cld','wrf-var-corr','3dvar-v-cld','nonlin-nox','wrf_stats','pick-rxns','mean-react','daily-react','sum-emis'};
+    allowed_plots = {'wrf_wind-cld','wrf-sat-cld','wrf-var-corr','2dvar-v-cld','3dvar-v-cld','nonlin-nox','wrf_stats','pick-rxns','mean-react','daily-react','sum-emis'};
     plttype = ask_multichoice('Select a plot type',allowed_plots,'list',true);
 end
 
@@ -14,9 +14,11 @@ switch plttype
     case 'wrf_wind-cld'
         wrf_wind_cld_corr();
     case 'wrf-sat-cld'
-        wrf_cloud_corr();
+        wrf_cloud_corr(varargin{:});
     case 'wrf-var-corr'
         wrf_var_corr();
+    case '2dvar-v-cld'
+        var2D_vs_cld();
     case '3dvar-v-cld'
         var3D_vs_cld(varargin{:});
     case 'nonlin-nox'
@@ -33,6 +35,8 @@ switch plttype
         [varargout{1}, varargout{2}, varargout{3}, varargout{4}] = calc_daily_total_reactivity();
     case 'sum-emis'
         varargout{1} = compute_wrf_emis();
+    case 'lifetime'
+        compute_avg_lifetime;
 end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -75,7 +79,7 @@ end
         ylabel('Average cloud fraction');
     end
 
-    function wrf_cloud_corr()
+    function wrf_cloud_corr(opts)
         start_date = ask_date('Enter the start date');
         end_date = ask_date('Enter the ending date');
         cld_calc = ask_multichoice('Use the random or maximum overlap cloud total?',{'random','max'});
@@ -83,12 +87,19 @@ end
         domain_x = [-87.1, -81.9];
         domain_y = [31.9, 35.6];
         
+        quad_avg_bool = strcmpi(ask_multichoice('Do you want to compare daily quadrant averages rather than pixel-by-pixel?',{'y','n'}),'y');
+        if quad_avg_bool && ~exist('opts','var')
+            opts = subset_BEHR_pixels;
+            fprintf('*** Center lat/lon will be set to 33.775, -84.39 ***\n')
+        end
+        % Overwrite the center lat/lon since this is only set up for
+        % Atlanta.
+        opts.center_lon = -84.39;
+        opts.center_lat = 33.775;
+        
         % Load each BEHR files and WRF file in the date range. Find the
         % BEHR pixels within the domain of interest. Average the WRF
         % clouds to them and add those values to the respective vectors.
-        omi_clds_vec = [];
-        modis_clds_vec = [];
-        wrf_clds_vec = [];
         
         behr_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';
         behr_files = dir(fullfile(behr_path,'OMI*.mat'));
@@ -105,7 +116,20 @@ end
             wrf_dates(a) = datenum(wrf_files(a).name(s:e), 'yyyy-mm-dd');
         end
         
-        for d=datenum(start_date):datenum(end_date)
+        datevec = datenum(start_date):datenum(end_date);
+        
+        if ~quad_avg_bool
+            omi_clds_vec = [];
+            modis_clds_vec = [];
+            wrf_clds_vec = [];
+        else
+            omi_clds_vec = nan(4,numel(datevec));
+            modis_clds_vec = nan(4,numel(datevec));
+            wrf_clds_vec = nan(4,numel(datevec));
+        end
+        nd=0;
+        for d=datevec;
+            nd=nd+1; % lazy and not refactoring code to loop over number of elements of datevec
             fprintf('Working on %s\n',datestr(d));
             bb = behr_dates == d;
             if sum(bb) < 1
@@ -139,63 +163,104 @@ end
             % domain
             D = load(fullfile(behr_path, behr_files(bb).name),'Data');
             Data = D.Data;
-            for s=1:numel(Data)
-                minloncorn = squeeze(min(Data(s).Loncorn,[],1));
-                maxloncorn = squeeze(max(Data(s).Loncorn,[],1));
-                minlatcorn = squeeze(min(Data(s).Latcorn,[],1));
-                maxlatcorn = squeeze(max(Data(s).Latcorn,[],1));
-                pp = minloncorn >= domain_x(1) & maxloncorn <= domain_x(2) & minlatcorn >= domain_y(1) & maxlatcorn <= domain_y(2);
-                if sum(pp) < 1;
-                    continue
-                end
-                
-                loncorn_in = Data(s).Loncorn(:,pp);
-                latcorn_in = Data(s).Latcorn(:,pp);
-                omi_clouds_in = Data(s).CloudFraction(pp);
-                modis_clouds_in = Data(s).MODISCloud(pp);
-                minloncorn_in = minloncorn(pp);
-                maxloncorn_in = maxloncorn(pp);
-                minlatcorn_in = minlatcorn(pp);
-                maxlatcorn_in = maxlatcorn(pp);
-                
-                % Find the WRF grid cells that match each pixel using our
-                % usual method of eliminating grid cells through logical
-                % operations first. Also find the time from the
-                % BEHRapriorimode field.
-                apr_str = Data(s).BEHRaprioriMode;
-                st = regexp(apr_str,'[')+1;
-                ed = regexp(apr_str,']')-1;
-                apr_hrs_cell = strsplit(apr_str(st:ed),';');
-                apr_hrs = nan(size(apr_hrs_cell));
-                for a=1:numel(apr_hrs)
-                    apr_hrs(a) = str2double(apr_hrs_cell{a});
-                end
-                
-                for p=1:numel(omi_clouds_in)
-                    omi_clds_vec(end+1) = omi_clouds_in(p);
-                    modis_clds_vec(end+1) = modis_clouds_in(p);
+            if ~quad_avg_bool
+                for s=1:numel(Data)
+                    minloncorn = squeeze(min(Data(s).Loncorn,[],1));
+                    maxloncorn = squeeze(max(Data(s).Loncorn,[],1));
+                    minlatcorn = squeeze(min(Data(s).Latcorn,[],1));
+                    maxlatcorn = squeeze(max(Data(s).Latcorn,[],1));
+                    pp = minloncorn >= domain_x(1) & maxloncorn <= domain_x(2) & minlatcorn >= domain_y(1) & maxlatcorn <= domain_y(2);
+                    if sum(pp) < 1;
+                        continue
+                    end
                     
-                    tt = ismember(wrf_hr,apr_hrs);
-                    wrf_cld_slice = nanmean(wrf_cld(:,:,tt),3);
-                    xx = wrf_lon >= minloncorn_in(p) & wrf_lon <= maxloncorn_in(p) & wrf_lat >= minlatcorn_in(p) & wrf_lat <= maxlatcorn_in(p);
-                    in = inpolygon(wrf_lon(xx), wrf_lat(xx), loncorn_in(:,p), latcorn_in(:,p));
-                    wrf_cld_pix = wrf_cld_slice(xx);
-                    wrf_clds_vec(end+1) = nanmean(wrf_cld_pix(in));
+                    loncorn_in = Data(s).Loncorn(:,pp);
+                    latcorn_in = Data(s).Latcorn(:,pp);
+                    omi_clouds_in = Data(s).CloudFraction(pp);
+                    modis_clouds_in = Data(s).MODISCloud(pp);
+                    minloncorn_in = minloncorn(pp);
+                    maxloncorn_in = maxloncorn(pp);
+                    minlatcorn_in = minlatcorn(pp);
+                    maxlatcorn_in = maxlatcorn(pp);
+                    
+                    % Find the WRF grid cells that match each pixel using our
+                    % usual method of eliminating grid cells through logical
+                    % operations first. Also find the time from the
+                    % BEHRapriorimode field.
+                    apr_hrs = get_apri_hr(Data(s));
+                    for p=1:numel(omi_clouds_in)
+                        omi_clds_vec(end+1) = omi_clouds_in(p);
+                        modis_clds_vec(end+1) = modis_clouds_in(p);
+                        
+                        tt = ismember(wrf_hr,apr_hrs);
+                        wrf_cld_slice = nanmean(wrf_cld(:,:,tt),3);
+                        xx = wrf_lon >= minloncorn_in(p) & wrf_lon <= maxloncorn_in(p) & wrf_lat >= minlatcorn_in(p) & wrf_lat <= maxlatcorn_in(p);
+                        in = inpolygon(wrf_lon(xx), wrf_lat(xx), loncorn_in(:,p), latcorn_in(:,p));
+                        wrf_cld_pix = wrf_cld_slice(xx);
+                        wrf_clds_vec(end+1) = nanmean(wrf_cld_pix(in));
+                    end
+                end
+            else
+                for s=1:numel(Data)
+                    apr_hr = unique(get_apri_hr(Data(s)));
+                    if ~isscalar(apr_hr)
+                        dum=1;
+                    end
+                    Data(s).Apriori_hour = repmat(apr_hr(:),[1,size(Data(s).Longitude)]);
+                end
+                AllData = struct('Longitude',[],'Latitude',[],'Loncorn',[],'Latcorn',[],'CloudFraction',[],'MODISCloud',[],'Row',[],'Apriori_hour',[]);
+                fns = fieldnames(AllData);
+                for f=1:numel(fns)
+                    % Loncorn and latcorn have corners along the first
+                    % dimension so we need to concatenated them along the
+                    % second
+                    AllData.(fns{f}) = padcat(ndims(Data(1).(fns{f}))-1, Data.(fns{f}));
+                end
+                [in, behr_quadrants] = subset_BEHR_pixels(AllData, domain_x, domain_y, opts);
+                omi_subset = AllData.CloudFraction(in);
+                modis_subset = AllData.MODISCloud(in);
+                apriori_hours = unique(AllData.Apriori_hour(:,in));
+                apriori_hours(isnan(apriori_hours)) = [];
+                
+                [in, wrf_quadrants] = subset_WRF_grid_cells(wrf_lon, wrf_lat, domain_x, domain_y, opts);
+                tt = ismember(wrf_hr,apriori_hours);
+                wrf_cld_slice = nanmean(wrf_cld(:,:,tt),3);
+                wrf_subset = wrf_cld_slice(in);
+                
+                for q=1:4
+                    qqb = behr_quadrants == q;
+                    qqw = wrf_quadrants == q;
+                    omi_clds_vec(q,nd) = nanmean(omi_subset(qqb));
+                    modis_clds_vec(q,nd) = nanmean(modis_subset(qqb));
+                    wrf_clds_vec(q,nd) = nanmean(wrf_subset(qqw));
                 end
             end
         end
         
-        figure;
-        scatter(omi_clds_vec, wrf_clds_vec);
-        set(gca,'fontsize',20);
-        xlabel('OMI clouds');
-        ylabel('WRF clouds');
+        if quad_avg_bool
+            nq = 4;
+            titlestr = 'Daily average in %s quadrant';
+        else
+            nq = 1;
+            titlestr = 'WRF matched to BEHR pixels';
+        end
+        quad_names = {'NE','NW','SW','SE'};
         
-        figure;
-        scatter(modis_clds_vec, wrf_clds_vec);
-        set(gca,'fontsize',20);
-        xlabel('MODIS clouds');
-        ylabel('WRF clouds');
+        for q=1:nq
+            figure;
+            scatter(omi_clds_vec(q,:), wrf_clds_vec(q,:));
+            set(gca,'fontsize',20);
+            xlabel('OMI clouds');
+            ylabel('WRF clouds');
+            title(sprintf(titlestr, quad_names{q}));
+            
+            figure;
+            scatter(modis_clds_vec(q,:), wrf_clds_vec(q,:));
+            set(gca,'fontsize',20);
+            xlabel('MODIS clouds');
+            ylabel('WRF clouds');
+            title(sprintf(titlestr, quad_names{q}));
+        end
     end
 
     function wrf_var_corr()
@@ -242,22 +307,96 @@ end
         ylabel(ystr);
     end
 
+    function var2D_vs_cld(omi_cld, quadrant_vec, wrf_var)
+        % Makes quadrant-wise scatter plot of any 2D in WRF against OMI
+        % cloud fraction
+        if nargin < 3
+            wrf_var_names = input('Enter the WRF variables to plot, separated by spaces: ', 's');
+            if strcmpi(wrf_var_names,'q')
+                fprintf('Aborting plot\n');
+                return
+            end
+            opts.quad_bool = true;
+            opts.dist_limit = 150;
+            opts.size_lim_type = 'row';
+            opts.lim_crit = 5;
+            opts.center_lon = -84.39;
+            opts.center_lat = 33.775;
+            [behr_vars, wrf_vars, quadrant_vec] = wrf_match_to_behr(opts, '2013-06-01','2013-08-30','CloudFraction',wrf_var_names);
+            omi_cld = behr_vars{1};
+        else
+            ystr = input('How should the x-axis be labeled? ','s');
+            
+            n(1) = numel(omi_cld);
+            n(2) = numel(quadrant_vec);
+            for a=1:numel(wrf_var)
+                n(a+2) = numel(wrf_var{a});
+            end
+            if any(n ~= n(1))
+                E.badinput('omi_cld, quadrant_vec, and all WRF vars must have the same number of elements')
+            end
+        end
+        
+        % get the x label with the variable name and units if the
+        % variable was read directly. Otherwise we got the label back in
+        % the beginning, but convert to a cell array
+        wrf_var_names = strsplit(wrf_var_names,' ');
+        if exist('wrf_var_names','var')
+            ystr = cell(numel(wrf_var_names));
+            W = dir(fullfile(wrf_path,'wrfout*'));
+            wi = ncinfo(fullfile(wrf_path,W(1).name));
+            for a=1:numel(wrf_var_names)
+                xx = strcmp(wrf_var_names{a}, {wi.Variables.Name});
+                uu = strcmpi('units',{wi.Variables(xx).Attributes.Name});
+                units = wi.Variables(xx).Attributes(uu).Value;
+                ystr{a} = sprintf('%s (%s)',wrf_var_names{a},units);
+            end
+        else
+            ystr = {ystr};
+        end
+        
+        % make four plots (one for each quadrant) times the number of WRF
+        % variables.
+        quad_names = {'NE','NW','SW','SE'};
+        for a=1:numel(wrf_vars)
+            for q=1:4
+                figure;
+                qq = quadrant_vec == q;
+                scatter(omi_cld(qq), wrf_vars{a}(qq))
+                xlabel('OMI cloud fraction')
+                ylabel(ystr{a})
+                title(quad_names{a})
+            end
+        end
+    end
+
     function var3D_vs_cld(omi_cld, quadrant_vec, wrf_var, P, PB)
         % Makes quadrant-wise plot of average vertical wind at each level
         % sorted by OMI cloud fraction. Can either pass the OMI cloud,
         % quadrant, W, P, and PB variables in directly or it will
         % automatically call wrf_match_to_behr to get these.
         
-        
-        plot_mode = ask_multichoice('Plot average, median w/quartiles, or avg. abs val?',{'avg','med','abs'});
+        prof_bool = strcmpi(ask_multichoice('Plot as profiles or scatter?',{'prof','scatter'}),'prof');
+        if prof_bool
+            plot_mode = ask_multichoice('Plot average, median w/quartiles, or avg. abs val?',{'avg','med','abs'});
+            layer_mode = ask_multichoice('Average over layer or interp to std. pres vec first?',{'layer','pres'});
+            interp_to_std_p = strcmpi(layer_mode,'pres');
+        else
+            plot_mode = 'scatter';
+            interp_to_std_p = false;
+        end
+            
         
         if nargin < 5
-            wrf_var_name = input('Enter the WRF variable to plot: ','s');
+            wrf_var_name = input('Enter the WRF variable to plot (windmag will get horizontal wind speed): ','s');
             if strcmpi(wrf_var_name,'q')
                 fprintf('Aborting plot\n');
                 return
+            elseif strcmpi(wrf_var_name,'windmag')
+                vars = 'U V P PB';
+            else
+                vars = [wrf_var_name, ' P PB']; % get the pressure as well (base and perturbation) as the vertical coordinate.
             end
-            vars = [wrf_var_name, ' P PB']; % get the pressure as well (base and perturbation) as the vertical coordinate.
             
             opts.quad_bool = true;
             opts.dist_limit = 150;
@@ -265,11 +404,17 @@ end
             opts.lim_crit = 5;
             opts.center_lon = -84.39;
             opts.center_lat = 33.775;
-            [behr_vars, wrf_vars, quadrant_vec] = wrf_match_to_behr(opts, '2013-06-01','2013-08-30',vars);
+            [behr_vars, wrf_vars, quadrant_vec] = wrf_match_to_behr(opts, '2013-06-01','2013-08-30','CloudFraction',vars);
             omi_cld = behr_vars{1};
-            wrf_var = wrf_vars{1};
-            P = wrf_vars{2};
-            PB = wrf_vars{3};
+            if strcmpi(wrf_var_name,'windmag')
+                wrf_var = sqrt(wrf_vars{1}.^2 + wrf_vars{2}.^2);
+                P = wrf_vars{3};
+                PB = wrf_vars{4};
+            else
+                wrf_var = wrf_vars{1};
+                P = wrf_vars{2};
+                PB = wrf_vars{3};
+            end
         else
             xstr = input('How should the x-axis be labeled? ','s');
             
@@ -289,6 +434,22 @@ end
             end
         end
         
+        % get the x label with the variable name and units if the
+        % variable was read directly. Otherwise we got the label back in
+        % the beginning.
+        if exist('wrf_var_name','var')
+            if ~strcmpi(wrf_var_name,'windmag')
+                W = dir(fullfile(wrf_path,'wrfout*'));
+                wi = ncinfo(fullfile(wrf_path,W(1).name));
+                xx = strcmp(wrf_var_name, {wi.Variables.Name});
+                uu = strcmpi('units',{wi.Variables(xx).Attributes.Name});
+                units = wi.Variables(xx).Attributes(uu).Value;
+                xstr = sprintf('%s (%s)',wrf_var_name,units);
+            else
+                xstr = 'UV wind speed (m/s)';
+            end
+        end
+        
         % unstagger the variable in the vertical direction if needed and
         % combine P and PB to get box center pressure, converted from Pa to
         % hPa
@@ -300,6 +461,10 @@ end
         end
         box_P = (P+PB)/100;
         
+        if interp_to_std_p
+            [wrf_var, box_P] = interp_to_std_p(wrf_var, box_P);
+        end
+        
         % make four plots (one for each quadrant), each with five subplots
         % (one for each cloud fraction bin).
         nbins = 5;
@@ -307,57 +472,58 @@ end
         cld_ul = (1:5)/nbins;
         quad_names = {'NE','NW','SW','SE'};
         
-        % get the x label with the variable name and units if the
-        % variable was read directly. Otherwise we got the label back in
-        % the beginning.
-        if exist('wrf_var_name','var')
-            W = dir(fullfile(wrf_path,'wrfout*'));
-            wi = ncinfo(fullfile(wrf_path,W(1).name));
-            xx = strcmp(wrf_var_name, {wi.Variables.Name});
-            uu = strcmpi('units',{wi.Variables(xx).Attributes.Name});
-            units = wi.Variables(xx).Attributes(uu).Value;
-            xstr = sprintf('%s (%s)',wrf_var_name,units);
-        end
-        
         
         for a=1:4
             figure;
             qq = quadrant_vec == a;
-            for b=1:nbins
-                cc = omi_cld >= cld_ll(b) & omi_cld <= cld_ul(b);
-                xx = qq & cc;
-                
-                subplot(1,nbins,b);
-                switch plot_mode
-                    case 'avg'
-                        this_w = nanmean(wrf_var(:,xx),2);
-                        this_w_std = nanstd(wrf_var(:,xx),0,2);
-                    case 'med'
-                        this_w = nanmedian(wrf_var(:,xx),2);
-                        this_w_quant = quantile(wrf_var(:,xx),[0.25 0.75],2);
-                    case 'abs'
-                        this_w = nanmean(abs(wrf_var(:,xx)),2);
-                        this_w_std = nanstd(abs(wrf_var(:,xx)),0,2);
+            if prof_bool
+                for b=1:nbins
+                    cc = omi_cld >= cld_ll(b) & omi_cld <= cld_ul(b);
+                    xx = qq & cc;
+                    
+                    subplot(1,nbins,b);
+                    switch plot_mode
+                        case 'avg'
+                            this_w = nanmean(wrf_var(:,xx),2);
+                            this_w_std = nanstd(wrf_var(:,xx),0,2);
+                        case 'med'
+                            this_w = nanmedian(wrf_var(:,xx),2);
+                            this_w_quant = quantile(wrf_var(:,xx),[0.25 0.75],2);
+                        case 'abs'
+                            this_w = nanmean(abs(wrf_var(:,xx)),2);
+                            this_w_std = nanstd(abs(wrf_var(:,xx)),0,2);
+                    end
+                    this_p = nanmean(box_P(:,xx),2);
+                    
+                    line(this_w, this_p, 'color','k','linewidth',2);
+                    if strcmpi(plot_mode,'med')
+                        scatter_errorbars(this_w, this_p, this_w - this_w_quant(:,1), this_w_quant(:,2) - this_w, 'direction', 'x');
+                    else
+                        scatter_errorbars(this_w, this_p, this_w_std, 'direction', 'x');
+                    end
+                    
+                    title(sprintf('Cld. frac. %.1f - %.1f',cld_ll(b),cld_ul(b)));
+                    
+                    
+                    xlabel(xstr);
+                    if b==1
+                        ylabel('Pressure (hPa)')
+                    end
+                    ylim([200 1000]);
+                    set(gca,'ydir','reverse');
+                    set(gca,'xgrid','on');
                 end
-                this_p = nanmean(box_P(:,xx),2);
-                
-                line(this_w, this_p, 'color','k','linewidth',2);
-                if strcmpi(plot_mode,'med')
-                    scatter_errorbars(this_w, this_p, this_w - this_w_quant(:,1), this_w_quant(:,2) - this_w, 'direction', 'x');
-                else
-                    scatter_errorbars(this_w, this_p, this_w_std, 'direction', 'x');
-                end
-                
-                title(sprintf('Cld. frac. %.1f - %.1f',cld_ll(b),cld_ul(b)));
-                
-                
-                xlabel(xstr);
-                if b==1
-                    ylabel('Pressure (hPa)')
-                end
-                ylim([200 1000]);
-                set(gca,'ydir','reverse');
-                set(gca,'xgrid','on');
+            else
+                omi_cld_plot = permute(omi_cld,[3 1 2]);
+                omi_cld_plot = repmat(omi_cld_plot, size(wrf_var,1), 1, 1);
+                omi_cld_plot = reshape(omi_cld_plot(:,qq),[],1);
+                wrf_var_plot = reshape(wrf_var(:,qq),[],1);
+                p_plot = reshape(box_P(:,qq),[],1);
+                scatter3(omi_cld_plot, wrf_var_plot, p_plot)
+                xlabel('Cloud fraction');
+                ylabel(xstr);
+                zlabel('Pressure (hPa)');
+                set(gca,'zdir','reverse')
             end
             if exist('wrf_var_name','var')
                 suptitle(sprintf('%s - %s quadrant - %s',wrf_var_name, quad_names{a},plot_mode));
@@ -463,11 +629,117 @@ end
         end
     end
 
+    function compute_avg_lifetime
+        % Will calculate the average lifetimes across WRF grid cells vs.
+        % loss to HNO3, RONO2, or total.
+        life_type = ask_multichoice('Which lifetime to calculate?',{'HNO3','RONO2','total'},'list',true);
+        
+        wrf_varnames = {'ho'}; % any calculation needs OH, either for OH + NO2 -> HNO3 or RO2 steady-state calculation
+        coeffs = [];
+        k = {};
+        if ismember(lower(life_type),{'hno3','total'});
+            wrf_varnames = [wrf_varnames, {'ho'}];
+            coeffs = [coeffs, 1];
+            k = [k, {@(TEMP, C_M) wrf_rate_expr('TROE', 1.49e-30 , 1.8 , 2.58e-11 , 0.0 , TEMP, C_M)}] ;
+        end
+        if ismember(lower(life_type),{'rono2','total'})
+            E.notimplemented('rono2 or total') % most of the species reacting to form ANs are peroxy radicals not stored in wrfout files.
+%             [~,~,reacts,react_coeffs,rates] = pick_wrf_rxns('LNOX-ANs',false);
+%             for a=1:numel(reacts)
+%                 xx = ~strcmpi('NO',reacts{a});
+%                 if sum(xx)>1
+%                     E.notimplemented('3 body reaction')
+%                 else
+%                     wrf_varnames = [wrf_varnames, lower(reacts{a}(xx))];
+%                     coeffs = [coeffs, react_coeffs{a}(xx)];
+%                     k = [k, rates{a}(xx)];
+%                 end
+%             end
+        end
+        
+        % We'll also need temperature and pressure to calculate number
+        % density of air and thus rate constants. Plus lat/lon for plotting
+        wrf_varnames = [wrf_varnames, {'XLONG','XLAT','T','P','PB'}];
+        
+        % Load all WRF files for the month of June at 1900 UTC (or summer
+        % if I ever download those). Get the date of each file to match to
+        % wind speed later
+        F = dir(fullfile(wrf_path,'wrfout_d01_2013-06*_19-*'));
+        F_dnums = nan(size(F));
+        for a=1:numel(F)
+            [s,e] = regexp(F(a).name,'\d\d\d\d-\d\d-\d\d');
+            F_dnums(a) = datenum(F(a).name(s:e));
+        end
+        wrfvars = cell(size(wrf_varnames));
+        [wrfvars{:}] = read_wrf_vars(wrf_path, F, wrf_varnames);
+        wrflon = wrfvars{end-4};
+        wrflat = wrfvars{end-3};
+        wrfT = wrfvars{end-2};
+        wrfP = wrfvars{end-1};
+        wrfPB = wrfvars{end};
+        wrfvars(end-4:end) = [];
+        
+        wrf_temp = convert_wrf_temperature(wrfT, wrfP, wrfPB);
+        wrf_ndens = calculate_wrf_air_ndens(wrfT, wrfP, wrfPB);
+        
+        opts.quad_bool = 0;
+        opts.dist_limit = 25;%50;
+        
+        
+        bins_lb = [-Inf, 3, 4, 5]; %m/s
+        
+        switch lower(life_type)
+            case 'hno3'
+                khno3 = k{1}(wrf_temp, wrf_ndens);
+                tau = 1 ./ (khno3 .* wrfvars{1} .* 1e-6 .* wrf_ndens); % concentration given in ppmv, convert to number density
+                tau = squeeze(nanmean(tau(:,:,1:5,:),3)) ./ 3600; % convert from seconds to hours
+                taubar = nanmean(tau, ndims(tau));
+                tausd = nanstd(tau, 0, ndims(tau));
+                
+                figure;
+                pcolor(wrflon(:,:,1), wrflat(:,:,1), taubar);
+                cb=colorbar; cb.Label.String = '\tau vs HNO_3';
+                city_names = {'Atlanta','Birmingham','Montgomery'};
+                for a=1:numel(city_names)
+                    [city_lon, city_lat] = return_city_info(city_names{a});
+                    line(city_lon, city_lat, 'linestyle','none','marker','x','linewidth',2,'color','r')
+                end
+                figure; 
+                pcolor(wrflon(:,:,1), wrflat(:,:,1), tausd);
+                cb=colorbar; cb.Label.String = '\sigma(\tau_{HNO3})';
+                city_names = {'Atlanta','Birmingham','Montgomery'};
+                for a=1:numel(city_names)
+                    [city_lon, city_lat, city_windvel, ~, city_dnums] = return_city_info(city_names{a});
+                    line(city_lon, city_lat, 'linestyle','none','marker','x','linewidth',2,'color','r')
+                    opts.center_lon = city_lon;
+                    opts.center_lat = city_lat;
+                    in = subset_WRF_grid_cells(wrflon(:,:,1),wrflat(:,:,1),[-90,-80],[30 40],opts);
+                    sz = size(tau);
+                    tau_vec = reshape(tau,[sz(1)*sz(2), sz(3:end)]);
+                    fprintf('Average tau around %s:\n',city_names{a});
+                    
+                    for b=1:numel(bins_lb)
+                        xx = city_windvel >= bins_lb(b);
+                        tt = ismember(F_dnums, city_dnums(xx));
+                        city_taubar = nanmean(reshape(tau_vec(in,tt),[],1));
+                        city_tausd = nanstd(reshape(tau_vec(in,tt),[],1));
+                        fprintf('\t Wind >= %.2f m/s: %.2f +/- %.2f\n',bins_lb(b),city_taubar,city_tausd);
+                    end
+                end
+                
+            otherwise
+                k_eval = cell(size(k));
+                for a=1:numel(k)
+                    k_eval{a} = k{a}(wrf_temp, wrf_ndens);
+                end
+        end
+    end
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%% DATA FUNCTIONS %%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    function [behr_vars, wrf_vars, quadrant_vec] = wrf_match_to_behr(options, start_date, end_date, wrf_var_names)
+    function [behr_vars, wrf_vars, quadrant_vec] = wrf_match_to_behr(options, start_date, end_date, behr_var_names, wrf_var_names)
         % Returns vectors or matrices of BEHR and WRF data matched so that
         % every WRF data point has a corresponding BEHR data point.
         %
@@ -480,9 +752,10 @@ end
             end_date = ask_date('Enter the ending date');
         end
         % could be turned on later if needed
-        %behr_var_names = input('Enter the BEHR variables to save, separated by spaces: ', 's');
-        %behr_var_names = strsplit(behr_var_names, ' ');
-        behr_var_names = {'CloudFraction'};
+        if ~exist('behr_var_names','var')
+            behr_var_names = input('Enter the BEHR variables to save, separated by spaces: ', 's');
+        end
+        behr_var_names = strsplit(behr_var_names, ' ');
         if ~exist('wrf_var_names','var')
             wrf_var_names = input('Enter the WRF variables to match to BEHR pixels, separated by spaces: ','s');
         end
@@ -683,11 +956,11 @@ end
         end
     end
 
-    function varargout = pick_wrf_rxns(subset_type)
+    function varargout = pick_wrf_rxns(subset_type, eval_k)
         % This will choose a subset of the reactions defined in the
         % r2smh.eqn file.
         %
-        allowed_subsets = {'NO+RO2','VOC+OH','One species'};
+        allowed_subsets = {'NO+RO2','VOC+OH','LNOX-ANs','One species'};
         if ~exist('subset_type','var')
             subset_type = ask_multichoice('Which subset of rxns would you like?',allowed_subsets,'list',true);
             if strcmpi(subset_type,'One species')
@@ -699,12 +972,22 @@ end
                 E.badinput('If given, SUBSET_TYPE must be one of : %s',strjoin(allowed_subsets,', '));
             end
         end
+        % If eval_k does not exist, assume that we want to go ahead and
+        % evalute the rate constants for surface conditions.
+        if ~exist('eval_k','var')
+            eval_k = true;
+        elseif ~isscalar(eval_k) || ~islogical(eval_k)
+            E.badinput('eval_k must be a scalar logical')
+        end
+        
         % If output requested, we will be saving the products, reactants,
         % and rate constant functions for each reaction.
         if nargout > 0
             save_bool = true;
             prod_out = {};
+            prod_c_out = {};
             react_out = {};
+            react_c_out = {};
             k_out = {};
         else
             save_bool = 0;
@@ -717,7 +1000,7 @@ end
         while ischar(tline)
             if ismember('#',tline) || ~isempty(regexp(tline,'JUNK','once'))
             else
-                [products, ~, reactants, ~, rate_fxn] = read_wrf_mech_line(tline);
+                [products, prod_coeff, reactants, react_coeff, rate_fxn] = read_wrf_mech_line(tline);
                 % Get reactions of organics with NO to produce NO2. This
                 % will let us calculate organic reactivity down the road.
                 switch lower(subset_type)
@@ -725,6 +1008,8 @@ end
                         eqn_bool = ismember('NO',reactants) && ismember('NO2',products) && ~any(ismember({'O3','O3P','HO2','NO3','M'},reactants));
                     case 'voc+oh'
                         eqn_bool = ismember('HO',reactants) && ~any(ismember({'O3','M','HO2','H2O2','NO','HONO','NO2','HNO3','NO3','HNO4','SO2'},reactants));
+                    case 'lnox-ans'
+                        eqn_bool = ismember('LNOXA',products);
                     case 'one species'
                         switch lower(spec_side)
                             case 'products'
@@ -738,8 +1023,14 @@ end
                 if eqn_bool
                     if save_bool
                         prod_out{end+1} = products;
+                        prod_c_out{end+1} = prod_coeff;
                         react_out{end+1} = reactants;
-                        k_out{end+1} = rate_fxn(298, 2e19); % evaluate for typical surface conditions.
+                        react_c_out{end+1} = react_coeff;
+                        if eval_k
+                            k_out{end+1} = rate_fxn(298, 2e19); % evaluate for typical surface conditions.
+                        else
+                            k_out{end+1} = rate_fxn;
+                        end
                     else
                         fprintf('%s\n',tline);
                     end
@@ -750,8 +1041,10 @@ end
         
         if save_bool
             varargout{1} = prod_out;
-            varargout{2} = react_out;
-            varargout{3} = k_out;
+            varargout{2} = prod_c_out;
+            varargout{3} = react_out;
+            varargout{4} = react_c_out;
+            varargout{5} = k_out;
         end
     end
 
@@ -763,10 +1056,10 @@ end
         r_type = ask_multichoice('Which type of reactivity to calculate for?',{'NO+RO2','VOC+OH'},'list',true);
         
         
-        [~, all_react, all_rates] = pick_wrf_rxns('NO+RO2');
+        [~, ~, all_react, ~, all_rates] = pick_wrf_rxns('NO+RO2');
         
         % Go through all the reactants and extract the names of the organic
-        % compounts.
+        % compounds.
         org_cmpds = {};
         switch lower(r_type)
             case 'no+ro2'
@@ -819,7 +1112,7 @@ end
         end_date = ask_date('Enter the ending date');
         
         
-        [~, all_react, all_rates] = pick_wrf_rxns(r_type);
+        [~, ~, all_react, ~, all_rates] = pick_wrf_rxns(r_type);
         all_rates = cell2mat(all_rates);
         % Go through all the reactants and extract the names of the organic
         % compounds. Also remove those not available in the output file.
@@ -946,6 +1239,17 @@ end
     end
     
     end
+
+    function ro2_conc = compute_ss_ro2(ro2_name, wrf_files)
+        % This function will compute steady-state RO2 concentration for the
+        % given RO2 species, assuming:
+        %
+        %   d[RO2]/dt = 0 = \sum_i k_{RH_i+OH}*[RH_i]*[OH] - k_{RO2+NO}*[RO2]*[NO]
+        %
+        % where RH_i represents all the possible VOCs that can produce the
+        % desired RO2 via reaction with OH. Inputs are the RO2 name from
+        % pick_wrf_rxns.
+    end
 end
 
 function files = files_in_dates(files, start_date, end_date)
@@ -976,19 +1280,46 @@ files = files(xx);
 
 end
 
-function [city_lon, city_lat] = return_city_info(city_name)
+function [city_lon, city_lat, windvel, theta, wind_dnums] = return_city_info(city_name)
 switch lower(city_name)
     case 'atlanta'
         city_lon = -84.39;
         city_lat = 33.775;
+        F=load('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta-Wind-Conditions-1900UTC-5layers.mat');
     case 'birmingham'
         city_lon = -86.80;
         city_lat = 33.52;
+        F=load('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Birmingham-Wind-Conditions-1900UTC-5layers.mat');
     case 'montgomery'
         city_lon = -86.30;
         city_lat = 32.37;
+        F=load('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Montgomery-Wind-Conditions-1900UTC-5layers.mat');
     otherwise
         E=JLLErrors;
         E.badinput('%s not recognized as a city',city_name);
 end
+windvel = F.windvel;
+theta = F.theta;
+wind_dnums = F.dnums;
+end
+
+function apr_hrs = get_apri_hr(Data)
+apr_str = Data.BEHRaprioriMode;
+st = regexp(apr_str,'[')+1;
+ed = regexp(apr_str,']')-1;
+apr_hrs_cell = strsplit(apr_str(st:ed),';');
+apr_hrs = nan(size(apr_hrs_cell));
+for a=1:numel(apr_hrs)
+    apr_hrs(a) = str2double(apr_hrs_cell{a});
+end
+end
+
+function [interp_val, interp_pres] = interp_to_std_p(vals, P)
+behr_stdp = BEHR_std_pres;
+vals_tmp = nan(numel(behr_stdp), size(vals,2));
+for a=1:size(vals,2)
+    vals_tmp(:,a) = interp1(P(:,a), vals(:,a), behr_stdp);
+end
+P = repmat(behr_stdp',1,size(vals,2));
+vals = vals_tmp;
 end
