@@ -634,28 +634,40 @@ end
         % loss to HNO3, RONO2, or total.
         life_type = ask_multichoice('Which lifetime to calculate?',{'HNO3','RONO2','total'},'list',true);
         
+        % Find all WRF files for the month of June at 1900 UTC
+        F = dir(fullfile(wrf_path,'wrfout_d01_2013-06*_19-*'));
+        
         wrf_varnames = {'ho'}; % any calculation needs OH, either for OH + NO2 -> HNO3 or RO2 steady-state calculation
         coeffs = [];
-        k = {};
         if ismember(lower(life_type),{'hno3','total'});
             wrf_varnames = [wrf_varnames, {'ho'}];
             coeffs = [coeffs, 1];
-            k = [k, {@(TEMP, C_M) wrf_rate_expr('TROE', 1.49e-30 , 1.8 , 2.58e-11 , 0.0 , TEMP, C_M)}] ;
+            k_hno3 = @(TEMP, C_M) wrf_rate_expr('TROE', 1.49e-30 , 1.8 , 2.58e-11 , 0.0 , TEMP, C_M) ;
         end
         if ismember(lower(life_type),{'rono2','total'})
-            E.notimplemented('rono2 or total') % most of the species reacting to form ANs are peroxy radicals not stored in wrfout files.
-%             [~,~,reacts,react_coeffs,rates] = pick_wrf_rxns('LNOX-ANs',false);
-%             for a=1:numel(reacts)
-%                 xx = ~strcmpi('NO',reacts{a});
-%                 if sum(xx)>1
-%                     E.notimplemented('3 body reaction')
-%                 else
-%                     wrf_varnames = [wrf_varnames, lower(reacts{a}(xx))];
-%                     coeffs = [coeffs, react_coeffs{a}(xx)];
-%                     k = [k, rates{a}(xx)];
-%                 end
-%             end
+            [prods,prod_coeff,reacts,~,ro2_rates] = pick_wrf_rxns('LNOX-ANs',false);
+            ro2_ss = cell(size(reacts));
+            ro2_alpha = zeros(size(reacts));
+            for a=1:numel(reacts)
+                xx = ~strcmpi('NO',reacts{a});
+                if numel(xx)>2
+                    E.notimplemented('3 body reaction')
+                elseif sum(~xx) ~= 1
+                    continue
+                else
+                    ro2_ss{a} = compute_ss_ro2(reacts{a}{xx}, F, -1);
+                    xx_no2 = strcmpi(prods{a},'NO2');
+                    if sum(xx_no2) > 0
+                        ro2_alpha(a) = 1 - prod_coeff{a}(xx_no2);
+                    end
+                end
+            end
+            xx = iscellcontents(ro2_ss,'isempty') | iscellcontents(ro2_ss, @(x) isscalar(x) && x==0);
+            ro2_ss = ro2_ss(~xx);
+            ro2_rates = ro2_rates(~xx);
         end
+        
+        
         
         % We'll also need temperature and pressure to calculate number
         % density of air and thus rate constants. Plus lat/lon for plotting
@@ -664,7 +676,7 @@ end
         % Load all WRF files for the month of June at 1900 UTC (or summer
         % if I ever download those). Get the date of each file to match to
         % wind speed later
-        F = dir(fullfile(wrf_path,'wrfout_d01_2013-06*_19-*'));
+        
         F_dnums = nan(size(F));
         for a=1:numel(F)
             [s,e] = regexp(F(a).name,'\d\d\d\d-\d\d-\d\d');
@@ -683,56 +695,77 @@ end
         wrf_ndens = calculate_wrf_air_ndens(wrfT, wrfP, wrfPB);
         
         opts.quad_bool = 0;
-        opts.dist_limit = 25;%50;
+        opts.dist_limit = 50;%25;
         
         
         bins_lb = [-Inf, 3, 4, 5]; %m/s
         
+        if ismember(lower(life_type),{'hno3','total'})
+            k_hno3 = k_hno3(wrf_temp, wrf_ndens);
+            tau_hno3 = 1 ./ (k_hno3 .* wrfvars{1} .* 1e-6 .* wrf_ndens); % concentration given in ppmv, convert to number density
+            tau_hno3 = squeeze(nanmean(tau_hno3(:,:,1:5,:),3)) ./ 3600; % convert from seconds to hours
+        end
+        if ismember(lower(life_type),{'rono2','total'})
+            tau_rono2 = zeros(size(ro2_ss{1}));
+            % Lifetimes add in reciprocal (1/tau = 1/tau_1 + 1/tau_2 + ...)
+            % but are themselves the reciprocal of alpha*k*[RO2], so add up
+            % all the alpha*k*[RO2] first, then invert.
+            for a=1:numel(ro2_ss)
+                k_ro2 = ro2_rates{a}(wrf_temp, wrf_ndens);
+                tau_rono2 = tau_rono2 + (ro2_alpha(a) .* ro2_ss{a} .* k_ro2);
+            end
+            tau_rono2 = 1 ./ tau_rono2;
+            tau_rono2 = squeeze(nanmean(tau_rono2(:,:,1:5,:),3)) ./ 3600;
+        end
+        
         switch lower(life_type)
             case 'hno3'
-                khno3 = k{1}(wrf_temp, wrf_ndens);
-                tau = 1 ./ (khno3 .* wrfvars{1} .* 1e-6 .* wrf_ndens); % concentration given in ppmv, convert to number density
-                tau = squeeze(nanmean(tau(:,:,1:5,:),3)) ./ 3600; % convert from seconds to hours
-                taubar = nanmean(tau, ndims(tau));
-                tausd = nanstd(tau, 0, ndims(tau));
-                
-                figure;
-                pcolor(wrflon(:,:,1), wrflat(:,:,1), taubar);
-                cb=colorbar; cb.Label.String = '\tau vs HNO_3';
-                city_names = {'Atlanta','Birmingham','Montgomery'};
-                for a=1:numel(city_names)
-                    [city_lon, city_lat] = return_city_info(city_names{a});
-                    line(city_lon, city_lat, 'linestyle','none','marker','x','linewidth',2,'color','r')
-                end
-                figure; 
-                pcolor(wrflon(:,:,1), wrflat(:,:,1), tausd);
-                cb=colorbar; cb.Label.String = '\sigma(\tau_{HNO3})';
-                city_names = {'Atlanta','Birmingham','Montgomery'};
-                for a=1:numel(city_names)
-                    [city_lon, city_lat, city_windvel, ~, city_dnums] = return_city_info(city_names{a});
-                    line(city_lon, city_lat, 'linestyle','none','marker','x','linewidth',2,'color','r')
-                    opts.center_lon = city_lon;
-                    opts.center_lat = city_lat;
-                    in = subset_WRF_grid_cells(wrflon(:,:,1),wrflat(:,:,1),[-90,-80],[30 40],opts);
-                    sz = size(tau);
-                    tau_vec = reshape(tau,[sz(1)*sz(2), sz(3:end)]);
-                    fprintf('Average tau around %s:\n',city_names{a});
-                    
-                    for b=1:numel(bins_lb)
-                        xx = city_windvel >= bins_lb(b);
-                        tt = ismember(F_dnums, city_dnums(xx));
-                        city_taubar = nanmean(reshape(tau_vec(in,tt),[],1));
-                        city_tausd = nanstd(reshape(tau_vec(in,tt),[],1));
-                        fprintf('\t Wind >= %.2f m/s: %.2f +/- %.2f\n',bins_lb(b),city_taubar,city_tausd);
-                    end
-                end
-                
-            otherwise
-                k_eval = cell(size(k));
-                for a=1:numel(k)
-                    k_eval{a} = k{a}(wrf_temp, wrf_ndens);
-                end
+                tau = tau_hno3;
+                cb_label1 = '\tau vs HNO3';
+                cb_label2 = '\sigma(\tau_{HNO3})';
+            case 'rono2'
+                tau = tau_rono2;
+                cb_label1 = '\tau vs RONO2';
+                cb_label2 = '\sigma(\tau_{RONO2})';
+            case 'total'
+                tau = 1 ./ (1 ./ tau_hno3 + 1./ tau_rono2);
+                cb_label1 = '\tau vs HNO3 & RONO2';
+                cb_label2 = '\sigma(\tau_{HNO3+RONO2})';
         end
+        taubar = nanmean(tau, ndims(tau));
+        tausd = nanstd(tau, 0, ndims(tau));
+        
+        figure;
+        pcolor(wrflon(:,:,1), wrflat(:,:,1), taubar);
+        cb=colorbar; cb.Label.String = cb_label1;
+        city_names = {'Atlanta','Birmingham','Montgomery'};
+        for a=1:numel(city_names)
+            [city_lon, city_lat] = return_city_info(city_names{a});
+            line(city_lon, city_lat, 'linestyle','none','marker','x','linewidth',2,'color','r')
+        end
+        figure;
+        pcolor(wrflon(:,:,1), wrflat(:,:,1), tausd);
+        cb=colorbar; cb.Label.String = cb_label2;
+        city_names = {'Atlanta','Birmingham','Montgomery'};
+        for a=1:numel(city_names)
+            [city_lon, city_lat, city_windvel, ~, city_dnums] = return_city_info(city_names{a});
+            line(city_lon, city_lat, 'linestyle','none','marker','x','linewidth',2,'color','r')
+            opts.center_lon = city_lon;
+            opts.center_lat = city_lat;
+            in = subset_WRF_grid_cells(wrflon(:,:,1),wrflat(:,:,1),[-90,-80],[30 40],opts);
+            sz = size(tau);
+            tau_vec = reshape(tau,[sz(1)*sz(2), sz(3:end)]);
+            fprintf('Average tau around %s:\n',city_names{a});
+            
+            for b=1:numel(bins_lb)
+                xx = city_windvel >= bins_lb(b);
+                tt = ismember(F_dnums, city_dnums(xx));
+                city_taubar = nanmean(reshape(tau_vec(in,tt),[],1));
+                city_tausd = nanstd(reshape(tau_vec(in,tt),[],1));
+                fprintf('\t Wind >= %.2f m/s: %.2f +/- %.2f\n',bins_lb(b),city_taubar,city_tausd);
+            end
+        end
+                
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -958,18 +991,38 @@ end
 
     function varargout = pick_wrf_rxns(subset_type, eval_k)
         % This will choose a subset of the reactions defined in the
-        % r2smh.eqn file.
+        % r2smh.eqn file. If you need to use it automatically, pass the
+        % subset desired as the first argument. If you wish to use the 'One
+        % species' subset, pass it as a cell array with 'One species' as
+        % the first element, the species name as the second and the side
+        % ('products','reactants', or 'either') as the third.
+        %
+        % eval_k is optional; defaults to true meaning that the rate
+        % constants will be evaluated at 298 K and 2x10^19 molec/cm^3
+        % number density of air.
         %
         allowed_subsets = {'NO+RO2','VOC+OH','LNOX-ANs','One species'};
+        allowed_sides = {'Products','Reactants','Either'};
         if ~exist('subset_type','var')
             subset_type = ask_multichoice('Which subset of rxns would you like?',allowed_subsets,'list',true);
             if strcmpi(subset_type,'One species')
                 spec_name = input('    Enter the species name to look for: ', 's');
-                spec_side = ask_multichoice('    Which side of the reaction should it be on?',{'Products','Reactants','Either'});
+                spec_side = ask_multichoice('    Which side of the reaction should it be on?', allowed_sides);
             end
         else
+            if iscell(subset_type)
+                subset_opts = subset_type;
+                subset_type = subset_opts{1};
+            end
             if ~ismember(lower(subset_type), lower(allowed_subsets));
                 E.badinput('If given, SUBSET_TYPE must be one of : %s',strjoin(allowed_subsets,', '));
+            end
+            if strcmpi(subset_type,'One species')
+                spec_name = subset_opts{2};
+                spec_side = subset_opts{3};
+                if ~ismember(lower(spec_side), lower(allowed_sides))
+                    E.badinput('If given SUBSET_TYPE{3} must be one of : %s',strjoin(allowed_sides,', ')); 
+                end
             end
         end
         % If eval_k does not exist, assume that we want to go ahead and
@@ -1212,6 +1265,9 @@ end
     options.quad_bool = false;
     options.dist_limit = 50;
     
+    in_50 = [];
+    in_flood = false(size(xlon));
+    
     [xloncorn, xlatcorn] = wrf_grid_corners(xlon,xlat);
     earth_ellip = referenceEllipsoid('wgs84','kilometers');
     for c=1:numel(city_names)
@@ -1219,6 +1275,7 @@ end
         options.center_lon = city_lon;
         options.center_lat = city_lat;
         in = subset_WRF_grid_cells(xlon,xlat,[-88 -80],[30 36], options);
+        in_50 = [in_50; in(:)];
         city_loncorn = xloncorn(:,in);
         city_latcorn = xlatcorn(:,in);
         city_areas = nan(1,numel(in));
@@ -1226,9 +1283,11 @@ end
             city_areas(a) = areaint(city_latcorn(:,a), city_loncorn(:,a), earth_ellip);
         end
         
+        
         emis.(city_names{c}).within50km = nansum2(e_no(in) .* city_areas');
         
         in = find_plume(e_no, xlon, xlat, 50, city_lon, city_lat);
+        in_flood = in_flood | in;
         city_loncorn = xloncorn(:,in);
         city_latcorn = xlatcorn(:,in);
         city_areas = nan(1,sum(in(:)));
@@ -1238,9 +1297,25 @@ end
         emis.(city_names{c}).floodfill = nansum2(e_no(in) .* city_areas');
     end
     
+    % Plot which emissions were used in each case
+    figure;
+    in_log = false(size(e_no));
+    in_log(in_50) = true;
+    e_no_50 = e_no;
+    e_no_50(~in_log) = nan;
+    pcolor(xlon, xlat, e_no_50);
+    title('50 km')
+    
+    figure;
+    e_no_flood = e_no;
+    e_no_flood(~in_flood) = nan;
+    pcolor(xlon,xlat,e_no_flood);
+    title('Floodfill')
+    
+    
     end
 
-    function ro2_conc = compute_ss_ro2(ro2_name, wrf_files)
+    function ro2_conc = compute_ss_ro2(ro2_name, wrf_files, voc_fatal)
         % This function will compute steady-state RO2 concentration for the
         % given RO2 species, assuming:
         %
@@ -1248,7 +1323,119 @@ end
         %
         % where RH_i represents all the possible VOCs that can produce the
         % desired RO2 via reaction with OH. Inputs are the RO2 name from
-        % pick_wrf_rxns.
+        % pick_wrf_rxns and a structure output from dir() with a list of
+        % WRF files to consider. voc_fatal is optional, it defaults to 1
+        % which means that if the required VOC cannot be found. 0 disables
+        % any mention of the failure to find that VOC. -1 will print out a
+        % message without erroring.
+        
+        % Method: find all reactions that produce the specified RO2 via
+        % reaction with OH. Make sure that the VOC reacting with OH exists
+        % in the WRF files (assuming the first one is representative).
+        wi = ncinfo(fullfile(wrf_path,wrf_files(1).name));
+        wrf_varnames = {wi.Variables.Name};
+        vars_to_read = {'T','P','PB','ho','no'};
+        [prods,prod_coeffs,reacts,~,rates] = pick_wrf_rxns({'One species',ro2_name,'Products'},false);
+        voc_names = cell(size(reacts));
+        ro2_coeffs = zeros(size(reacts));
+        for a=1:numel(reacts)
+            if numel(reacts{a}) > 2
+                rates{a} = 0;
+                continue % shouldn't be any 3 body reactions.
+            end
+            xx = strcmpi(reacts{a},'OH') | strcmpi(reacts{a},'HO');
+            if sum(xx) == 0
+                rates{a} = 0;
+                continue % only want reactions with OH to produce this
+            end
+            voc_a = reacts{a}{~xx};
+            if any(strcmp(wrf_varnames,voc_a))
+                voc_names{a} = voc_a;
+            elseif any(strcmp(wrf_varnames,lower(voc_a))) %#ok<STCI>
+                voc_names{a} = lower(voc_a);
+            elseif any(strcmp(wrf_varnames,upper(voc_a))) %#ok<STCI>
+                voc_names{a} = upper(voc_a);
+            else
+                rates{a} = 0;
+                msg = sprintf('Species "%s" from %s -> %s cannot be found in any form in the first WRF file',voc_a,strjoin(reacts,' + '),strjoin(prods,' + '));
+                if voc_fatal > 0
+                    E.callError('voc_not_found',msg);
+                elseif voc_fatal < 0
+                    fprintf(msg);
+                end
+            end
+            
+            rr = strcmpi(prods{a}, ro2_name);
+            if sum(rr) ~= 1
+                E.callError('ro2_count','%s not defined exactly once in the reaction %s -> %s',ro2_name,strjoin(reacts,' + '),strjoin(prods,' + '));
+            end
+            ro2_coeffs(a) = prod_coeffs{a}(rr);
+        end
+        xx1 = iscellcontents(voc_names,'isempty');
+        xx2 = ro2_coeffs == 0;
+        xx3 = iscellcontents(rates,@(x) ~isa(x,'function_handle'));
+        if any(xor(xx1,xx2)) || any(xor(xx1,xx3))
+            % If (somehow) we mismatched the VOC names and their respective
+            % rate constants, this should catch it by finding any locations
+            % where we can remove an empty VOC name or 0 rate constant.
+            E.callError('react_rate_mismatch','There is disagreement between which VOC names, RO2 coefficiets, and rate constants to remove')
+        end
+        
+        if sum(~xx1) == 0
+            ro2_conc = 0;
+            return
+        end
+        
+        voc_names = voc_names(~xx1);
+        ro2_coeffs = ro2_coeffs(~xx1);
+        rates = rates(~xx3);
+        
+        if sum(~xx1) == 0
+            ro2_conc = 0;
+            return
+        end
+        
+        vars_to_read = [vars_to_read, voc_names];
+        wrf_vars = cell(size(vars_to_read));
+        [wrf_vars{:}] = read_wrf_vars(wrf_path, wrf_files, vars_to_read, 0, 'visual');
+        T = wrf_vars{1};
+        P = wrf_vars{2};
+        PB = wrf_vars{3};
+        oh_conc = wrf_vars{4};
+        no_conc = wrf_vars{5};
+        voc_conc = wrf_vars(6:end);
+        wrf_temp = convert_wrf_temperature(T,P,PB);
+        wrf_ndens = calculate_wrf_air_ndens(T,P,PB);
+        for a=1:numel(voc_conc)
+            voc_unit = ncreadatt(fullfile(wrf_path,wrf_files(1).name),vars_to_read{a+5},'units');
+            if ~isempty(voc_unit)
+                conversion = convert_units(1, voc_unit, 'ppp'); % convert from usually ppm too unscaled mixing ratio
+            else
+                conversion = 1e-6; % if no unit given, assume ppm
+            end
+            voc_conc{a} = conversion * voc_conc{a} .* wrf_ndens;
+        end
+        
+        % Calculate the rate of reaction of VOC + OH --> RO2
+        sum_rate_RH_OH = zeros(size(voc_conc{1}));
+        for a=1:numel(voc_conc)
+            k = rates{a}(wrf_temp, wrf_ndens);
+            sum_rate_RH_OH = sum_rate_RH_OH + ro2_coeffs(a) .* k .* voc_conc{a} .* oh_conc;
+        end
+        
+        % Now find the rate for RO2 + NO 
+        [~, ~, reacts, ~, rates] = pick_wrf_rxns({'One species',ro2_name,'Reactants'},false);
+        for a=1:numel(reacts)
+            xx = strcmpi(reacts{a},'NO');
+            if sum(xx) == 1 && numel(reacts{a}) == 2
+                k_ro2_no = rates{a}(wrf_temp, wrf_ndens);
+            end
+        end
+        rate_RO2_NO = k_ro2_no .* no_conc;
+        
+        % Steady state concentration is the ratio of the production and
+        % loss.
+        ro2_conc = sum_rate_RH_OH ./ rate_RO2_NO;
     end
 end
 
