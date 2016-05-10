@@ -45,13 +45,17 @@ switch lower(plottype)
 end
 
     function plot_3_fits
-        [data_file, data_path] = uigetfile('*LineDensities*.mat','Select the line density file for the conditions to plot');
-        LD = load(fullfile(data_path,data_file));
-        fitfile = strrep(data_file,'LineDensities','SimpleFits');
-        if ~exist(fullfile(data_path,fitfile),'file')
+        [data_file, data_path] = uigetfile('*SimpleFits*.mat','Select the fits file for the conditions to plot');
+        if data_file == 0
+            fprintf('Cancelled\n')
+            return
+        end
+        SF = load(fullfile(data_path,data_file));
+        ldfile = strrep(data_file,'SimpleFits','LineDensities');
+        if ~exist(fullfile(data_path,ldfile),'file')
             E.filenotfound('simple fits file');
         else
-            SF = load(fullfile(data_path,fitfile));
+            LD = load(fullfile(data_path,ldfile));
         end
         
         % Get city name
@@ -61,14 +65,31 @@ end
         % Get wind conditions
         WC = load(sprintf('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/%s-Wind-Conditions-1900UTC-5layers.mat',city_name));
         
+        % Determine whether to plot the WRF ones too
+        plot_wrf = false;
+        if all(isfield(LD,{'no2x_wrffast','no2x_wrfslow'}))
+            plot_wrf_ans = questdlg('Include WRF line densities?');
+            if strcmpi(plot_wrf_ans,'Yes')
+                plot_wrf = true;
+            elseif strcmpi(plot_wrf_ans,'Cancel')
+                return
+            end
+        end
+        
         figure; hold on
+        lstr = {'Coarse monthly data','Coarse monthly fit', 'Fine monthly data', 'Fine monthly fit', 'Hybrid data', 'Hybrid fit'};
         plot(LD.no2x_mn108slow, LD.no2ld_mn108slow, 'go', 'linewidth', 2);
         plot(LD.no2x_mn108slow, SF.f_mn108slow.emgfit, '--', 'color', [0 0.5 0], 'linewidth', 2);
         plot(LD.no2x_mnslow, LD.no2ld_mnslow, 'o', 'linewidth', 2, 'color', [1 0.5 0]);
         plot(LD.no2x_mnslow, SF.f_mnslow.emgfit, 'r--', 'linewidth', 2);
         plot(LD.no2x_hyslow, LD.no2ld_hyslow, 'co', 'linewidth', 2);
         plot(LD.no2x_hyslow, SF.f_hyslow.emgfit, 'b--', 'linewidth', 2);
-        legend('Coarse monthly data','Coarse monthly fit', 'Fine monthly data', 'Fine monthly fit', 'Hybrid data', 'Hybrid fit');
+        if plot_wrf
+            plot(LD.no2x_wrfslow, LD.no2ld_wrfslow, 'ko', 'linewidth',2);
+            plot(LD.no2x_wrfslow, SF.f_wrfslow.emgfit, 'k--','linewidth',2)
+            lstr = [lstr, {'WRF data','WRF fit'}];
+        end
+        legend(lstr{:});
         xlabel('Distance from city (km)')
         ylabel('Line density (mol km^{-1})')
         set(gca,'fontsize',20)
@@ -85,7 +106,12 @@ end
         plot(LD.no2x_mnfast, SF.f_mnfast.emgfit, 'r--', 'linewidth', 2);
         plot(LD.no2x_hyfast, LD.no2ld_hyfast, 'co', 'linewidth', 2);
         plot(LD.no2x_hyfast, SF.f_hyfast.emgfit, 'b--', 'linewidth', 2);
-        legend('Coarse monthly data','Coarse monthly fit', 'Fine monthly data', 'Fine monthly fit', 'Hybrid data', 'Hybrid fit');
+        if plot_wrf
+            plot(LD.no2x_wrffast, LD.no2ld_wrffast, 'ko', 'linewidth',2);
+            plot(LD.no2x_wrffast, SF.f_wrffast.emgfit, 'k--','linewidth',2)
+            %lstr = [lstr, {'WRF data','WRF fit'}]; already done in slow
+        end
+        legend(lstr{:});
         xlabel('Distance from city (km)')
         ylabel('Line density (mol km^{-1})')
         set(gca,'fontsize',20)
@@ -97,9 +123,15 @@ end
         
         % Make the fitting parameters into a matrix (to print in latex
         % format) and a table (to look at visually)
-        A = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit),...
-            struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit))';
-        
+        if plot_wrf
+            A = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit), struct2array(SF.f_wrffast.ffit),...
+                struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit), struct2array(SF.f_wrfslow.ffit))';
+            varnames = {'Mn108Fast','MnFast','HyFast','WRFFast','Mn108Slow','MnSlow','HySlow','WRFSlow'};
+        else
+            A = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit),...
+                struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit))';
+            varnames = {'Mn108Fast','MnFast','HyFast','Mn108Slow','MnSlow','HySlow'};
+        end
         fns = {'a (mol)','x_0 (km)','mu_x (km)','sigma_x (km)','B (mol)'};
         latex_fns = {'$a$ (mol \chem{NO_2})';'$x_0$ (km)';'$\mu_x$ (km)';'$\sigma_x$ (km)';'$B$ (mol \chem{NO_2} km$^{-1}$)'};
         if isfield(LD,'wind_crit')
@@ -121,7 +153,7 @@ end
         end
         
         % print the table
-        T = array2table(A,'RowNames',fns,'VariableNames',{'Mn108Fast','MnFast','HyFast','Mn108Slow','MnSlow','HySlow'})
+        T = array2table(A,'RowNames',fns,'VariableNames',varnames)
         % Print the latex output
         L = cat(2, latex_fns, mat2cell_simple(A));
         fprintf('\nLatex format:\n\n');
