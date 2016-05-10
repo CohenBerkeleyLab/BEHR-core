@@ -800,17 +800,19 @@ end
         
         % Do we want to use the fine or coarse WRF simulation?
         allowed_res = {'f','c'};
-        if ~isfield(options,'res')
-            res = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF a priori', allowed_res);
+        if ~isfield(options,'res_base') || ~isfield(options,'res_new')
+            res_base = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF for the base a priori', allowed_res);
+            res_new = ask_multichoice('And for the new a priori?', allowed_res, 'default', res_base);
         else
             if ~ismember(options.res, allowed_res)
                 E.badinput('options.res must be one of %s',strjoin(allowed_res,', '))
             end
-            res = options.res;
+            res_base = options.res_base;
+            res_new = options.res_new;
         end
         
         % Use the hour-average or instantaneous profiles?
-        if strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'})) && strcmpi(res,'f')
+        if strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'}) & strcmpi({res_base, res_new},'f'))
             allowed_timemode = {'avg','instant'};
             if ~isfield(options,'timemode')
                 timemode = ask_multichoice('Use profiles averaged over an hour or instantaneous at the top of the hour?', allowed_timemode);
@@ -918,79 +920,6 @@ end
         %%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% PARSING INPUT %%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%
-        
-        % File paths: need the daily and monthly paths. Will construct a
-        % cell array where the first dimension corresponds to the
-        % difference sources (e.g. WRF, BEHR, pseudo-BEHR) and the second
-        % to cities. Put NaNs for cases that don't exist.
-        %
-        % File name format: strings should include a %1$04d where the year,
-        % %2$02d where the month, and %3$02d where the day get filled in.
-        % Only expected to be different for the different sources.
-        
-        sharedir = '/Volumes/share2/USERS/LaughnerJ/';
-        workdir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/';
-        
-        switch source
-            case 'wrf'
-                daily_file_name_spec = 'WRF_BEHR_hourly_%1$04d-%2$02d-%3$02d.nc';
-                monthly_file_name_spec = 'WRF_BEHR_monthly_%1$04d-%2$02d-%3$02d.nc';
-                switch res
-                    case 'f'
-                        daily_path = fullfile(sharedir,'WRF','E_US_BEHR','hourly');
-                        hybrid_path = NaN;
-                        monthly_path = fullfile(sharedir,'WRF','E_US_BEHR','monthly');
-                    case 'c'
-                        daily_path = fullfile(sharedir,'WRF','E_US_BEHR_COARSE','hourly');
-                        hybrid_path = NaN;
-                        monthly_path = fullfile(sharedir,'WRF','E_US_BEHR_COARSE','monthly');
-                end
-            case 'behr'
-                daily_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
-                monthly_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
-                s = 2;
-                switch res
-                    case 'f'
-                        daily_path = fullfile(workdir,'SE US BEHR Hourly - No ghost');
-                        hybrid_path = fullfile(workdir,'SE US BEHR Hybrid - No ghost');
-                        monthly_path = fullfile(workdir,'SE US BEHR Monthly - No ghost');
-                    case 'c'
-                        daily_path = fullfile(workdir,'SE US BEHR Hourly - No ghost - Coarse WRF');
-                        hybrid_path = fullfile(workdir,'SE US BEHR Hybrid - No ghost - Coarse WRF');
-                        monthly_path = fullfile(workdir,'SE US BEHR Monthly - No ghost - Coarse WRF');
-                end
-            case 'pseudo-behr'
-                daily_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
-                monthly_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
-                xx = 1:11;
-                yy = 1:19;
-                s = 1;
-                switch res
-                    case 'f'
-                        if strcmpi(timemode,'avg')
-                            daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost');
-                            hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost');
-                            hybrid_avg_path = fullfile(workdir, 'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
-                        else
-                            daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Instantaneous');
-                            hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Instantaneous');
-                        end
-                        monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost');
-                    case 'c'
-                        daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Coarse WRF');
-                        hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Coarse WRF');
-                        hybrid_avg_path = fullfile(workdir, 'Atlanta BEHR Avg Hybrid - No clouds - No ghost - Coarse WRF');
-                        monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost - Coarse WRF');
-                end
-        end
-
-        daily_file_name = sprintf(daily_file_name_spec, year(date_in), month(date_in), day(date_in));
-        if strcmp(source,'wrf')
-            monthly_file_name = sprintf(monthly_file_name_spec, year(date_in), month(date_in), eomday(year(date_in), month(date_in)));
-        else
-            monthly_file_name = sprintf(monthly_file_name_spec, year(date_in), month(date_in), day(date_in));
-        end
-        
         switch city
             case 'Atlanta'
                 %xl = [-86 -82];
@@ -1020,24 +949,8 @@ end
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% LOAD DATA, CALCULATE QUANTITIES, AND PLOT %%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        switch apriori_base
-            case 'monthly'
-                base_file = fullfile(monthly_path, monthly_file_name);
-            case 'hybrid'
-                base_file = fullfile(hybrid_path, daily_file_name);
-            case 'hybrid-avg'
-                base_file = fullfile(hybrid_avg_path, daily_file_name);
-            case 'hourly'
-                base_file = fullfile(daily_path, daily_file_name);
-        end
-        switch apriori_new
-            case 'monthly'
-                new_file = fullfile(monthly_path, monthly_file_name);
-            case 'hybrid'
-                new_file = fullfile(hybrid_path, daily_file_name);
-            case 'hourly'
-                new_file = fullfile(daily_path, daily_file_name);
-        end
+        base_file = return_data_file_info(source, timemode, res_base, apriori_base, date_in);
+        new_file = return_data_file_info(source, timemode, res_new, apriori_new, date_in);
         
         if strcmp(source,'wrf')
             
@@ -2935,6 +2848,7 @@ end
                 end
                 
                 dVCDStats.table = cell2table(tabcell,'VariableNames',varnames,'RowNames',city_names);
+                fprintf('Placing output variable "dVCDStats" in the base workspace\n')
                 putvar(dVCDStats);
         end
         
@@ -3254,4 +3168,98 @@ end
 
 function badpix = find_bad_pixels(Data)
 badpix = Data.CloudFraction > 0.2 | Data.XTrackQualityFlags ~= 0 | mod(Data.vcdQualityFlags,2) ~= 0 | Data.BEHRColumnAmountNO2Trop < 0 | Data.BEHRColumnAmountNO2Trop > 1e17;
+end
+
+function [interp_val, interp_pres] = interp_to_std_p(vals, P)
+behr_stdp = BEHR_std_pres;
+vals_tmp = nan(numel(behr_stdp), size(vals,2));
+for a=1:size(vals,2)
+    vals_tmp(:,a) = interp1(P(:,a), vals(:,a), behr_stdp);
+end
+P = repmat(behr_stdp',1,size(vals,2));
+vals = vals_tmp;
+end
+
+function [file_out] = return_data_file_info(source, timemode, res, apriori, date_in)
+% File paths: need the daily and monthly paths. Will construct a
+% cell array where the first dimension corresponds to the
+% difference sources (e.g. WRF, BEHR, pseudo-BEHR) and the second
+% to cities. Put NaNs for cases that don't exist.
+%
+% File name format: strings should include a %1$04d where the year,
+% %2$02d where the month, and %3$02d where the day get filled in.
+% Only expected to be different for the different sources.
+
+sharedir = '/Volumes/share2/USERS/LaughnerJ/';
+workdir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/';
+switch source
+    case 'wrf'
+        daily_file_name_spec = 'WRF_BEHR_hourly_%1$04d-%2$02d-%3$02d.nc';
+        monthly_file_name_spec = 'WRF_BEHR_monthly_%1$04d-%2$02d-%3$02d.nc';
+        switch res
+            case 'f'
+                daily_path = fullfile(sharedir,'WRF','E_US_BEHR','hourly');
+                hybrid_path = NaN;
+                monthly_path = fullfile(sharedir,'WRF','E_US_BEHR','monthly');
+            case 'c'
+                daily_path = fullfile(sharedir,'WRF','E_US_BEHR_COARSE','hourly');
+                hybrid_path = NaN;
+                monthly_path = fullfile(sharedir,'WRF','E_US_BEHR_COARSE','monthly');
+        end
+    case 'behr'
+        daily_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
+        monthly_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
+        s = 2;
+        switch res
+            case 'f'
+                daily_path = fullfile(workdir,'SE US BEHR Hourly - No ghost');
+                hybrid_path = fullfile(workdir,'SE US BEHR Hybrid - No ghost');
+                monthly_path = fullfile(workdir,'SE US BEHR Monthly - No ghost');
+            case 'c'
+                daily_path = fullfile(workdir,'SE US BEHR Hourly - No ghost - Coarse WRF');
+                hybrid_path = fullfile(workdir,'SE US BEHR Hybrid - No ghost - Coarse WRF');
+                monthly_path = fullfile(workdir,'SE US BEHR Monthly - No ghost - Coarse WRF');
+        end
+    case 'pseudo-behr'
+        daily_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
+        monthly_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
+        xx = 1:11;
+        yy = 1:19;
+        s = 1;
+        switch res
+            case 'f'
+                if strcmpi(timemode,'avg')
+                    daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost');
+                    hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost');
+                    hybrid_avg_path = fullfile(workdir, 'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
+                else
+                    daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Instantaneous');
+                    hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Instantaneous');
+                end
+                monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost');
+            case 'c'
+                daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Coarse WRF');
+                hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Coarse WRF');
+                hybrid_avg_path = fullfile(workdir, 'Atlanta BEHR Avg Hybrid - No clouds - No ghost - Coarse WRF');
+                monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost - Coarse WRF');
+        end
+end
+
+daily_file_name = sprintf(daily_file_name_spec, year(date_in), month(date_in), day(date_in));
+if strcmp(source,'wrf')
+    monthly_file_name = sprintf(monthly_file_name_spec, year(date_in), month(date_in), eomday(year(date_in), month(date_in)));
+else
+    monthly_file_name = sprintf(monthly_file_name_spec, year(date_in), month(date_in), day(date_in));
+end
+
+switch apriori
+    case 'monthly'
+        file_out = fullfile(monthly_path, monthly_file_name);
+    case 'hybrid'
+        file_out = fullfile(hybrid_path, daily_file_name);
+    case 'hybrid-avg'
+        file_out = fullfile(hybrid_avg_path, daily_file_name);
+    case 'hourly'
+        file_out = fullfile(daily_path, daily_file_name);
+end
 end

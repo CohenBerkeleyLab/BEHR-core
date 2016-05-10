@@ -91,14 +91,14 @@ if ~exist('options','var')
     end
 elseif isempty(options)
     % Set default values
-    options.qual_bool = false;
+    options.quad_bool = false;
     options.dist_limi = 0;
     options.size_lim_type = 'none';
     options.lim_crit = 0;
     options.center_lon = 0;
     options.center_lat = 0;
 elseif ~isstruct(options) || any(~isfield(options,req_options))
-    E.badinput('OPTIONS must be a structure with the fields %s',strjoin(options,', '));
+    E.badinput('OPTIONS must be a structure with the fields %s',strjoin(req_options,', '));
 end
 
 if ~exist('Data','var')
