@@ -20,6 +20,22 @@
 
 \usepackage{appendix}
 
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows, positioning, fit}
+%%%%%% TIKZ FLOWCHARTS %%%%%
+% Definitions for tikz flowcharts (https://www.sharelatex.com/blog/2013/08/29/tikz-series-pt3.html)
+% Use the environment \begin{tikzpicture}[node distance=2cm]
+\tikzstyle{startstop} = [rectangle, rounded corners, minimum width=1cm, minimum height=.3cm,text centered, draw=black, fill=red!30, align=center, font=\tiny]
+\tikzstyle{io} = [trapezium, trapezium left angle=70, trapezium right angle=110, minimum width=1cm, minimum height=.3cm, text centered, draw=black, fill=blue!30, align=center, font=\tiny]
+\tikzstyle{process} = [rectangle, minimum width=1cm, minimum height=.3cm, text centered, draw=black, fill=orange!30, align=center, font=\tiny]
+\tikzstyle{subprocess} = [rectangle, rounded corners, minimum width=1cm, minimum height=.3cm, text centered, draw=black, fill=yellow!30, align=center, font=\tiny]
+\tikzstyle{decision} = [diamond, minimum width=1cm, minimum height=.3cm, text centered, draw=black, fill=green!30, align=center, font=\tiny]
+\tikzstyle{spacer} = [rectangle, minimum width=0cm, minimum height=0cm, draw=none, fill=none]
+\tikzstyle{line} = [thick]
+\tikzstyle{arrow} = [thick,->,>=stealth]
+\tikzstyle{dasharrow} = [dashed,->,>=stealth]
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \usepackage[version=3]{mhchem} %Simpler chemistry notation, use \ce{} to typeset chemical formula
 	%e.g. \ce{H2O} for water and \ce{1/2SO4^2-} to set half a mol of sulfate ion.
 
@@ -60,6 +76,7 @@
 \section{Literature}
 
 \section{Getting started}
+	\subsection{Before you begin}
 
 	You'll want to make sure you have the following software or utilities installed:
 
@@ -67,13 +84,14 @@
 		\item \textbf{All platforms:}
 		\begin{itemize}
 			\item MATLAB
+			\item Git version control system
 			\item Python (optional but recommended)
 		\end{itemize}
 		
 		\item \textbf{Windows:}
 		\begin{itemize}
 			\item An SSH client like puTTy
-			\item Cygwin - a bash shell for Windows
+			\item Cygwin - a bash shell for Windows. Includes capability to make SSH connections.
 			\item wget - a method for retrieving remote files, install by selecting it as a package during Cygwin setup
 		\end{itemize}
 		
@@ -88,15 +106,25 @@
 		\end{itemize}
 	\end{itemize}
 	
-	MATLAB is used to run BEHR itself. Python is another language that some utilities for BEHR are written in currently. None are essential. Bash is a shell---basically a text based OS interface---that Unix based systems use. Most importantly, it's the easiest way to download large amounts of satellite data with the command line utility \texttt{wget}. SSH is a secure protocol that allows remote, command-line access to machines set up to accept SSH connection (this includes the file server, Savio cluster, and satellite download computer).
+	MATLAB is used to run BEHR itself. Python is another language that some utilities for BEHR are written in currently. None are essential. Bash is a shell---basically a text based OS interface---that Unix based systems use. It's the easiest way to download large amounts of satellite data with the command line utility \texttt{wget}, and is used in much of the BEHR automation and in the development branch. SSH is a secure protocol that allows remote, command-line access to machines set up to accept SSH connection (this includes the file server, Savio cluster, and satellite download computer).
 	
 	Some resources if you are new to any of these languages:
 	\begin{itemize}
 		\item MATLAB:
+		\item Git:
 		\item Python:
 		\item Bash:
 		\item SSH:
 	\end{itemize}
+	
+	\subsection{Quickstart}
+	\begin{enumerate}
+	\item Clone the \lstinline$BEHR_GitRepo$, \lstinline$MiscUtils$, and \lstinline$BEHR_MatlabClasses_GitRepo$ repositories (Table \ref{GitReposTable}, pg. \pageref{GitReposTable}) and add them to your Matlab path.
+	\item Mount the \path{share-sat} share on the Synology NAS at 128.32.208.13 (you'll need the login credentials from another group member).
+	\item Run \lstinline$BEHR_path_setup.m$ under \path{BEHR/Utils/BEHR_path_setup.m} to create the function \lstinline$BEHR_paths.m$ that will point to various directories on your computer and the file server that BEHR needs.
+	\item Try running \lstinline$read_omnno2_v_aug2012.m$ for one or two days. Make sure it saves to some temporary directory and \emph{not} the main \path{OMI_SP} directory on the file server.
+	\item Do the same for \lstinline$BEHR_main.m$, also saving to a temporary folder.
+	\end{enumerate}
 
 \section{Retrieving NASA data}
 	\subsection{Group server file locations}\label{sec:file-server}
@@ -126,7 +154,7 @@
 	
 		The necessary satellite data for BEHR is being downloaded automatically by the black Compaq computer in room B47. Each week, this computer queries the relevant archives for new files, compares the remote and local file lists, and retrieves any new files from the remote archive.  It will not intelligently acquire new versions, so it will need updated accordingly as new product versions are released, or additional satellite products are required by BEHR.
 		
-		It will also run \texttt{read\_omno2\_v\_aug2012.m} each week to produce new \texttt{.mat} files containing the relevant data. These files are the first step in BEHR, and are much easier to copy to the computing cluster due to their smaller size.
+		It is also running \lstinline$read_omno2_v_aug2012.m$, \lstinline$BEHR_main.m$, and \lstinline$BEHR_publishing_v2.m$ each week to produce new BEHR files. This is keeping the website (\S\ref{sec:website}) as up-to-date as possible.
 		
 		Here the downloading process itself will be described. All scripts can be found in the \texttt{Downloading} folder of the BEHR git repository (see \S\ref{sec:version-control}).  For information on how the computer and its OS were configured for this, see Appendix \ref{app:autodl}.
 		
@@ -146,7 +174,7 @@
 			
 			Cloud files were more involved, because these become very large as many of them are downloaded. Since we look at individual MODIS granules for clouds (instead of the global gridded product for albedo) we want to restrict the cloud files to the lat/lon boundaries of the US (or other region of interest), plus a 5-10$^\circ$ buffer to ensure all granules are retrieved.
 			
-			To do this, we use the \emph{Simple Object Access Protocol} through the Python module SOAPpy to send a request for all MYD06\_L2 files in the given time and space range, using the Python script \texttt{automodis.py}. This returns a list or URLs that \texttt{get\_modis.sh} can then check against local files.  Note that because of how Bash and Python interact, \texttt{automodis.py} must \emph{only} print the URL list; no other printing to terminal can be done, even for debugging purposes.
+			To do this, we use the \emph{Simple Object Access Protocol} through the Python module SOAPpy to send a request for all MYD06\_L2 files in the given time and space range, using the Python script \texttt{automodis.py}. This places a list of URLs into a file that \texttt{get\_modis.sh} can then check against local files. 
 			
 			\item \textbf{Reading the files:}
 			
@@ -157,7 +185,7 @@
 		
 		
 \section{Version Control}\label{sec:version-control}
-	
+	\subsection{Repositories}
 	The core code for BEHR is contained in a Git repository on our group's Synology DS1813+ NAS file server.  If you are not familiar with Git, I recommend reading chapters 1-4 at \url{http://git-scm.com/doc}, which includes information on installing Git on your system as well as the basic commands.  If you are working on a Windows machine you make also want to look at \url{http://guides.beanstalkapp.com/version-control/git-on-windows.html} and follow their recommendations, although as I've never used Git on a Windows machine, I can't say for certain how well that works.  
 	Once you have Git installed and working on your machine, navigate to the folder that will be your working directory for the project in either Terminal (Mac) or Command Prompt (Windows) and run the command:
 
@@ -188,9 +216,81 @@
 	 \item \emph{Parallel development.}  If multiple people are developing BEHR at one point, each person can create their own branch and develop simultaneously, while still being able to update the project on the server, and eventually merge the development lines together.
 	 \item \emph{Code sharing.} Conversely, if two (or more) people are both using BEHR, this makes it easier to synchronize code when and if you want.
 	\end{enumerate}
+	
+	\subsection{Best practices for version control}
+	\emph{Read this section before you start changing things!} As I'm writing this, the version control for BEHR is fairly straightforward as I'm the only user on the project. If multiple users are developing the code simultaneously, adhering to some good practices will help keep everyone sane.
+	
+	\begin{itemize}
+	\item \textbf{The master branch should only contain stable code.} Generally in Git, the ``master'' branch is just as it sounds: the main branch with reliable code. This branch should contain the version of BEHR that produces the \emph{published website} data.
+	\item \textbf{Changes to the master branch should be understood by all parties.} Before merging any work into the master branch, everyone involved in developing BEHR should sit down together and be sure they understand the changes to be merged. Ideally, this would include a full code review where everyone satisfies themselves that there are no lingering bugs; but realistically that probably won't happen.
+	\item \textbf{Each student on the project should create their own development branch.}  This will serve as a sort of ``personal master branch,'' i.e. the branch that all the rest of your branches split from and that you merge back into. Ideally, only this branch should then be merged into the true master branch.
+	\item \textbf{Not every local branch needs a remote branch.} Git is really useful because you can create these branches to develop new code while leaving a stable state alone. However, not every local branch needs to have a corresponding remote branch.  To keep the remote repo from getting too crazy, only make remotes when you need to sync that branch across multiple computers.
+	\item \textbf{Clean up remote branches when finished with them.} Once you merge or delete a development branch, make sure the remote that went along with it gets deleted.
+	\item \textbf{Finally, don't check out someone else's dev branch without telling them.} And definitely don't push back to it, as then they have unexpected code coming into their dev branch.
+	\end{itemize}
 
-\section{File structure}
+\section{Program structure}
 	This section describes the key files of code in BEHR to make it run.  Instructions for running it contained within this section are predicated on the idea that you're running BEHR on a desktop computer.  For instructions on running it on a cluster, see \S\ref{sec:Cluster}.
+	
+	The general program flow is outlined in Fig. \ref{fig:curr-pgrm-flow}. The first step is reading in the OMNO2 and ancillary data using \lstinline$read_omno2_v_aug2012.m$. The result of this function is taken by \lstinline$BEHR_main.m$ which computes and applies the BEHR AMF, as well as grids the data to a $0.05^\circ \times 0.05^\circ$ grid. Finally the results can be published to the website using \lstinline$BEHR_publishing_v2.m$.
+
+	\begin{figure}
+	\begin{tikzpicture}[node distance=0.5cm and 1cm,every text node part/.style={align=center}]
+	\node (omno2) [io] {OMNO2 \\ .he5 files};
+	\node (modcld) [io, below=of omno2] {MYD06};
+	\node (space1) [spacer, right=of modcld] {};
+	\node (modalb) [io, right=of space1] {MCD43C3};
+	\node (globe) [io, above=of modalb] {GLOBE \\ Database};
+	\node (corners) [subprocess, above=of omno2] {\texttt{fxn\_corner\_coordinates.m}};
+	\node (read) [process, below=of space1] {\texttt{read\_omno2\_v\_aug2012.m}};
+	
+	\node (omisp) [io, below=of read] {OMI\_SP\_yyyymmdd.mat};
+	\node (behrmain) [process, below=of omisp, yshift=-1cm] {\texttt{BEHR\_main.m}};
+	\node (space2) [spacer, left=of behrmain] {};
+	\node (rDamf2) [subprocess, above=of space2] {\texttt{rDamf2.m}};
+	\node (rNmcTmp2) [subprocess, below=of space2] {\texttt{rNmcTmp2.m}};
+	\node (swtab) [io, left=of rDamf2] {SW table \\ (\texttt{damf.txt})};
+	\node (temptab) [io, left=of rNmcTmp2, xshift=0.2cm] {Temperature \\ table \\ (\texttt{nmcTmpYr.txt})};
+	\node (rProfileUS) [subprocess, right=of behrmain] {\texttt{rProfile\_US.m}};
+	\node (profiles) [io, right=of rProfileUS] {WRF-Chem \\ profiles \\ (\texttt{mXX\_NO2\_profile.mat})};
+	
+	\node (grid) [subprocess, below=of behrmain,yshift=-1cm] {\texttt{add2grid\_BEHR.m} \\ \texttt{hdf\_quadrangle\_BEHR.m}};
+	\node (omibehr) [io, below=of grid] {OMI\_BEHR\_yyyymmdd.mat};
+	
+	\node (publish) [process, below=of omibehr] {\texttt{BEHR\_publishing\_v2.m}};
+	\node (space3) [coordinate, below=of publish] {};
+	\node (behrhdf) [io, below=of space3] {OMI\_BEHR\_yyyymmdd.hdf \\ native HDF5};
+	\node (behrtxt) [io, left=of behrhdf] {OMI\_BEHR\_yyyymmdd.txt \\ native TXT};
+	\node (behrgridded) [io, right=of behrhdf] {OMI\_BEHR\_yyyymmdd.hdf \\ gridded HDF5};
+	
+	\draw [arrow] (omno2) -| (read);
+	\draw [arrow] (modcld) -| (read);
+	\draw [arrow] (modalb) -| (read);
+	\draw [arrow] (globe) -| (read);
+	\draw [arrow] (corners) -| (read);
+	
+	\draw [arrow] (read) -- (omisp);
+	\draw [arrow] (omisp) -- (behrmain);
+	
+	\draw [arrow] (swtab) -- (rDamf2);
+	\draw [arrow] (rDamf2) |- (behrmain);
+	\draw [arrow] (temptab) -- (rNmcTmp2);
+	\draw [arrow] (rNmcTmp2) |- (behrmain);
+	\draw [arrow] (profiles) -- (rProfileUS);
+	\draw [arrow] (rProfileUS) -- (behrmain);
+	
+	\draw [arrow] (behrmain) -- (grid);
+	\draw [arrow] (grid) -- (omibehr);
+	\draw [arrow] (omibehr) -- (publish);
+	
+	\draw [arrow] (publish) -- (behrhdf);
+	\draw [arrow] (space3) -| (behrtxt);
+	\draw [arrow] (space3) -| (behrgridded);
+	
+	\end{tikzpicture}
+	\caption{The structure of the BEHR program. Orange rectangles indicate the primary MATLAB functions that need to be executed; yellow rounded rectangles are other functions called internally by those main functions. Blue trapezoids represent input or output data.}
+	\label{fig:curr-pgrm-flow}
+	\end{figure}
 
 	\subsection{Read data}
 	
@@ -201,6 +301,7 @@
 	 This function serves several purposes: 
 		\begin{enumerate}
  		 \item It reads all relevant variables from OMNO2 files into Matlab.
+ 		 \item It computes pixel corner points based on the field of regard of each pixel and the area over which 50\% of the pixel's sensitivity can be attributed.
 		 \item It averages the MYD06\_L2 cloud product data to each OMI pixel.
 		 \item It averages the MCD43C3 albedo product data to each OMI pixel.
 		 \item It averages the GLOBE terrain data to each OMI pixel, converting from altitude to terrain pressure.
@@ -231,13 +332,28 @@
 		This function should require minimal upkeep even in the event a new NASA product is released.
 		
 	\subsection{Weight pixels and map}
+	This step is used when creating maps of BEHR \ce{NO2} data. The existing function to handle this is \lstinline$no2_column_map_2014.m$. It can be called with a GUI by using \lstinline$no2colmap_wrapper.m$. Either way, this uses the gridded BEHR data to do time averaging and \lstinline$omi_pixel_reject.m$ to filter out pixels with cloud contamination or that are affected by the row anomaly.
+	
+	When doing temporal averaging, each grid cell has an areaweight associated with it; this is the sum of the reciprocal of the areas of each pixel that overlapped that grid cell. By weighting by the reciprocal of the area, it gives more weight to grid cells that got information from small, more representative, pixels.  Therefore, any temporal average should be weighted by this field.
+	
+	Plotting can be accomplished using the \lstinline$m_map$ package (which is used in the above functions, and which should be included in the BEHR Git repo). MATLAB also has built in mapping functions which can be used if desired. Generally a \lstinline$pcolor$ plot of some sort is the best option.
+	
+	\subsection{Publish}
+	Once a production quality version of BEHR is ready to go, it needs to be published to the website (see \S\ref{sec:website}). The data is published in three formats:
+	\begin{itemize}
+	\item Plain text CSV files that list the important variables for each pixel. The 2D structure of the swath is lost. This is considered at the native OMI pixel resolution.
+	\item HDF5 files containing the same variables as the plain text files. However, because HDF files can store data in arrays with any number of dimensions, the 2D structure of the swath can be preserved. This is also at the native OMI pixel resolution.
+	\item HDF5 files containing a subset of the variables at the $0.05^\circ \times 0.05^\circ$ resolution.
+	\end{itemize}
+	
+	The publishing is handled by the function \lstinline$BEHR_publishing_v2.m$. It is set up to produce a single one of the above three types with each run. Which type and the dates to produce for can be specified as inputs to the function or by modifying the corresponding values in the ``Set Options'' part of the code and running it without any inputs. It also retains the ability to produce some specialized versions of the product, mainly those that used \emph{a priori} profiles derived from the DISCOVER-AQ research flights.
 
 \section{Running BEHR on a compute cluster} \label{sec:Cluster}
 	\subsection{BEHR in Matlab}
 	\subsubsection{Parallelization}
 		Starting in Jan 2015, the main BEHR code (\texttt{read\_omno2\_v\_aug2012.m} and \texttt{BEHR\_main.m}) had simple parallelization added to the code body.  This is only intended to be used when the code is run on a cluster because in order to run operations in parallel, Matlab must send all relevant variables from the main instance to the parallel ``workers'' actually executing the code.  Given the size of the variables routinely used in BEHR, this communication overhead can result in overall slower work than a serial execution if too few cores are used.  As of 29 Jan 2015, I have yet to run any sort of rigorous benchmarking tests, but anecdotally, running BEHR in parallel with only 2 cores seemed to result in a slower execution than running it in serial.
 		
-		There were numerous small changes to the code to enable parallelization, most importantly, the (\texttt{for} loop over days was replaced with a \texttt{parfor} loop. \texttt{parfor} in Matlab allows multiple iterations of a for loop to run in parallel, and automatically handles the distribution of data.  Compared to an \texttt{spmd} block, we give up control over how and when the data is distributed in exchange for Matlab handling it automatically.
+		There were numerous small changes to the code to enable parallelization, most importantly, the \texttt{for} loop over days was replaced with a \texttt{parfor} loop. \texttt{parfor} in Matlab allows multiple iterations of a for loop to run in parallel, and automatically handles the distribution of data.  Compared to an \texttt{spmd} block, we give up control over how and when the data is distributed in exchange for Matlab handling it automatically.
 		
 		Compared to previous versions of BEHR, most of the changes in the code (too numerous to list individually) were mainly to allow Matlab to ``slice'' variables appropriately for inclusion in a \texttt{parfor} loop.  The change that is significant for the user is that a number of global variables were added to control both the action of the parallel loop and the paths to data.  
 
@@ -268,7 +384,7 @@ matlab -nosplash -nodisplay -r "run(`runscript.m')"
 		Like any job you want to run on a computing cluster, you'll need to write a shell script that is put into the queue for the cluster.  Since the Savio cluster that I use operates with the SLURM scheduler, this section will be written from the point of view of submitting to SLURM using the bash shell. (I assume that if you use tcsh or another shell that you know what you're doing well enough to make the necessary adjustments.) Below will be an example submit script, each important line will be described afterward.
 
 % Only for this listings environment do we want line numbers
-\lstset{numbers=left}
+\lstset{numbers=left,basicstyle=\scriptsize\ttfamily}
 \begin{lstlisting}
 #!/bin/bash
 #
@@ -299,7 +415,7 @@ matlab -nosplash -nodisplay -logfile "runlog.txt" -r "run('runscript_behr.m')"
 MATLAB_EXIT=$?
 exit $MATLAB_EXIT
 \end{lstlisting}
-\lstset{numbers=none}
+\lstset{numbers=none,basicstyle=\ttfamily}
 
 \bgroup
 \def\arraystretch{1.5}
@@ -336,11 +452,93 @@ exit $MATLAB_EXIT
 	\end{enumerate}
 		
 	
-
+\section{Maintaining the website}\label{sec:website}
+	\subsection{Editing the content}
+	\subsection{Providing new data}
 	
 \section{Additional utilities}
 	\subsection{Verification}
 
+\section{Current development}
+	The current focus of work on BEHR is to give it daily (rather than monthly average) \emph{a priori} \ce{NO2} profiles. To do so, I've completely rewritten how the \ce{NO2} profiles are imported into \lstinline$BEHR_main.m$.
+
+\begin{figure}
+	\begin{tikzpicture}[node distance=0.5cm and 1cm,every text node part/.style={align=center}]
+	\node (omno2) [io] {OMNO2 \\ .he5 files};
+	\node (modcld) [io, below=of omno2] {MYD06};
+	\node (space1) [spacer, right=of modcld] {};
+	\node (modalb) [io, right=of space1] {MCD43C3};
+	\node (globe) [io, above=of modalb] {GLOBE \\ Database};
+	\node (corners) [subprocess, above=of omno2] {\texttt{fxn\_corner\_coordinates.m}};
+	\node (read) [process, below=of space1] {\texttt{read\_omno2\_v\_aug2012.m}};
+	
+	\node (omisp) [io, below=of read] {OMI\_SP\_yyyymmdd.mat};
+	\node (behrmain) [process, below=of omisp, yshift=-1cm] {\texttt{BEHR\_main.m}};
+	\node (space2) [spacer, left=of behrmain] {};
+	\node (rDamf2) [subprocess, above=of space2] {\texttt{rDamf2.m}};
+	\node (rNmcTmp2) [subprocess, below=of space2] {\texttt{rNmcTmp2.m}};
+	\node (swtab) [io, left=of rDamf2] {SW table \\ (\texttt{damf.txt})};
+	\node (temptab) [io, left=of rNmcTmp2, xshift=0.2cm] {Temperature \\ table \\ (\texttt{nmcTmpYr.txt})};
+	\node (rProfileWRF) [subprocess, right=of behrmain] {\texttt{rProfile\_WRF.m}};
+	\node (profiles) [io, right=of rProfileWRF] {WRF\_BEHR\_*\_yyyy-mm-dd.nc};
+	\node (runwrf) [process, above=of profiles] {\texttt{slurmrun/run\_wrf\_output.sh}};
+	\node (readwrf) [subprocess, left=of runwrf] {\texttt{read\_wrf\_output.sh}};
+	\node (wrfout) [io, above=of runwrf] {wrfout\_*};
+	\node (wrfchem) [process, above=of wrfout] {WRF-Chem};
+		
+	\node (grid) [subprocess, below=of behrmain,yshift=-1cm] {\texttt{add2grid\_BEHR.m} \\ \texttt{hdf\_quadrangle\_BEHR.m}};
+	\node (omibehr) [io, below=of grid] {OMI\_BEHR\_yyyymmdd.mat};
+	
+	\node (publish) [process, below=of omibehr] {\texttt{BEHR\_publishing\_v2.m}};
+	\node (space3) [coordinate, below=of publish] {};
+	\node (behrhdf) [io, below=of space3] {OMI\_BEHR\_yyyymmdd.hdf \\ native HDF5};
+	\node (behrtxt) [io, left=of behrhdf] {OMI\_BEHR\_yyyymmdd.txt \\ native TXT};
+	\node (behrgridded) [io, right=of behrhdf] {OMI\_BEHR\_yyyymmdd.hdf \\ gridded HDF5};
+	
+	\node (development) [draw=red, line width=1.5pt, dashed, fit=(rProfileWRF) (profiles) (runwrf) (readwrf) (wrfout) (wrfchem)] {};
+	
+	\draw [arrow] (omno2) -| (read);
+	\draw [arrow] (modcld) -| (read);
+	\draw [arrow] (modalb) -| (read);
+	\draw [arrow] (globe) -| (read);
+	\draw [arrow] (corners) -| (read);
+	
+	\draw [arrow] (read) -- (omisp);
+	\draw [arrow] (omisp) -- (behrmain);
+	
+	\draw [arrow] (swtab) -- (rDamf2);
+	\draw [arrow] (rDamf2) |- (behrmain);
+	\draw [arrow] (temptab) -- (rNmcTmp2);
+	\draw [arrow] (rNmcTmp2) |- (behrmain);
+	\draw [arrow] (rProfileWRF) -- (behrmain);
+	\draw [arrow] (profiles) -- (rProfileWRF);
+	\draw [arrow] (runwrf) -- (profiles);
+	\draw [arrow] (readwrf) -- (runwrf);
+	\draw [arrow] (wrfout) -- (runwrf);
+	\draw [arrow] (wrfchem) -- (wrfout);
+	
+	\draw [arrow] (behrmain) -- (grid);
+	\draw [arrow] (grid) -- (omibehr);
+	\draw [arrow] (omibehr) -- (publish);
+	
+	\draw [arrow] (publish) -- (behrhdf);
+	\draw [arrow] (space3) -| (behrtxt);
+	\draw [arrow] (space3) -| (behrgridded);
+	
+	\end{tikzpicture}
+	\caption{The changes necessary to allow the use of daily \emph{a priori} profiles, marked by the red box.}
+	\label{fig:dev-pgrm-flow}
+	\end{figure}
+
+	The new pieces of code are \lstinline$rProfile_WRF.m$, which replaces \lstinline$rProfile_US.m$ and reads profiles from the \lstinline$WRF_BEHR_*_yyyy-mm-dd.nc$ netCDF files instead of the .mat files used previously.  These netCDF files are produced by the Bash shell script \lstinline$slurmrun_wrf_output.sh$ or \lstinline$run_wrf_output.sh$. Ideally the difference between these two is that \lstinline$run_wrf_output.sh$ is meant to run in serial, while \lstinline$slurmrun_wrf_output.sh$ runs in parallel, using the \lstinline$srun$ command with the SLURM scheduler. However, development of \lstinline$slurmrun_wrf_output.sh$ tends to proceed more rapidly, so it is preferred although it can only be run on the Savio cluster or another cluster using the SLURM scheduler.
+	
+	Both scripts use the NCO tools. These are installed on the Savio cluster (although as a module that needs to be loaded) and can be installed on your computer if desired. Essentially, \lstinline$slurmrun_wrf_output.sh$ determines how to average the WRF output (monthly, daily, hourly), which set of variables to put in the final files, and whether it is preparing \emph{a priori} for OMI or TEMPO (the TEMPO one is a notional implementation at current, making certain assumptions about the operation of TEMPO). It identifies the files necessary and instantiates multiple instances of the appropriate \lstinline$read_wrf_output.sh$ (may also be \lstinline$read_wrf_tempo.sh$ or \lstinline$read_wrf_emis.sh$) to allow parallel execution.  These in turn make use of built-in NCO functions and several NCO scripts I've written to both extract the key variables and calculate several additional quantities not automatically included in the WRF output. Cutting down the files in this manner substantially reduces the amount of data that needs to be moved from a cluster capable of running WRF-Chem to whatever computer is running BEHR.
+	
+	This information is extracted from the raw WRF-Chem output files, \lstinline[breaklines=true]$wrfout_d0X_yyyy-mm-dd_hh:mm:ss$. My scripts assume that there is one output ``frame'' per file, that is, each file represents a single slice in time. It is possible that WRF-Chem might save multiple time slices to each file, although the resulting files will likely be huge. 
+	
+	\lstinline$rProfile_WRF.m$ is also fairly intelligent about how it reads and applies the \ce{NO2} profiles, accounting for different spatial resolutions as well as being able to use different temporal resolutions. However to do the latter, it expects the profiles to be organized in subfolders named by the temporal resolution of the \emph{a priori} profiles in them: ``hourly,'' ``daily,'' or ``monthly.''
+	
+	
 
 \newpage
 \appendix
@@ -348,6 +546,7 @@ exit $MATLAB_EXIT
 \addappheadtotoc
 	
 \section{Changelog}
+
 	A notation of (dev) after the version number indicates that the full archive of BEHR data was never produced using that version (i.e. ``development only'').
 
 \bgroup
