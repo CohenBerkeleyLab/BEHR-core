@@ -51,7 +51,7 @@ end
             return
         end
         SF = load(fullfile(data_path,data_file));
-        ldfile = strrep(data_file,'SimpleFits','LineDensities');
+        ldfile = regexprep(data_file,'SimpleFits(-ssresid|-unexvar)*','LineDensities');
         if ~exist(fullfile(data_path,ldfile),'file')
             E.filenotfound('simple fits file');
         else

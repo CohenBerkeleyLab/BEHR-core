@@ -53,6 +53,8 @@ switch lower(plttype)
         del_shape_vs_vcd();
     case 'mag-delvcd'
         mag_delvcd_stats();
+    case 'wind-v-cld'
+        wind_cond_vs_cld();
     otherwise
         fprintf('plttype not recognized\n');
 end
@@ -2854,7 +2856,113 @@ end
         
     end
         
-    
+    function wind_cond_vs_cld()
+        % This function will plot wind speed and direction based off of the
+        % wind conditions file for atlanta vs. cloud fraction.
+        hybrid_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost'; 
+        monthly_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost'; 
+        W = load('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta-Wind-Conditions-1900UTC-5layers.mat');
+        
+        clds50 = nan(size(W.dnums));
+        dAMF50 = nan(size(W.dnums));
+        clds150 = nan(size(W.dnums));
+        dAMF150 = nan(size(W.dnums));
+        
+        opts.quad_bool = 0;
+        opts.size_lim_type = 'none';
+        opts.lim_crit = [];
+        opts.center_lon = -84.39;
+        opts.center_lat = 33.775;
+        
+        if isDisplay
+            wb = waitbar(0,'Loading clouds');
+        end
+        
+        for d=1:numel(W.dnums)
+            if isDisplay
+                waitbar(d/numel(W.dnums));
+            end
+                
+            behr_file = sprintf('OMI_BEHR_%s.mat',datestr(W.dnums(d),'yyyymmdd'));
+            H = load(fullfile(hybrid_path,behr_file),'Data');
+            Data = H.Data;
+            M = load(fullfile(monthly_path,behr_file),'Data');
+            tmp_clds50 = [];
+            tmp_hyamf50 = [];
+            tmp_mnamf50 = [];
+            tmp_clds150 = [];
+            tmp_hyamf150 = [];
+            tmp_mnamf150 = [];
+            for s=1:numel(Data)
+                badpix = find_bad_pixels(Data(s),1);
+                Data(s).CloudFraction(badpix) = nan;
+                
+                opts.dist_limit = 50;
+                in50 = subset_BEHR_pixels(Data(s),[-90 -80],[30 40],opts);
+                tmp_clds50 = cat(1, tmp_clds50, Data(s).CloudFraction(in50));
+                tmp_hyamf50 = cat(1, tmp_hyamf50, Data(s).BEHRAMFTrop(in50));
+                tmp_mnamf50 = cat(1, tmp_mnamf50, M.Data(s).BEHRAMFTrop(in50));
+                
+                opts.dist_limit = 150;
+                in150 = subset_BEHR_pixels(Data(s),[-90, -80],[30 40],opts);
+                tmp_clds150 = cat(1, tmp_clds150, Data(s).CloudFraction(in150));
+                tmp_hyamf150 = cat(1, tmp_hyamf150, Data(s).BEHRAMFTrop(in150));
+                tmp_mnamf150 = cat(1, tmp_mnamf150, M.Data(s).BEHRAMFTrop(in150));
+            end
+            
+            clds50(d) = nanmean(tmp_clds50);
+            clds150(d) = nanmean(tmp_clds150);
+            dAMF50(d) = nanmean(reldiff(tmp_hyamf50, tmp_mnamf50))*100;
+            dAMF150(d) = nanmean(reldiff(tmp_hyamf150, tmp_mnamf150))*100;
+        end
+        
+        if isDisplay
+            close(wb)
+        end
+        % Make figures. For now we'll do two for each distance, until I
+        % upgrade to 2016a and have access to polar plots. The two will be
+        % cloud fraction vs. wind speed and direction.
+        figure;
+        scatter(W.windvel, clds50, 32, dAMF50, 'filled');
+        xlabel('Wind speed (m/s)')
+        ylabel('Cloud fraction')
+        title('Within 50 km')
+        cb=colorbar;
+        cb.Label.String = '%\Delta AMF';
+        colormap('jet')
+        caxis([-50 50])
+        
+        figure;
+        scatter(W.theta, clds50, 32, dAMF50, 'filled');
+        xlabel('Wind direction (CCW from E)')
+        ylabel('Cloud fraction')
+        title('Within 50 km');
+        cb=colorbar;
+        cb.Label.String = '%\Delta AMF';
+        colormap('jet')
+        caxis([-50 50])
+        
+        figure;
+        scatter(W.windvel, clds150, 32, dAMF50, 'filled');
+        xlabel('Wind speed (m/s)')
+        ylabel('Cloud fraction')
+        title('Within 150 km')
+        cb=colorbar;
+        cb.Label.String = '%\Delta AMF';
+        colormap('jet')
+        caxis([-50 50])
+        
+        figure;
+        scatter(W.theta, clds150, 32, dAMF50, 'filled');
+        xlabel('Wind direction (CCW from E)')
+        ylabel('Cloud fraction')
+        title('Within 150 km');
+        cb=colorbar;
+        cb.Label.String = '%\Delta AMF';
+        colormap('jet')
+        caxis([-50 50])
+    end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% OTHER FUNCTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3166,8 +3274,11 @@ for a=1:min(nargout,2) % if no second output is requested, don't ask for a "new"
 end
 end
 
-function badpix = find_bad_pixels(Data)
-badpix = Data.CloudFraction > 0.2 | Data.XTrackQualityFlags ~= 0 | mod(Data.vcdQualityFlags,2) ~= 0 | Data.BEHRColumnAmountNO2Trop < 0 | Data.BEHRColumnAmountNO2Trop > 1e17;
+function badpix = find_bad_pixels(Data, cldfrac)
+if ~exist('cldfrac','var')
+    cldfrac = 0.2;
+end
+badpix = Data.CloudFraction > cldfrac | Data.XTrackQualityFlags ~= 0 | mod(Data.vcdQualityFlags,2) ~= 0 | Data.BEHRColumnAmountNO2Trop < 0 | Data.BEHRColumnAmountNO2Trop > 1e17;
 end
 
 function [interp_val, interp_pres] = interp_to_std_p(vals, P)
