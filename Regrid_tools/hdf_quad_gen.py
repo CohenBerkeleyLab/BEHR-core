@@ -31,6 +31,9 @@ with open(cellfields_file,'r') as f2:
 numfields = len(fields)
 numcellfields = len(cellfields)
 
+# Get the function name out of the file name
+func_name = os.path.basename(hdf_quad_save).split('.')[0]
+
 # Open the template file and the file to be saved
 f_template = open(hdf_quad_template,'r')
 f_save = open(hdf_quad_save,'w')
@@ -71,6 +74,7 @@ f_save = open(hdf_quad_save,'w')
 
 for line in f_template:
     test_line = line.lstrip()
+    line = line.replace('hdf_quadrangle_template',func_name)
     if test_line[0:3] == '%$f':
         newline = line.replace('%$f ','')
         for a in range(numfields):

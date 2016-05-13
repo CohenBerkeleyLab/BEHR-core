@@ -53,15 +53,17 @@ end
 if DEBUG_LEVEL > 1; fprintf('Adding folders\n'); end
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
-addpath(genpath('~/Documents/MATLAB/BEHR'))
-addpath(genpath('~/Documents/MATLAB/Classes'))
-addpath(genpath('~/Documents/MATLAB/Utils'))
+mpath = fileparts(mfilename('fullpath'));
+addpath(genpath(fullfile(mpath,'..')));
 
 
 % Add the paths needed to run on the cluster
 if onCluster;
     addpath(genpath('~/MATLAB/Classes'));
     addpath(genpath('~/MATLAB/Utils'));
+else
+    addpath(genpath(BEHR_paths('classes')));
+    addpath(genpath(BEHR_paths('utils')));
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -153,23 +155,20 @@ if onCluster
     
     
 else
-    %This is the directory where the final .mat file will be saved. This will
-    %need to be changed to match your machine and the files' location.
-    sp_mat_dir = '/Volumes/share-sat/SAT/BEHR/SP_Files_2014';
+    %This is the directory where the final .mat file will be saved.
+    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Production tests';%BEHR_paths('sp_mat_dir');
     
     %This is the directory where the he5 files are saved.
-    omi_he5_dir = '/Volumes/share-sat/SAT/OMI/OMNO2';
+    omi_he5_dir = BEHR_paths('omno2_dir');
     
     %This is the directory where the MODIS myd06_L2*.hdf files are saved. It should include subfolders organized by year.
-    modis_myd06_dir = '/Volumes/share-sat/SAT/MODIS/MYD06_L2';
+    modis_myd06_dir = BEHR_paths('myd06_dir');
     
     %This is the directory where the MODIS MCD43C3*.hdf files are saved. It should include subfolders organized by year.
-    modis_mcd43_dir = '/Volumes/share-sat/SAT/MODIS/MCD43C3';
+    modis_mcd43_dir = BEHR_paths('mcd43c3_dir');
     
     %This is the directory where the GLOBE data files and their headers (.hdr files) are saved.
-    %Do not include a trailing separator.
-    %globe_dir = '/Volumes/share/GROUP/SAT/BEHR/GLOBE_files';
-    globe_dir = globepath; % a function that returns the GLOBE directory path
+    globe_dir = BEHR_paths('globe_dir');
 end
 
 
@@ -209,6 +208,8 @@ if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
+onCluster_local = onCluster;
+
 datenums = datenum(date_start):datenum(date_end);
 
 parfor j=1:length(datenums)
@@ -221,9 +222,9 @@ parfor j=1:length(datenums)
     
     % Check if the file already exists. If it does, and if we're set
     % to not overwrite, we don't need to process this day.
-    filename=[satellite,'_',retrieval,'_',year,month,day,'.mat'];
-    if exist(fullfile(sp_mat_dir, filename), 'file') && ~overwrite
-        if DEBUG_LEVEL > 0; fprintf('File %s exists, skipping this day\n', filename); end
+    savename = sprintf('%s_%s_%s_%s.mat',satellite,retrieval,BEHR_version,datestr(datenums(j),'yyyymmdd'));
+    if exist(fullfile(sp_mat_dir, savename), 'file') && ~overwrite
+        if DEBUG_LEVEL > 0; fprintf('File %s exists, skipping this day\n', savename); end
         continue
     end
 
@@ -398,7 +399,7 @@ parfor j=1:length(datenums)
                 %AMFTroposphere
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'AmfTrop')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); AMFTrop = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); AMFTrop=double(AMFTrop); AMFTrop=AMFTrop';
                 %CloudFraction
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudFraction=double(CloudFraction); CloudFraction=CloudFraction'; CloudFraction = CloudFraction/1000;
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudFraction=double(CloudFraction); CloudFraction=CloudFraction'; CloudFraction(CloudFraction>-1) = CloudFraction(CloudFraction>-1)/1000; % don't scale the fill values
                 %CloudFractionError
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudFractionStd')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudFractionError = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudFractionError=double(CloudFractionError); CloudFractionError=CloudFractionError';
                 %CloudPressure
@@ -406,7 +407,7 @@ parfor j=1:length(datenums)
                 %CloudPressureError
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudPressureStd')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudPressureError = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudPressureError=double(CloudPressureError); CloudPressureError=CloudPressureError';
                 %CloudRadianceFraction
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1, 'CloudRadianceFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudRadianceFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudRadianceFraction=double(CloudRadianceFraction); CloudRadianceFraction=CloudRadianceFraction'; CloudRadianceFraction = CloudRadianceFraction/1000;
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1, 'CloudRadianceFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudRadianceFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudRadianceFraction=double(CloudRadianceFraction); CloudRadianceFraction=CloudRadianceFraction'; CloudRadianceFraction(CloudRadianceFraction>-1) = CloudRadianceFraction(CloudRadianceFraction>-1)/1000; % don't scale the fill values.
                 %ColumnAmountNO2
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'ColumnAmountNO2')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); ColumnAmountNO2 = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); ColumnAmountNO2=double(ColumnAmountNO2); ColumnAmountNO2=ColumnAmountNO2';
                 %ColumnAmountNO2Trop
@@ -422,7 +423,7 @@ parfor j=1:length(datenums)
                 %TerrainPressure
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainPressure')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainPressure = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainPressure=double(TerrainPressure); TerrainPressure=TerrainPressure';
                 %TerrainReflectivity
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainReflectivity')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainReflectivity = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainReflectivity=double(TerrainReflectivity); TerrainReflectivity=TerrainReflectivity';
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainReflectivity')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainReflectivity = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainReflectivity=double(TerrainReflectivity); TerrainReflectivity=TerrainReflectivity'; TerrainReflectivity(TerrainReflectivity>-1) = TerrainReflectivity(TerrainReflectivity>-1)/1000; % only scale non-fill values
                 %TropopausePressure
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TropopausePressure')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TropopausePressure = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TropopausePressure=double(TropopausePressure); TropopausePressure=TropopausePressure';
                 %vcdQualityFlags
@@ -503,7 +504,12 @@ parfor j=1:length(datenums)
                 %but before the next OMI file.
                 modis_file=(['MYD06_L2.A',year,julian_day,'*.hdf']);
                 modis_files=dir(fullfile(modis_myd06_dir,year,modis_file));
-                
+                % Error if no MODIS cloud files found and we are running in
+                % batch mode; this will prevent publishing data without
+                % MODIS cloud information.
+                if isempty(modis_files) && onCluster_local
+                    E.filenotfound(sprintf('MODIS cloud for %s',datestr(datenums(j))));
+                end
                     % Calculate the start time for the next OMI swath.
                     % Usually there is at least one swath starting after
                     % the one overflying the US west coast for that day,
@@ -743,7 +749,6 @@ parfor j=1:length(datenums)
             end %End the section carried out only if there are OMI pixels in the area of interest
         
         end %End the loop over all swaths in a day
-        savename=[satellite,'_',retrieval,'_',year,month,day];
         saveData(fullfile(sp_mat_dir,savename), Data); % Saving must be handled as a separate function in a parfor loop because passing a variable name as a string upsets the parallelization monkey (it's not transparent).
  %       toc
  %       t=toc;
