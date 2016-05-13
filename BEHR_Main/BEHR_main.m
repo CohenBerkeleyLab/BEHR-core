@@ -163,18 +163,11 @@ if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
-file_prefix = [satellite,'_',retrieval,'_'];
 datenums = datenum(date_start):datenum(date_end);
 parfor j=1:length(datenums)
-    %Read the desired year, month, and day
-  	R=datenums(j);
-    date=datestr(R,26);
-    year=date(1:4);
-    month=date(6:7);
-    day=date(9:10);
-    if DEBUG_LEVEL > 0; disp(['Processing data for ', date]); end
-    
-    filename = ['OMI_SP_',year,month,day,'.mat'];
+    month=datestr(datenums(j),'mm');
+    if DEBUG_LEVEL > 0; disp(['Processing data for ', datestr(datenums(j))]); end
+    filename = sprintf('OMI_SP_%s_%s.mat',BEHR_version,datestr(datenums(j),'yyyymmdd'));
 
     if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(sp_mat_dir,filename),'...']); end %#ok<PFGV> % The concern with using global variables in a parfor is that changes aren't synchronized.  Since I'm not changing them, it doesn't matter.
     if isequal(exist(fullfile(sp_mat_dir,filename),'file'),0)
@@ -201,7 +194,7 @@ parfor j=1:length(datenums)
                 if DEBUG_LEVEL > 1; fprintf('  Note: Data(%u) is empty\n',d); end
                 continue %JLL 17 Mar 2014: Skip doing anything if there's really no information in this data
             else
-                if DEBUG_LEVEL>0; fprintf('  Swath %u of %s \n',d,date); end
+                if DEBUG_LEVEL>0; fprintf('  Swath %u of %s \n',d,datestr(datenums(j))); end
                 c=numel(Data(d).Longitude);
                 
                 Data(d).MODISAlbedo(isnan(Data(d).MODISAlbedo)==1)=0; %JLL 17 Mar 2014: replace NaNs with fill values
@@ -229,6 +222,7 @@ parfor j=1:length(datenums)
                 
                 surfPres(surfPres>=1013)=1013; %JLL 17 Mar 2014: Clamp surface pressure to sea level or less.
                 cldPres = Data(d).CloudPressure(:);
+                cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating clear and cloudy AMFs'); end
                 dAmfClr = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres); %JLL 18 Mar 2014: Interpolate the values in dAmf to the albedo and other conditions input
@@ -282,6 +276,9 @@ parfor j=1:length(datenums)
                 continue
             else
                 Data(z).BEHRColumnAmountNO2Trop=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTrop;
+                % make sure fill values in the original column or AMF are
+                % fill values in BEHR.
+                Data(z).BEHRColumnAmountNO2Trop(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AMFTrop < -30000) = nan; 
                 if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
             end
         end
@@ -343,7 +340,7 @@ parfor j=1:length(datenums)
         % Clean up any unused elements in OMI
         OMI(hh+1:end) = [];
 
-        savename=[file_prefix,year,month,day];  
+        savename = sprintf('%s_%s_%s_%s.mat',satellite,retrieval,BEHR_version,datestr(datenums(j),'yyyymmdd'));
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
         saveData(fullfile(behr_mat_dir,savename),Data,OMI)
     end

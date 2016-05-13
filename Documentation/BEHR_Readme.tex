@@ -228,6 +228,8 @@
 	\item \textbf{Clean up remote branches when finished with them.} Once you merge or delete a development branch, make sure the remote that went along with it gets deleted.
 	\item \textbf{Finally, don't check out someone else's dev branch without telling them.} And definitely don't push back to it, as then they have unexpected code coming into their dev branch.
 	\end{itemize}
+	
+	Along with having good practices for version control, be sure to update the file \path{Changelog.txt} under the Documentation folder of the BEHR repository.  This should contain itemized, human-readable descriptions of the change for each new version or revision.  To help this, you should keep a ``Development'' section at the top of it where you can record significant changes as you make them.  When this merges into the master branch, change the header from ``Development'' to the new version number.  Make sure to post the updated change log on the website (it is uploaded as a regular text file and linked under the ``Documentation'' section of the ``Download BEHR data'' page on the website.
 
 \section{Program structure}
 	This section describes the key files of code in BEHR to make it run.  Instructions for running it contained within this section are predicated on the idea that you're running BEHR on a desktop computer.  For instructions on running it on a cluster, see \S\ref{sec:Cluster}.
@@ -453,8 +455,40 @@ exit $MATLAB_EXIT
 		
 	
 \section{Maintaining the website}\label{sec:website}
+	\subsection{Gaining administrative access}
+		To be able to edit the website, you'll need to make an account.  At the top right of every page, there should be a register link.  Complete that to create an account.
+		
+		Once you have an account, you'll need to contact an existing administrator to have your account promoted. Existing administrators are (try in order):
+		\begin{itemize}
+		\item Josh Laughner (\href{mailto:joshlaugh5@gmail.com}{joshlaugh5@gmail.com})
+		\item Anna Mebust (\href{mailto:annamebust@gmail.com}{annamebust@gmail.com})
+		\item Ashley Russell (\href{mailto:ashley.ray.russell@gmail.com}{ashley.ray.russell@gmail.com})
+		\end{itemize}
+		
+		Go ahead and add yourself to the top of this list once you've been promoted.  If none of the existing admins can help, you can also contact Stephen dos Remedios (\href{mailto:steven@meetthere.com}{steven@meetthere.com}), he is the one who helped set up the website initially, and can help with most issues, although he usually prefers to have one of the other admins handle adding new admins.
+		
 	\subsection{Editing the content}
-	\subsection{Providing new data}
+	
+		Log in with your newly promoted admin account.  At the top of the site, you should now see the Dot Net Nuke Community bar. To edit, change the dropdown menu at the top right from ``View'' to ``Edit.'' Each section in each page should now have a ``Manage'' ghost button when you hover over it.  Hovering over that in turn brings up a menu, one option is ``Edit content.'' This is how you modify the text and most of the content in the website.
+		
+		Some small files should be uploaded directly to the website, things like the change log, user guide, etc. In the edit content window, the planet with a chain link button is the hyperlink manager.  This lets you insert links to other websites, but also to uploaded files. The button next to the URL field bring you to the Document Manager, where such files can be uploaded. \emph{This is not how to upload new versions of BEHR, see \S\ref{sec:website-behr-data}!}
+		
+	\subsection{Providing new data}\label{sec:website-behr-data}
+	
+	The website is set up such that a URL pointing to \path{/behr} (no \url{http://} or \url{www}, this is a local path) points to the directory \path{/volume1/share-sat/SAT/BEHR/WEBSITE/webData/} on the file server at 128.32.208.13.  The most important subdirectories are noted in Table \ref{tab:website2fileserver-paths}.
+	
+	\begin{table}
+	\begin{tabular}{p{0.33\textwidth}p{0.67\textwidth}}
+	Website URL & Server folder \\ \hline
+	\path{/behr/behr_hdf} & \path{/volume1/share-sat/SAT/BEHR/WEBSITE/webData/behr_hdf} \\
+	\path{/behr/behr_txt} & \path{/volume1/share-sat/SAT/BEHR/WEBSITE/webData/behr_txt} \\
+	\path{/behr/behr_regridded_hdf} & \path{/volume1/share-sat/SAT/BEHR/WEBSITE/webData/behr_regridded_hdf}
+	\end{tabular}
+	\caption{Important data paths on the website and file server.}
+	\label{tab:website2fileserver-paths}
+	\end{table}
+	
+	To update the publicly available produce, simply replace the files in these directories with the proper output files from \lstinline$BEHR_publishing_v2.m$.  No other action is necessary.
 	
 \section{Additional utilities}
 	\subsection{Verification}
@@ -534,7 +568,7 @@ exit $MATLAB_EXIT
 	
 	Both scripts use the NCO tools. These are installed on the Savio cluster (although as a module that needs to be loaded) and can be installed on your computer if desired. Essentially, \lstinline$slurmrun_wrf_output.sh$ determines how to average the WRF output (monthly, daily, hourly), which set of variables to put in the final files, and whether it is preparing \emph{a priori} for OMI or TEMPO (the TEMPO one is a notional implementation at current, making certain assumptions about the operation of TEMPO). It identifies the files necessary and instantiates multiple instances of the appropriate \lstinline$read_wrf_output.sh$ (may also be \lstinline$read_wrf_tempo.sh$ or \lstinline$read_wrf_emis.sh$) to allow parallel execution.  These in turn make use of built-in NCO functions and several NCO scripts I've written to both extract the key variables and calculate several additional quantities not automatically included in the WRF output. Cutting down the files in this manner substantially reduces the amount of data that needs to be moved from a cluster capable of running WRF-Chem to whatever computer is running BEHR.
 	
-	This information is extracted from the raw WRF-Chem output files, \lstinline[breaklines=true]$wrfout_d0X_yyyy-mm-dd_hh:mm:ss$. My scripts assume that there is one output ``frame'' per file, that is, each file represents a single slice in time. It is possible that WRF-Chem might save multiple time slices to each file, although the resulting files will likely be huge. 
+	This information is extracted from the raw WRF-Chem output files, \path{wrfout_d0X_yyyy-mm-dd_hh:mm:ss}. My scripts assume that there is one output ``frame'' per file, that is, each file represents a single slice in time. It is possible that WRF-Chem might save multiple time slices to each file, although the resulting files will likely be huge. 
 	
 	\lstinline$rProfile_WRF.m$ is also fairly intelligent about how it reads and applies the \ce{NO2} profiles, accounting for different spatial resolutions as well as being able to use different temporal resolutions. However to do the latter, it expects the profiles to be organized in subfolders named by the temporal resolution of the \emph{a priori} profiles in them: ``hourly,'' ``daily,'' or ``monthly.''
 	
@@ -544,25 +578,138 @@ exit $MATLAB_EXIT
 \appendix
 \appendixpage
 \addappheadtotoc
-	
-\section{Changelog}
-
-	A notation of (dev) after the version number indicates that the full archive of BEHR data was never produced using that version (i.e. ``development only'').
-
-\bgroup
-\def\arraystretch{1.5}
-	\begin{table}[h]
-		\begin{longtabu} to \textwidth{| l | l | X |} \hline
-			Date 		& 	Version Number		&	Description \endhead \hline
-			2012		&	2.0A				&	Original version by A. Russell, using OMI SP 2 with MODIS cloud and albedo, GLOBE terrain database, and WRF-Chem profiles (12 km for full US). \\ \hline
-			May 2013	&	2.0B	 (dev)		&	Version (unvalidated at this point) updated by J. Laughner to use OMI SP 2 and MODIS cloud collection 6.  Albedo, terrain products, and WRF-Chem profiles unchanged.  MODIS and GLOBE data import now done directly by \texttt{read\_omno2\_v\_aug2012}, ``preprocessing'' of these files into Matlab .mat files no longer necessary. \\ \hline
-		\end{longtabu}
-	\end{table}
-\egroup
 
 \section{Running downloads in the background}
 
 \section{Setup for automatic downloads} \label{app:autodl}
+\subsection{OMNO2}
+	Sources:
+	\begin{itemize}
+	\item \url{http://disc.sci.gsfc.nasa.gov/additional/faq/general_user_services_faq.html#subscription}
+	\item \url{http://disc.sci.gsfc.nasa.gov/additional/scienceTeam/s4pa_mri.html}
+	\end{itemize}
 
+	Automatic downloads for OMNO2 are the trickiest part of this because they require a data subscription in order to be downloaded automatically. I chose to use an inactive subscription in which our computer makes a request, receives the list of URLs, and executes the download.  This gives us the maximum control over when the download process occurs.
+	
+	Because of the nature of these systems, I recommend that automatic downloading be carried out on an Ubuntu or other Linux-based OS.  These tools are easiest to configure in such an OS, and these instructions are meant for those.
+	
+	\begin{enumerate}
+	\item The computer must have \textbf{openssh} installed. I will be very surprised if it doesn't, but you can make sure by checking that there is a folder \path{/usr/lib/openssh}. If not, install with:
+	\begin{lstlisting}
+sudo apt-get install openssh
+	\end{lstlisting}
+	
+	\item The way that the machine request interface works is that upon a request (delivered by wget'ing a formatted URL), it will produce a delivery notice with the URLs to the files requested via secure file transfer protocol (sftp) to the designated computer at a fixed IP address.  I have the users \lstinline$nasa$ set up on the black Compaq computer at 128.32.208.13 for this purpose. 
+	
+	\item For security, the computer has password authentication for SSH disable, only asymmetric key login allowed. Authorized public keys need to be pasted into the \path{~/.ssh/authorized_keys} file (one per line) for the correct user. The OMNO2 DISC sent their public key to me upon request, this should go in the \path{authorized_keys} file for the \lstinline$nasa$ user. (Password authentication is disabled by changing the line in \path{/etc/ssh/sshd_config}
+	\begin{lstlisting}
+PasswordAuthentication yes
+	\end{lstlisting}
+	from \lstinline$yes$ to \lstinline$no$. If there is a \lstinline$#$ sign at the front of the line, remove it.)
+	
+	\item To set up sftp, find the line in \path{/etc/ssh/sshd_config} containing:
+	\begin{lstlisting}
+Subsystem sftp
+	\end{lstlisting}
+	Change it and add lines following it to match:
+	\begin{lstlisting}
+Subsystem sftp /usr/lib/openssh/sftp-server
+Match group ftpaccess
+ChrootDirectory %h
+X11Forwarding no
+AllowTcpForwarding no
+ForceCommand internal-sftp -d /www
+	\end{lstlisting}
+	
+	This will require the user to be in the group \lstinline$ftpaccess$ (next step), lock it to its home directory, and automatically start logged into the \path{www} directory in its home folder.
+	
+	\item Add the \lstinline$nasa$ user to the ftpaccess group
+	\begin{lstlisting}
+sudo groupadd ftpaccess
+sudo usermod -a -G ftpaccess nasa
+	\end{lstlisting}
+	Also create a \path{www}	 directory in the \lstinline$nasa$ user's home folder if it does not already exist.	
+	
+	\end{enumerate}
+
+	This should be sufficient. You may test this by adding your own public key to the \lstinline$nasa$ user's authorized keys file and attempting to sftp in:
+\begin{lstlisting}
+sftp nasa@128.32.208.11
+\end{lstlisting}
+If successful, you should be in a usual ftp prompt in the www directory.
+
+\subsection{MODIS}
+	Sources:
+	\begin{itemize}
+	\item \url{http://modaps.nascom.nasa.gov/services/faq/}
+	\end{itemize}
+	MODIS requires no special setup to establish a subscription, as it has an open ftp server. We access it using a combination of \lstinline$wget$ and SOAPpy.
+	
+\subsection{General setup}
+	All the necessary scripts are written in Bash or Python and are contained in the BEHR repo's Downloading folder. These can be automated through the use of crontab. Most can be run from your user, however some need to be run as root (to allow access to the nasa user).
+	
+	First, the root crontab, edit with \lstinline$sudo crontab -e$:
+	\begin{lstlisting}
+# m h  dom mon dow   command
+30 3 * * 6 /home/josh/Documents/MATLAB/BEHR/Downloading/order_omno2.sh
+	\end{lstlisting}
+	
+	And the regular user's crontab, edit with \lstinline$crontab -e$:
+	\begin{lstlisting}
+# m h  dom mon dow   command
+0 1 * * 6 /home/josh/SatDL/get_modis.sh
+0 1 * * 7 /home/josh/SatDL/get_omno2.sh
+0 1 * * 1 /home/josh/SatDL/run_read_omno2.sh
+0 1 * * 2 /home/josh/SatDL/run_behr_main.sh
+0 1 * * 3 /home/josh/SatDL/run_publishing.sh
+	\end{lstlisting}
+	
+	This reads as, e.g. ``run \lstinline$order_omno2.sh$ at 3:30 AM on Saturday morning.''  The only two key points for the order are:
+	\begin{enumerate}
+	\item \lstinline$order_omno2.sh$ must run before \lstinline$get_omno2.sh$.
+	\item \lstinline$get_omno2.sh$ and \lstinline$get_modis$ should run before any of the \lstinline$run_xxx.sh$ files.
+	\end{enumerate}
+	
+	These scripts rely on the following environmental variables and aliases being set. Add the following to your \path{~/.bashrc} file:
+\begin{lstlisting}
+# Define the environmental variables and aliases first,
+# this way they'll be defined before the check if the shell
+# is interactive
+
+# User defined environmental variables
+export OMNO2DIR="/mnt/sat/SAT/OMI/OMNO2/download_staging"
+export MODDIR="/mnt/sat/SAT/MODIS"
+export SPDIR="/mnt/sat/SAT/BEHR/SP_Files_2014"
+export BEHRDIR="/mnt/sat/SAT/BEHR/BEHR_Files_2014"
+export AMFTOOLSDIR="${HOME}/Documents/MATLAB/BEHR/AMF_tools"
+export NO2PROFDIR="/mnt/sat/SAT/BEHR/Monthly_NO2_Profiles"
+export HDFSAVEDIR="/mnt/sat/SAT/BEHR/WEBSITE/webData"
+export MATRUNDIR="$HOME/Documents/MATLAB/Run"
+
+# Aliases
+alias startmatlab="export MATLAB_DISPLAY=0; /usr/local/MATLAB/R2014b/bin/matlab -nodisplay -nosplash"
+
+# Add to PATH
+export PATH="/usr/local/bin:$PATH"
+\end{lstlisting}
+
+	To the root \path{.bashrc} in \path{/root/.bashrc} (you'll need to use \lstinline$sudo$ to edit it) add the \lstinline$OMNO2DIR$ variable:
+\begin{lstlisting}
+# User defined environmental variables
+export OMNO2DIR="/mnt/sat/SAT/OMI/OMNO2/download_staging"
+\end{lstlisting}
+just before the following lines:
+\begin{lstlisting}
+# If not running interactively, don't do anything
+[ -z "$PS1" ] && return
+\end{lstlisting}
+
+	Save this but DO NOT exit before testing that you can still make yourself root with \lstinline$sudo su$.
+	
+	To allow automatic emailing of success or failure, link or copy the \path{automessage.sh} script to \path{/usr/local/bin} (making sure it's executable, \lstinline$chmod u+x automessage.sh$) and install the sendEmail package (\lstinline$sudo apt-get install sendEmail$) if it is not already. Finally, place the following information in the file \path{.gmailcredentials} in both your home folder and \path{/root}:
+\begin{lstlisting}
+behrautodownload@gmail.com
+!%e^XN!8Lk-j=HYRM-2S&wfvky&T5U+&
+\end{lstlisting}
 
 \end{document}

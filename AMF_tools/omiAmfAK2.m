@@ -166,7 +166,7 @@ if numel(noGhost) == 1;
     end
 end
 
-amf = max(amf,1.e-6);   % clamp at min value (2008-06-20)
+amf(~isnan(amf)) = max(amf(~isnan(amf)),1.e-6);   % clamp at min value (2008-06-20), but don't replace NaNs with the min value (2016-05-12)
 
 if numel(ak) == 1;
    if ak > 0;
