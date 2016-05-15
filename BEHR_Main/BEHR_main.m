@@ -34,6 +34,11 @@ if isempty(numThreads)
     numThreads = 1;
 end
 
+% Cleanup object will safely exit if there's a problem
+if onCluster
+    cleanupobj = onCleanup(@() mycleanup());
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% DEPENDENCIES %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%
@@ -350,4 +355,16 @@ end
 
 function saveData(filename,Data,OMI)
     save(filename,'OMI','Data')
+end
+
+function mycleanup()
+err=lasterror;
+if ~isempty(err.message)
+    fprintf('MATLAB exiting due to problem: %s\n', err.message);
+    if ~isempty(gcp('nocreate'))
+        delete(gcp)
+    end 
+
+    exit(1)
+end
 end
