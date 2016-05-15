@@ -26,15 +26,14 @@ would indicate this sort of minor change.
 2) Changelog
 ============
 
-**** 2.0A ****
 
--- Final version produced by Ashley Russell
--- Albedo: MODIS MCD43C3 16-day average (every 8 days)
--- Terrain pressure: Global Land One-kilometer Base Elevation (GLOBE) topography
-used to calculate surface pressure using scale height relationship. GLOBE data
-pre-averaged to 4-km.
--- NO2 profiles calculated for continental US using WRF-Chem at 12 km resolution
-using NEI 2005 emissions.
+**** Development (unpublished) ****
+-- Revision only: no substantial changes to the data product itself.
+-- File names will now contain the version number for easier tracability.
+-- Corrected issue where fill values for cloud fraction fields are divided by 1000.
+-- All BEHR fields will now use a fill value of -3.402e38 (-realmax('single') in matlab).
+-- Updated some metadata in the HDF files.
+-- Any pixels with 
 
 
 **** 2.1A ****
@@ -58,6 +57,8 @@ ColumnAmountNO2Initial from OMNO2 (sorry!). Dataset names should be the same.
 those quantities.  These are calculated as the average of the clear and cloudy
 scattering weights weighted by the radiance cloud fraction.  Both include the OMI
 temperature correction for the NO2 cross section.
+-- Added the a priori NO2 profiles used for each pixel.  This allows advanced users
+to compare the effect of a priori choice with a model of their own choosing.
 -- Attributes have been added to the HDF files' variables, including unit, 
 range, fill value, product (standard (SP) or BEHR), and a description. Each
 swath also has an attribute indicating if it is organized by native pixel or
@@ -66,3 +67,14 @@ swath also has an attribute indicating if it is organized by native pixel or
 visible NO2 column, and will not include any contribution from the ghost column.
 The field BEHRGhostFraction will provide a multiplicative factor to add back in
 the ghost column (based on WRF-Chem model runs) if desired.
+
+
+**** 2.0A ****
+
+-- Final version produced by Ashley Russell
+-- Albedo: MODIS MCD43C3 16-day average (every 8 days)
+-- Terrain pressure: Global Land One-kilometer Base Elevation (GLOBE) topography
+used to calculate surface pressure using scale height relationship. GLOBE data
+pre-averaged to 4-km.
+-- NO2 profiles calculated for continental US using WRF-Chem at 12 km resolution
+using NEI 2005 emissions.

@@ -8,8 +8,8 @@ VZA = 55;
 RAA = 100;
 ALB = 0.02;
 SurfP = 1013;
-cldFrac = 0;
-cldRadFrac = 0;
+cldFrac = 0.3;
+cldRadFrac = 0.5;
 
 % Set geographic parameters (used for temperature correction)
 lon = 0;

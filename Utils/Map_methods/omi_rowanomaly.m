@@ -45,7 +45,11 @@ switch mode
         xx = false(size(omi.XTrackQualityFlags));
         if iscell(omi.XTrackQualityFlags)
             for a=1:numel(omi.XTrackQualityFlags)
-                xx(a) = any(omi.XTrackQualityFlags{a}) ~= 0; %JLL 20 Mar 2014: If the XTrackQualityFlag value is not 0, then the pixel has been affected by the row anomaly.
+                if ~isempty(omi.XTrackQualityFlags{a})
+                    xx(a) = any(omi.XTrackQualityFlags{a}) ~= 0; %JLL 20 Mar 2014: If the XTrackQualityFlag value is not 0, then the pixel has been affected by the row anomaly.
+                else
+                    xx(a) = true;
+                end
             end
         else
             xx = omi.XTrackQualityFlags ~= 0;
@@ -54,9 +58,14 @@ switch mode
         xx = false(size(omi.XTrackQualityFlags));
         if iscell(omi.XTrackQualityFlags)
             for a=1:numel(omi.XTrackQualityFlags)
-                binary_flags = de2bi(omi.XTrackQualityFlags{a}); %JLL 20 Mar 2014: Convert all values to binary arrays.  Each value will be a row in the resulting matrix.
-                key_flags = bi2de(binary_flags(:,1:3)); %JLL 20 Mar 2014: Convert the first three (least significant) bits back to decimal
-                xx(a) = key_flags == 1 | key_flags == 7; 
+                if ~isempty(omi.XTrackQualityFlags{a})
+                    binary_flags = de2bi(omi.XTrackQualityFlags{a}); %JLL 20 Mar 2014: Convert all values to binary arrays.  Each value will be a row in the resulting matrix.
+                    binary_flags = cat(2,binary_flags,zeros(size(binary_flags,1), 8-size(binary_flags,2))); % pad to 8 across (a byte)
+                    key_flags = bi2de(binary_flags(:,1:3)); %JLL 20 Mar 2014: Convert the first three (least significant) bits back to decimal
+                    xx(a) = any(key_flags == 1 | key_flags == 7); 
+                else
+                    xx(a) = true;
+                end
             end
         else
             binary_flags = de2bi(omi.XTrackQualityFlags(a)); %JLL 20 Mar 2014: Convert all values to binary arrays.  Each value will be a row in the resulting matrix.
