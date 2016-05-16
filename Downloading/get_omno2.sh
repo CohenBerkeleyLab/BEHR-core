@@ -71,7 +71,7 @@ do
         echo "File $fname exists"
         continue
     else
-        wget -nH -nd $f
+        wget -q -nH -nd $f
         mv $fname ../${y}/${m}/
     fi
     

@@ -6,7 +6,9 @@
 # syntax urls=$(python automodis.py)
 
 from SOAPpy import SOAPProxy
+import os
 import sys
+import time
 import pdb
 
 def parse_args(args_in):
@@ -30,7 +32,7 @@ def parse_args(args_in):
         raise IOError("All arguments must be flag-value pairs, e.g. --north 50")
 
     pargs = dict()
-
+    
     for a in req_args:
         flag = "--" + a
         if flag in args_in:
@@ -38,7 +40,7 @@ def parse_args(args_in):
             pargs[a] = args_in[i]
         else:
             raise IOError("{0} must be specified".format(a))
-
+    
     for a in opt_args.keys():
         flag = "--" + a
         if flag in args_in:
@@ -77,18 +79,58 @@ def print_help(req_args, opt_args):
     sys.stdout.write("\n")
     exit(0)
 
+def write_urls(urls):
+    p = os.environ['MATRUNDIR']
+    filename = os.path.join(p,'modis_urls.txt')
+    with open(filename,'w') as f:
+        for l in urls:
+            f.writelines(l+"\n")
 
 if __name__ == "__main__":
-    args = parse_args(sys.argv)
+    inargs = parse_args(sys.argv)
 
     url = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
     server = SOAPProxy(url)
-    fileIDs = server.searchForFiles(products=args["products"], startTime=args["startTime"], endTime=args["endTime"],
-                          north=args["north"], south=args["south"], east=args["east"], west=args["west"],
-                          coordsOrTiles=args["coordsOrTiles"], dayNightBoth=args["dayNightBoth"])
+    print "Retrieving file IDs"
+    attempt=0
+    while True:
+        try:
+            fileIDs = server.searchForFiles(products=inargs["products"], startTime=inargs["startTime"], endTime=inargs["endTime"],
+            north=inargs["north"], south=inargs["south"], east=inargs["east"], west=inargs["west"],
+            coordsOrTiles=inargs["coordsOrTiles"], dayNightBoth=inargs["dayNightBoth"])
+        except:
+            if attempt > 5:
+                print "More than five attempts failed to retrieve file IDs. Aborting."
+                raise
+            else:
+                print "Retrieving file IDs failed, waiting 30 sec"
+                time.sleep(30)
+        else:
+            break
+        finally:
+            attempt += 1
+    
+    print "fileIDs has length", len(fileIDs)
     fileIDs = ",".join(fileIDs) # returned as list, need as comma separated string
-    fileURLs = server.getFileUrls(fileIds=fileIDs)
-    fileURLs = " ".join(fileURLs)
+    
+    attempt=0
+    while True:
+        try:
+            fileURLs = server.getFileUrls(fileIds=fileIDs)
+        except:
+            if attempt > 5:
+                print "More than five attempts failed to retrieve file URLs. Aborting."
+                raise
+            else:
+                print "Retrieving file IDs failed, waiting 30 sec"
+                time.sleep(30)
+        else:
+            break
+        finally:
+            attempt += 1           
+    
+    #fileURLs = "\n".join(fileURLs)
 
     # Print to shell, will be set to variable if called appropriately
-    sys.stdout.write(fileURLs)
+    #sys.stdout.write(fileURLs)
+    write_urls(fileURLs)

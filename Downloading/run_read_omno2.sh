@@ -39,6 +39,22 @@ then
     echo -e "SPDIR=${SPDIR}\nMODDIR=${MODDIR}\nMATRUNDIR=${MATRUNDIR}"
 fi
 
+# Check that the SPDIR and MODDIR folders exist, if not, the file server
+# likely isn't mounted
+if [[ ! -d $SPDIR ]];
+then
+    echo "ERROR run_read_omno2.sh: $SPDIR is not a directory. Is the file server mounted?"
+    automessage.sh "ERROR run_read_omno2.sh" "$SPDIR does not exist"
+    exit 1
+fi
+if [[ ! -d $MODDIR ]];
+then
+    echo "ERROR run_read_omno2.sh: $MODDIR is not a directory. Is the file server mounted?"
+    automessage.sh "ERROR run_read_omno2.sh" "$MODDIR does not exist"
+    exit 1
+fi
+
+
 # Find the last existing OMI_SP_YYYYMMDD.mat file
 offset=0
 while true

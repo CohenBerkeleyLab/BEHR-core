@@ -18,9 +18,9 @@ rm DN*.notify
 # Construct the URL we will use to request the files we need. See
 # http://disc.sci.gsfc.nasa.gov/additional/scienceTeam/s4pa_mri.shtml for
 # information on the format. Note that %20 is used to represent a space in html.
-syr=$(date -d "-30 days" +'%Y')
-smn=$(date -d "-30 days" +'%m')
-sday=$(date -d "-30 days" +'%d')
+syr=$(date -d "-120 days" +'%Y')
+smn=$(date -d "-120 days" +'%m')
+sday=$(date -d "-120 days" +'%d')
 
 eyr=$(date +'%Y')
 emn=$(date +'%m')
@@ -29,8 +29,10 @@ eday=$(date +'%d')
 username="jlaughner"
 
 url="http://aurapar2.gesdisc.eosdis.nasa.gov/daac-bin/s4pa/s4pa_m2m_cgi.pl?user=${username}&dataset=OMNO2&version=003&startTime=${syr}-${smn}-${sday}%2000:00:00&endTime=${eyr}-${emn}-${eday}%2000:00:00"
+echo $url
 
 status=$(wget -O - "$url")
+echo "Status = $status"
 
 # The output of this wget command should contain the status "success"; if not,
 # there's been a problem
@@ -39,7 +41,7 @@ then
     # send email about problem
     echo "Order failed. Contacting admin"
     msg="Order of OMNO2 failed. Message returned was:\n${status}"
-    automessage.sh "OMNO2 order failure" "$msg"
+    /usr/local/bin/automessage.sh "OMNO2 order failure" "$msg"
     exit 1
 else
     echo "Order succeeded. Waiting for DN"
