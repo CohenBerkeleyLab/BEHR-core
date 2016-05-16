@@ -27,26 +27,31 @@ function [ ffit, emgfit, param_stats, f0, history, fitresults, N, L ] = fit_line
 %
 %   There are several parameters available: 
 %
-%       'fixed_param' - a string that sets which fitting parameter should be
-%       fixed. Must be used with 'fixed_val' to set the value. String must be
-%       one of 'a', 'x0', 'mux', 'sx', or 'B'.
+%       'fixed_param' - a string that sets which fitting parameter should
+%       be fixed. Must be used with 'fixed_val' to set the value. String
+%       must be one of 'a', 'x0', 'mux', 'sx', or 'B'.
 %
 %       'fixed_val' - sets the value of the parameter fixed by fixed_param.
 %
-%       'f0' - allows you to define the initial point for the fit minimization.
-%       A 5-element vector with the values in the order of a, x0, mu_x, sigma_x, B.
-%       If not set, the function will make a best guess as to a reasonable initial point.
+%       'f0' - allows you to define the initial point for the fit
+%       minimization. A 5-element vector with the values in the order of a,
+%       x0, mu_x, sigma_x, B. If not set, the function will make a best
+%       guess as to a reasonable initial point.
 %
-%       'lb' and 'ub' - allow you to specify the lower and upper bounds of each of
-%       the five fitting parameters again as 5 element vectors in the same order as
-%       f0. If not given, these will be set within this function to physically realistic
-%       values.
+%       'lb' and 'ub' - allow you to specify the lower and upper bounds of
+%       each of the five fitting parameters again as 5 element vectors in
+%       the same order as f0. If not given, these will be set within this
+%       function to physically realistic values.
 %
-%       'emgtype' - allows you to vary which one of 3 EMG functions are used. There were
-%       slight differences between de Foy 2014 and Lu 2015 regarding the form of the 
-%       function; 'defoy' and 'lu' respectively select each paper's respective function.
-%       The only practical difference is in the definition of a: a_defoy =
-%       a_lu / x0. Defaults to 'lu.'
+%       'emgtype' - allows you to vary which one of 3 EMG functions are
+%       used. There were slight differences between de Foy 2014 and Lu 2015
+%       regarding the form of the function; 'defoy' and 'lu' respectively
+%       select each paper's respective function. The only practical
+%       difference is in the definition of a: a_defoy = a_lu / x0. Defaults
+%       to 'lu.'
+%
+%       DEBUG_LEVEL - integer controlling the amount of messages printed to
+%       the console. Set to 0 to disable.
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 5 Feb 2016
 
@@ -63,6 +68,8 @@ p.addParameter('lb',[]);
 p.addParameter('ub',[]);
 p.addParameter('emgtype','lu');
 p.addParameter('fittype','ssresid');
+p.addParameter('nattempts',10);
+p.addParameter('DEBUG_LEVEL',1);
 p.parse(varargin{:});
 pout=p.Results;
 
@@ -74,6 +81,8 @@ ubin = pout.ub;
 lbin = pout.lb;
 emgtype = lower(pout.emgtype);
 fittype = lower(pout.fittype);
+nattempts = pout.nattempts;
+DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 E = JLLErrors;
 E.addCustomError('fixed_val_out_of_range','The fixed value given is outside the upper and lower bounds allowed for that value.');
@@ -107,6 +116,12 @@ if ~ismember(emgtype,{'defoy','lu'})
 end
 if ~ismember(fittype,{'ssresid','unexvar'})
     E.badinput('The parameter ''fittype'' must be one of ssresid or unexvar')
+end
+if ~isscalar(nattempts) || ~isnumeric(nattempts) || nattempts < 1
+    E.badinput('nattempts must be a scalar >= 1');
+end
+if ~isscalar(DEBUG_LEVEL) || ~isnumeric(DEBUG_LEVEL) || DEBUG_LEVEL < 0
+    E.badinput('DEBUG_LEVEL must be a scalar >= 0');
 end
 
 % Define the fit function, which although is physically a function of x, is
@@ -324,13 +339,29 @@ while true
     try
         [fitparams, fitresults.fval, fitresults.exitFlag, fitresults.output, fitresults.lambda, fitresults.grad, fitresults.Hessian]...
             = fmincon(fitfxn_fix, f0, A, b, [], [], f_lb, f_ub, nlcon, opts);
-        break
+        % There's a few checks we can try. One, see if the solver exited
+        % prematurely. Two, we can check that a minimum difference exists
+        % between the background value and the fit: usually this fails by
+        % finding a (nearly) flat line at the background level, so that is
+        % the main failure case.
+        emgfit = emgfxn_fix(fitparams, no2_x);
+        ffit = unfix_params(fitparams, fixed_param, fixed_val);
+        delB = sum(abs(emgfit - ffit.B));
+        if attempts >= 10
+            E.callError('fmincon_failure','After %d attempts, fmincon failed to return an acceptable fit.',nattempts);
+        elseif fitresults.exitFlag == 0
+            if DEBUG_LEVEL > 0; fprintf('Solver exited prematurely; randomizing initial condition for another attempt.\n'); end
+        elseif delB < 5000
+            if DEBUG_LEVEL > 0; fprintf('Little difference between fit and background (%.3g mol/km) likely flat line,\nrandomizing initial condition for another attempt.\n',delB); end
+        else
+            break
+        end
+        f0 = randomize_f0(f_lb, f_ub);
     catch err
         if strcmp(err.identifier,'optim:barrier:UsrObjUndefAtX0')
             if attempts < 10
                 f0 = f0*rand*1.5;
                 fprintf('fmincon input function undefined at f0; randomizing f0 (%s) to try again\n',mat2str(f0))
-                attempts = attempts+1;
             else
                 E.callError('fmincon_failure','After 10 attempts no valid f0 was found for fmincon using fixed parameter = %s, fixed value = %.3g',fixed_param,fixed_val)
             end
@@ -338,6 +369,7 @@ while true
             rethrow(err);
         end
     end
+    attempts = attempts+1;
 end
 unc_opts = optimoptions('fminunc','algorithm','quasi-newton','maxfunevals',1,'display','none'); % will switch to QN anyway to get Hessian w/o gradient; this avoids that message.
 [f_unc,~,~,~,~,unc_hessian] = fminunc(fitfxn_fix, fitparams, unc_opts);
@@ -346,10 +378,7 @@ if any(abs(f_unc - fitparams) > 0.01)
     warning('fminunc found a different minimum than fmincon, check it''s Hessian before using the standard deviations')
 end
 
-ffit = unfix_params(fitparams, fixed_param, fixed_val);
 
-
-emgfit = emgfxn_fix(fitparams, no2_x);
 
 % The inverse of the Hessian is an approximation to the covariance matrix
 % (Dovi 1991, Appl. Math. Lett. Vol 4, No 1, pp. 87-90; also
@@ -434,4 +463,21 @@ ffit.x_0 = ffinal(2);
 ffit.mu_x = ffinal(3);
 ffit.sigma_x = ffinal(4);
 ffit.B = ffinal(5);
+end
+
+function f0 = randomize_f0(f_lb, f_ub)
+% Simplest method to randomize f0 is to allow it to take on any value
+% between f_lb and f_ub for fully bounded values.  For those with an
+% infinite limit, use some senisibly large but finite bound.
+% Reasonable upper bound for each parameter if set to infinity:
+ub_lim = [5e4, 1e3, 1e3, 1e3, 5e4];
+lb_lim = [0 0 -1e3 0 0];
+
+rvec = rand(1,5);
+uu = isinf(f_ub);
+f_ub(uu) = ub_lim(uu);
+ll = isinf(f_lb);
+f_lb(ll) = lb_lim(ll);
+
+f0 = f_lb + rvec .* (f_ub - f_lb);
 end
