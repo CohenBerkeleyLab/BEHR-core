@@ -334,43 +334,43 @@ f_lb = f_lb(inds);
 f_ub = f_ub(inds);
 A = A(inds);
 
+err_attempts = 0;
 attempts = 0;
-while true
+best_fval = inf;
+while attempts < nattempts
     try
-        [fitparams, fitresults.fval, fitresults.exitFlag, fitresults.output, fitresults.lambda, fitresults.grad, fitresults.Hessian]...
+        % Always try with our best guess first, then let it randomize
+        % nattempts-1 times to see if we find a better minimum.
+        [this_fitparams, this_fitresults.fval, this_fitresults.exitFlag, this_fitresults.output, this_fitresults.lambda, this_fitresults.grad, this_fitresults.Hessian]...
             = fmincon(fitfxn_fix, f0, A, b, [], [], f_lb, f_ub, nlcon, opts);
-        % There's a few checks we can try. One, see if the solver exited
-        % prematurely. Two, we can check that a minimum difference exists
-        % between the background value and the fit: usually this fails by
-        % finding a (nearly) flat line at the background level, so that is
-        % the main failure case.
-        emgfit = emgfxn_fix(fitparams, no2_x);
-        ffit = unfix_params(fitparams, fixed_param, fixed_val);
-        delB = sum(abs(emgfit - ffit.B));
-        if attempts >= 10
-            E.callError('fmincon_failure','After %d attempts, fmincon failed to return an acceptable fit.',nattempts);
-        elseif fitresults.exitFlag == 0
-            if DEBUG_LEVEL > 0; fprintf('Solver exited prematurely; randomizing initial condition for another attempt.\n'); end
-        elseif delB < 5000
-            if DEBUG_LEVEL > 0; fprintf('Little difference between fit and background (%.3g mol/km) likely flat line,\nrandomizing initial condition for another attempt.\n',delB); end
-        else
-            break
+        if this_fitresults.fval < 0 || abs(imag(this_fitresults.fval))>0
+            E.callError('fval_lt0','The value of the fitting function is negative or imaginary. Double check the form of the fitting function.');
+        elseif this_fitresults.fval < best_fval
+            best_fval = this_fitresults.fval;
+            fitparams = this_fitparams;
+            fitresults = this_fitresults;
         end
-        f0 = randomize_f0(f_lb, f_ub);
     catch err
         if strcmp(err.identifier,'optim:barrier:UsrObjUndefAtX0')
-            if attempts < 10
-                f0 = f0*rand*1.5;
+            if err_attempts < 10
                 fprintf('fmincon input function undefined at f0; randomizing f0 (%s) to try again\n',mat2str(f0))
+                attempts = attempts - 1; % don't count this as one of the regular attempts.
+                err_attempts = err_attempts+1;
             else
-                E.callError('fmincon_failure','After 10 attempts no valid f0 was found for fmincon using fixed parameter = %s, fixed value = %.3g',fixed_param,fixed_val)
+                E.callError('fmincon_failure','fmincon has been undefined at f0 10 times using fixed parameter = %s, fixed value = %.3g, aborting to prevent infinite loop',fixed_param,fixed_val)
             end
         else
             rethrow(err);
         end
     end
-    attempts = attempts+1;
+    f0 = randomize_f0(f_lb, f_ub, inds);
+    attempts = attempts + 1;
 end
+
+if isinf(best_fval)
+    E.callError('fmincon_failure','fmincon never found a valid fit')
+end
+
 unc_opts = optimoptions('fminunc','algorithm','quasi-newton','maxfunevals',1,'display','none'); % will switch to QN anyway to get Hessian w/o gradient; this avoids that message.
 [f_unc,~,~,~,~,unc_hessian] = fminunc(fitfxn_fix, fitparams, unc_opts);
 
@@ -378,7 +378,8 @@ if any(abs(f_unc - fitparams) > 0.01)
     warning('fminunc found a different minimum than fmincon, check it''s Hessian before using the standard deviations')
 end
 
-
+emgfit = emgfxn_fix(fitparams, no2_x);
+ffit = unfix_params(fitparams, fixed_param, fixed_val);
 
 % The inverse of the Hessian is an approximation to the covariance matrix
 % (Dovi 1991, Appl. Math. Lett. Vol 4, No 1, pp. 87-90; also
@@ -465,13 +466,16 @@ ffit.sigma_x = ffinal(4);
 ffit.B = ffinal(5);
 end
 
-function f0 = randomize_f0(f_lb, f_ub)
+function f0 = randomize_f0(f_lb, f_ub, inds)
 % Simplest method to randomize f0 is to allow it to take on any value
 % between f_lb and f_ub for fully bounded values.  For those with an
 % infinite limit, use some senisibly large but finite bound.
 % Reasonable upper bound for each parameter if set to infinity:
 ub_lim = [5e4, 1e3, 1e3, 1e3, 5e4];
+ub_lim = ub_lim(inds);
 lb_lim = [0 0 -1e3 0 0];
+lb_lim = lb_lim(inds);
+% Must remove the fixed parameter if one exists, hence the use of inds.
 
 rvec = rand(1,5);
 uu = isinf(f_ub);
