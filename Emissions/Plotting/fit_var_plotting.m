@@ -40,6 +40,8 @@ switch lower(plottype)
         show_fits(varargin{:})
     case 'mchist'
         mchist(varargin{:});
+    case 'stats'
+        stats_table();
     otherwise
         fprintf('Plot type not recognized\n')
 end
@@ -160,19 +162,29 @@ end
         mat2latex(L,'%#.3g')
     end
 
-    function residuals(Ffixed,F,prof_wind_type,resid_type)
+    function residuals(resid_type) 
         % Let's first just plot the relative sum of squared residuals vs. the fixed
-        % value for each parameter or the R-square value. THe last option
+        % value for each parameter or the R-square value. The last option
         % selects which one to use; input 'rel' or nothing to select the
         % ratio of SSresid to optimal and 'r2' to plot R-square values.
-        if ~exist('resid_type','var')
-            resid_type = 'rel';
+        
+        resid_type_in = exist('resid_type','var');
+        if resid_type_in
+            [Ffixed, F, ~, prof_wind_type] = resid_user_input(~resid_type_in);
+        else
+            [Ffixed, F, resid_type, prof_wind_type] = resid_user_input(~resid_type_in);
         end
+        
+        %%%%% MAIN FXN %%%%%
         params = {Ffixed(1,:).fixed_par};
         fns = fieldnames(F.ffit);
         for a=1:numel(params)
             x=[Ffixed(:,a).fixed_val];
-            switch resid_type
+            switch lower(resid_type)
+                case 'resid'
+                    y=[Ffixed(:,a).ssresid];
+                    yopt = F.ssresid;
+                    ytext = 'Sum of squared resid fixed';
                 case 'rel'
                     y=[Ffixed(:,a).ssresid] ./ F.ssresid;
                     yopt = 1;
@@ -203,6 +215,7 @@ end
             set(gca,'fontsize',16)
             title(sprintf('%s residuals - %s fixed, %d points',prof_wind_type,params{a},numel(x)))
         end
+        tilefigs;
     end
 
     function residuals_onepar(par, varargin)
@@ -255,9 +268,10 @@ end
         end
     end
 
-    function cross_effects(Ffixed,F,prof_wind_type)
+    function cross_effects()
         % Next let's see how the other parameters vary as we fix each
         % parameter in turn
+        [Ffixed, F, ~, prof_wind_type] = resid_user_input(false);
         params = {Ffixed(1,:).fixed_par};
         fns = fieldnames(F.ffit);
         for a=1:numel(params)
@@ -312,5 +326,101 @@ end
             line([ffit.(params{a}), ffit.(params{a})], y, 'color', 'r', 'linewidth', 2);
         end
     end
+
+    function stats_table
+        % Will load all the simple fit files in the selected directory and
+        % print out tables of the requested statistic.
+        fit_dir = uigetdir('.','Choose the directory with the simple fit files to query');
+        F_ss = dir(fullfile(fit_dir,'*SimpleFits-ssresid*'));
+        F_unex = dir(fullfile(fit_dir,'*SimpleFits-unexvar*'));
+        
+        % Load one file to get some information from
+        D = load(fullfile(fit_dir,F_ss(1).name));
+        fns = fieldnames(D);
+        stats = fieldnames(D.(fns{1}).stats);
+        
+        % Ask the user which statistic to summarize in the table
+        stat = ask_multichoice('Which statistic to summarize?',stats,'list',true);
+        
+        [tstr_ss, rownames_ss] = make_stats_table(fit_dir, F_ss, stat);
+        [tstr_unex, rownames_unex] = make_stats_table(fit_dir, F_unex, stat);
+        
+        fprintf('SSRESID table:')
+        struct2table(tstr_ss, 'RowNames', rownames_ss)
+        fprintf('UNEXVAR table:')
+        struct2table(tstr_unex, 'RowNames', rownames_unex)
+    end
+end
+
+function [tstr, rownames] = make_stats_table(fit_dir, F, stat)
+D = load(fullfile(fit_dir,F(1).name));
+fns = fieldnames(D);
+apriori = fns;
+for a=1:numel(apriori)
+    % clean up a priori names for column headers
+    apriori{a} = strrep(apriori{a},'f_','');
+end
+% Prep the structure and cell array to hold the row names
+tstr = make_empty_struct_from_cell(apriori,'');
+tstr = repmat(tstr,numel(F),1);
+rownames = cell(numel(F),1);
+
+
+for a=1:numel(F)
+    D = load(fullfile(fit_dir,F(a).name));
+    % Get the city name and wind sep speed
+    [s,e] = regexp(F(a).name,'(Atlanta|Birmingham|Montgomery)');
+    city_name = F(a).name(s:e);
+    [s,e] = regexp(F(a).name,'\dpt\d');
+    wind_spd = F(a).name(s:e);
+    rownames{a} = sprintf('%s_%s',city_name,wind_spd);
+    for f=1:numel(fns)
+        tstr(a).(apriori{f}) = nanmean(D.(fns{f}).stats.(stat));
+    end
+end
+end
+
+function [Ffixed, F, resid_type, prof_wind_type] = resid_user_input(ask_resid_type)
+%%%%% USER INPUT %%%%%
+[filename, filepath] = uigetfile('*VariationalFits*.mat','Choose the file to plot');
+if isnumeric(filename) && filename == 0
+    return
+end
+
+% Get file and apriori to plot
+D = load(fullfile(filepath, filename));
+fns = fieldnames(D);
+apriori = cell(numel(fns)/2,1);
+a = 1;
+for f=1:numel(fns)
+    if ~isempty(strfind(fns{f},'F_'))
+        apriori{a} = fns{f}(3:end);
+        a=a+1;
+    end
+end
+[sel,ok] = listdlg('ListString',apriori,'SelectionMode','single','PromptString','Choose which to plot');
+if ok == 1
+    fn1 = strcat('F_',apriori{sel});
+    fn2 = strcat('Ffix_',apriori{sel});
+    F = D.(fn1);
+    Ffixed = D.(fn2);
+else
+    return
+end
+
+% Which residual type to plot
+if ask_resid_type
+    allowed_resid = {'resid','rel','r2','r'};
+    resid_type = ask_multichoice('Which residual type to use?',allowed_resid,'list',true);
+else 
+    resid_type = '';
+end
+
+% Make plot name
+[s,e] = regexp(filename,'(Atlanta|Birmingham|Montgomery)');
+city_name = filename(s:e);
+[s,e] = regexp(filename,'\dpt\d');
+wind_spd = regexprep(filename(s:e),'pt','\.');
+prof_wind_type = sprintf('%s (%s)',city_name,wind_spd);
 end
 
