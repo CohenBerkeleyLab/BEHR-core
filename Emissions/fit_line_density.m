@@ -406,6 +406,8 @@ param_stats.r = nansum2(x .* y) ./ sqrt(nansum2(x.^2) .* nansum2(y.^2));
 % This is really a check I did r right more than anything.
 param_stats.r2 = 1 - nansum2((no2_ld - emgfit).^2) / nansum2((no2_ld - nanmean(no2_ld)).^2);
 
+
+
 if nargout >= 7
     opts = statset('funvalcheck','off'); % This prevents nlinfit from stopping if NaNs or Infs occur. But can make the CovB matrix unusually large.
     %[N.beta, N.R, N.J, N.CovB, N.MSE, N.ErrorModelInfo] = nlinfit(no2_x,no2_ld,emgfxn_fix,f0,opts);
@@ -477,7 +479,7 @@ lb_lim = [0 0 -1e3 0 0];
 lb_lim = lb_lim(inds);
 % Must remove the fixed parameter if one exists, hence the use of inds.
 
-rvec = rand(1,5);
+rvec = rand(size(f_ub));
 uu = isinf(f_ub);
 f_ub(uu) = ub_lim(uu);
 ll = isinf(f_lb);
