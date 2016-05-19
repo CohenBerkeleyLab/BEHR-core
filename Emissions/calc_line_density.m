@@ -1,5 +1,7 @@
-function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std ] = calc_line_density( fpath, fnames, center_lon, center_lat, theta, varargin )
-%CALC_LINE_DENSITY Calculate a wind-aligned line density for a given time period
+function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, num_valid_obs ] = calc_line_density( fpath, fnames, center_lon, center_lat, theta, varargin )
+%[ NO2_X, NO2_LINEDENS, NO2_LINEDENS_STD, LON, LAT, NO2_MEAN, NO2_STD, NUM_VALID_OBS] = CALC_LINE_DENSITY( FPATH, FNAMES, CENTER_LON, CENTER_LAT, THETA )
+%   Calculate a wind-aligned line density for a given time period.
+%
 %   Calculates a line density of NO2 up and downwind of a city by aligning
 %   each day's plume to the x-axis as described in Valin 2013.  By fitting
 %   an exponentially modified Gaussian function to the line density,
@@ -28,6 +30,31 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std ] =
 %       theta - a vector of wind directions given as degrees CCW from east
 %       between -180 and 180. Must match the number of files to be loaded.
 %
+%   Outputs:
+%
+%       no2_x - the x-coordinates of the line density (in km from center
+%       lon/lat)
+%
+%       no2_linedensity - the line density in mol/km.
+%
+%       no2_linedens_std - the standard deviation of the line density,
+%       calculated by first calculated a standard deviation of the column
+%       densities across the time average weighted by the grid cell
+%       areaweight, then adding up those in quadrature along the line of
+%       integration, multiplied by the width of the grid cells.
+%
+%       lon, lat - the longitude and latitude coordinates of the
+%       wind-aligned column densities.
+%
+%       no2_mean - the average wind-aligned column densities.
+%
+%       no2_std - the area-weighted standard deviation of the wind aligned
+%       column densities.
+%
+%       num_valid_obs - an array the same size as no2_mean that counts the
+%       number of observations that went into each column density. NaNs and
+%       cases where areaweight = 0 do not count.
+%
 %   Parameter inputs:
 %
 %
@@ -39,7 +66,7 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std ] =
 %       'windvel' - a vector of wind velocities to be used in filtering out
 %       days that do not meet desired criteria. If not given, all days that
 %       have sufficient coverage (pixels not removed for clouds or row
-%       anomaly)
+%       anomaly) are used.
 %
 %       'windcrit' - the number to compare windvel values to, if given, the
 %       parameter 'windop' must also be specified.
@@ -291,6 +318,7 @@ end
 
 %no2_mean = nanmean(nox,3);
 no2_mean = nansum2(nox .* aw, 3) ./ nansum2(aw, 3);
+num_valid_obs = sum( ~isnan(nox) & aw > 0, 3);
 % Calculate the weighted standard deviation (c.f.
 % https://en.wikipedia.org/wiki/Mean_square_weighted_deviation)
 no2_var = (nansum2(aw .* nox.^2, 3) .* nansum2(aw,3) - (nansum2(aw .* nox, 3)).^2)./(nansum2(aw,3).^2 - nansum(aw.^2,3));
