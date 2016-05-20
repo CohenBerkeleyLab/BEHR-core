@@ -127,15 +127,15 @@ end
         
         % Make the fitting parameters into a matrix (to print in latex
         % format) and a table (to look at visually)
-        fns = fieldnames(SF);
+        fns = {'f_mn108fast','f_mnfast','f_hyfast','f_mn108slow','f_mnslow','f_hyslow'};
         if plot_wrf
             E.notimplemented('plot_wrf needs updated with uncertainty')
             A = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit), struct2array(SF.f_wrffast.ffit),...
                 struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit), struct2array(SF.f_wrfslow.ffit))';
             varnames = {'Mn108Fast','MnFast','HyFast','WRFFast','Mn108Slow','MnSlow','HySlow','WRFSlow'};
         else
-            %A = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit),...
-            %    struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit))';
+            Aold = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit),...
+                struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit))';
             A = [];
             
             for a=1:numel(fns)
@@ -189,8 +189,8 @@ end
         % Print the latex output
         L = cat(2, latex_fns, num2cell(A));
         fprintf('\nLatex format:\n\n');
-        mat2latex(L,'%#.3g',1)
-        %mat2latex(L,'u',1)
+        %mat2latex(L,'%#.3g',1)
+        mat2latex(L,'u',1)
     end
 
     function residuals(resid_type) 
