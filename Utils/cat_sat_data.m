@@ -1,11 +1,14 @@
 function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
-%CAT_SAT_DATA(FILEPATH, DATAFIELDS) Concatenates data from OMI .mat files
+%CAT_SAT_DATA( FILEPATH, DATAFIELDS ) Concatenates data from OMI .mat files
 %   In some cases, one might wish to use satellite data from multiple days,
 %   but we import OMI data and process BEHR data into daily files. This
 %   function will load all the .mat files in the directory given by
 %   FILEPATH and output a concatenated version of the data in the field or
 %   fields given by DATAFIELDS, which should be a string or cell array of
 %   strings.
+%
+%   CAT_SAT_DATA( DATA, DATAFIELDS ) will concatenate all swaths in the
+%   structure DATA for the fields specified in DATAFIELDS.
 %
 %   Parameter arguments are:
 %
@@ -37,8 +40,14 @@ E=JLLErrors;
 %%%%% INPUT PARSING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
-if ~ischar(filepath) || ~exist(filepath,'dir')
-    E.badinput('filepath must be a string specifying a valid directory')
+if isstruct(filepath)
+    Data = filepath;
+    load_data = false;
+else
+    load_data = true;
+    if ~ischar(filepath) || ~exist(filepath,'dir')
+        E.badinput('filepath must be a string specifying a valid directory')
+    end
 end
 
 if ischar(datafields)
@@ -115,12 +124,15 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN FUNCTION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Get all .mat files in the specified directory 
-F = dir(fullfile(filepath, sprintf('%s*.mat',prefix)));
-
-if isempty(F)
-    E.filenotfound('satellite .mat file');
+if load_data
+    % Get all .mat files in the specified directory
+    F = dir(fullfile(filepath, sprintf('%s*.mat',prefix)));
+    
+    if isempty(F)
+        E.filenotfound('satellite .mat file');
+    end
+else
+    F = 0;
 end
 
 % Prep output
@@ -130,23 +142,27 @@ varargout = cell(1,numel(datafields));
 % variable, look for the datafields given, and add their data to the output
 % which will be one long column vector.
 
-if wbbool
+if wbbool && load_data
     wb = waitbar(0,sprintf('Concatenating %s*.mat',strrep(prefix,'_','\_')));
+elseif wbbool
+    wb = waitbar(0,'Concatenating input structure');
 end
 
 for a=1:numel(F)
-    [s,e] = regexp(F(a).name, '\d\d\d\d\d\d\d\d');
-    filedate = datenum(F(a).name(s:e), 'yyyymmdd');
-    if filedate < startdate || filedate > enddate
-        continue
-    end
+    if load_data
+        [s,e] = regexp(F(a).name, '\d\d\d\d\d\d\d\d');
+        filedate = datenum(F(a).name(s:e), 'yyyymmdd');
+        if filedate < startdate || filedate > enddate
+            continue
+        end
+        
+        load(fullfile(filepath, F(a).name),'Data'); % brings the variable Data into the workspace
     
-    load(fullfile(filepath, F(a).name),'Data'); % brings the variable Data into the workspace
-    
-    if DEBUG_LEVEL > 0
-        fprintf('Loading file %s...\n',F(a).name);
-    elseif wbbool
-        waitbar(a/numel(F));
+        if DEBUG_LEVEL > 0
+            fprintf('Loading file %s...\n',F(a).name);
+        elseif wbbool
+            waitbar(a/numel(F));
+        end
     end
     
     for b=1:numel(datafields)
