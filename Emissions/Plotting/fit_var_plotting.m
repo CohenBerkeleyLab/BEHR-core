@@ -134,8 +134,8 @@ end
                 struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit), struct2array(SF.f_wrfslow.ffit))';
             varnames = {'Mn108Fast','MnFast','HyFast','WRFFast','Mn108Slow','MnSlow','HySlow','WRFSlow'};
         else
-            Aold = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit),...
-                struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit))';
+            %Aold = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit),...
+            %    struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit))';
             A = [];
             
             for a=1:numel(fns)
@@ -168,13 +168,18 @@ end
             % Uncertainty in emissions needs to add the uncertainty in the
             % NOx:NO2 ratio (10%). Uncertainty in lifetime will just depend
             % on uncertainty in x_0
+            
             %Simple case (assumes average wind has no error)
-            %per_uncert_tau = (A(4,:) ./ A(3,:)) ./ avg_wind;
+            %uncert_tau = A(4,:)  ./ avg_wind;
             %Full case (consider uncertainty as 95% CI
-            per_uncert_tau = sqrt( ((A(4,:)./A(3,:)) ./ avg_wind).^2 + ( err_wind ./ avg_wind .* -A(3,:) ./ avg_wind.^2 ).^2 );
-            per_uncert_a = A(2,:) ./ A(1,:);
-            per_uncert_E = sqrt(0.1.^2 + per_uncert_a.^2 + per_uncert_tau.^2);
-            uncert_tau = tau .* per_uncert_tau;
+            uncert_tau = sqrt( (A(4,:) ./ avg_wind).^2 + ( err_wind .* -A(3,:) ./ avg_wind.^2 ).^2 );
+            
+            % We'll handle the uncertainty in E in two steps. First,
+            % compute the percent error due to error in a and tau. Then add
+            % this in quadrature with the 10% error due to the NOx:NO2
+            % ratio.
+            init_uncert_E_squared = (A(2,:) ./ tau).^2 + (uncert_tau .* -A(1,:) ./ (tau .^ 2)).^2;
+            per_uncert_E = sqrt( init_uncert_E_squared ./ (emis .^ 2) + 0.1 .^ 2 );
             uncert_E = emis .* per_uncert_E;
             
             A = cat(1,A,emis,uncert_E,tau,uncert_tau);
