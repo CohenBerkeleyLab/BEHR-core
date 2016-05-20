@@ -182,7 +182,7 @@ if ~onCluster
             if strcmpi(output_type,'hdf')
                 ask_to_overwrite = make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
             elseif strcmpi(output_type,'txt')
-                ask_to_overwrite = make_txt_file(Data_to_save,vars,date_string,save_dir,savename,ask_to_overwrite);
+                ask_to_overwrite = make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,ask_to_overwrite);
             end
         end
     end
@@ -218,7 +218,7 @@ else
             if strcmpi(output_type,'hdf')
                 make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
             elseif strcmpi(output_type,'txt')
-                make_txt_file(Data_to_save,vars,date_string,save_dir,savename,ask_to_overwrite);
+                make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,ask_to_overwrite);
             end
         end
     end
@@ -519,7 +519,7 @@ end
 
 
 
-function ask_to_overwrite = make_txt_file(Data_in, vars, date_string, save_dir, savename, ask_to_overwrite)
+function ask_to_overwrite = make_txt_file(Data_in, vars, attr, date_string, save_dir, savename, ask_to_overwrite)
 E = JLLErrors;
 
 global DEBUG_LEVEL
@@ -597,23 +597,59 @@ for s=1:numel(Data_in)
         for a=1:numel(header_cell)
             switch header_cell{a}
                 case 'Loncorn1'
-                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(1,p));
+                    v = Data_in(s).Loncorn(1,p);
+                    if isnan(v)
+                        v = attr.Loncorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Loncorn2'
-                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(2,p));
+                    v = Data_in(s).Loncorn(2,p);
+                    if isnan(v)
+                        v = attr.Loncorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Loncorn3'
-                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(3,p));
+                    v = Data_in(s).Loncorn(3,p);
+                    if isnan(v)
+                        v = attr.Loncorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Loncorn4'
-                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(4,p));
+                    v = Data_in(s).Loncorn(4,p);
+                    if isnan(v)
+                        v = attr.Loncorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Latcorn1'
-                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(1,p));
+                    v = Data_in(s).Latcorn(1,p);
+                    if isnan(v)
+                        v = attr.Latcorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Latcorn2'
-                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(2,p));
+                    v = Data_in(s).Latcorn(2,p);
+                    if isnan(v)
+                        v = attr.Latcorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Latcorn3'
-                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(3,p));
+                    v = Data_in(s).Latcorn(3,p);
+                    if isnan(v)
+                        v = attr.Latcorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Latcorn4'
-                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(4,p));
+                    v = Data_in(s).Latcorn(4,p);
+                    if isnan(v)
+                        v = attr.Latcorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 otherwise
-                    fprintf(fid,format_spec{a},Data_in(s).(header_cell{a})(p));
+                    v = Data_in(s).(header_cell{a})(p);
+                    if isnan(v)
+                        v = attr.(header_cell{a}).Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
             end
             
             if a<numel(header_cell)
