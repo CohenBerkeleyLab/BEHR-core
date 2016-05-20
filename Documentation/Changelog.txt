@@ -22,18 +22,40 @@ does not change the core algorithm), a revision number will be appended to the
 version number. For example, v2.1A and v2.1Arev0 will be the same, but v2.1Arev1
 would indicate this sort of minor change.
 
+The version number may also be formatted as, e.g. v2-1A. This is used as the version
+string in file names to prevent any issue with file systems unable to handle a . in
+a filename that is not separating the file extension. This form is completely
+equivalent to the one with the period and is used interchangeably.
+
 ============
 2) Changelog
 ============
 
 
-**** Development (unpublished) ****
+**** 2.1Arev1 ****
 -- Revision only: no substantial changes to the data product itself.
 -- File names will now contain the version number for easier tracability.
--- Corrected issue where fill values for cloud fraction fields are divided by 1000.
--- All BEHR fields will now use a fill value of -3.402e38 (-realmax('single') in matlab).
+-- Corrected issue where fill values for cloud fraction fields are divided by 1000. The
+   fields CloudFraction and CloudRadianceFraction will now have fill values of -32767
+   instead of -32.767.
+-- Terrain reflectivity has now been scaled to actually lie between 0 and 1. 
+-- All BEHR fields will now use a fill value of -3.402e38 (-realmax('single') in Matlab).
 -- Updated some metadata in the HDF files.
--- Any pixels with 
+-- The .txt files now replace NaNs with fill values for fields that have fill values defined.
+-- In the computation of the BEHR AMF, it has always been clamped to a minimum value of 1e-6.
+   This is still true; however, the way Matlab treats NaNs meant that a NaN AMF was changed to
+   1e-6, when really we would prefer that it remain a NaN as this usually indicates that either
+   the scattering weights or a priori profile were all NaNs as well, due to either the inputs
+   to the scattering weight lookup table being outside the ranges defined in that table.
+   Many cases where the AMF should have remained a NaN were returned to NaNs by a later check
+   in the code, however now pixels where the AMF is a NaN are never converted to 1e-6 in the 
+   first place. *Note: as long as you have been following the recommendation to remove all VCDs
+   >1e17 (as an extra guarentee against including row anomaly pixels), you will notice no change,
+   as AMFs of 1e-6 lead to VCDs ~1e20 or greater. 
+-- Rarely, cloud pressure may be >1013 hPa. This causes the scattering weight lookup to fail, 
+   because the algorithm treats cloud pressure as surface pressure for the cloudy AMF, and the
+   lookup table is only defined for surface pressure <= 1013 hPa. Therefore, cloud pressures are
+   now clamped to <= 1013 hPa before input to the lookup table.
 
 
 **** 2.1A ****
