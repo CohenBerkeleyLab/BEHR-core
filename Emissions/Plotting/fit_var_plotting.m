@@ -23,6 +23,8 @@ function [  ] = fit_var_plotting(plottype, varargin )
 
 E=JLLErrors;
 
+first_warning = true;
+
 if ~exist('plottype','var')
     plottype = ask_multichoice('Which plot to make?', {'fits'},'list',true);
 end
@@ -40,6 +42,8 @@ switch lower(plottype)
         show_fits(varargin{:})
     case 'mchist'
         mchist(varargin{:});
+    case 'stats'
+        stats_table();
     otherwise
         fprintf('Plot type not recognized\n')
 end
@@ -123,20 +127,36 @@ end
         
         % Make the fitting parameters into a matrix (to print in latex
         % format) and a table (to look at visually)
+        fns = {'f_mn108fast','f_mnfast','f_hyfast','f_mn108slow','f_mnslow','f_hyslow'};
         if plot_wrf
+            E.notimplemented('plot_wrf needs updated with uncertainty')
             A = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit), struct2array(SF.f_wrffast.ffit),...
                 struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit), struct2array(SF.f_wrfslow.ffit))';
             varnames = {'Mn108Fast','MnFast','HyFast','WRFFast','Mn108Slow','MnSlow','HySlow','WRFSlow'};
         else
-            A = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit),...
-                struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit))';
+            %Aold = cat(1, struct2array(SF.f_mn108fast.ffit), struct2array(SF.f_mnfast.ffit), struct2array(SF.f_hyfast.ffit),...
+            %    struct2array(SF.f_mn108slow.ffit), struct2array(SF.f_mnslow.ffit), struct2array(SF.f_hyslow.ffit))';
+            A = [];
+            
+            for a=1:numel(fns)
+                vals = struct2array(SF.(fns{a}).ffit);
+                uncertainty = calc_total_fit_uncert(SF.(fns{a}), LD);
+                a_row = nan(1,10);
+                a_row(1:2:9) = vals;
+                a_row(2:2:10) = uncertainty;
+                A = cat(1, A, a_row);
+            end
+            A = A';
             varnames = {'Mn108Fast','MnFast','HyFast','Mn108Slow','MnSlow','HySlow'};
         end
-        fns = {'a (mol)','x_0 (km)','mu_x (km)','sigma_x (km)','B (mol)'};
-        latex_fns = {'$a$ (mol \chem{NO_2})';'$x_0$ (km)';'$\mu_x$ (km)';'$\sigma_x$ (km)';'$B$ (mol \chem{NO_2} km$^{-1}$)'};
+        fns = {'a (mol)','uncert. a','x_0 (km)','uncert. x','mu_x (km)','uncert. mu','sigma_x (km)','uncert. sigma','B (mol)','uncert. B'};
+        latex_fns = {'$a$ (mol \chem{NO_2})';'';'$x_0$ (km)';'';'$\mu_x$ (km)';'';'$\sigma_x$ (km)';'';'$B$ (mol \chem{NO_2} km$^{-1}$)';''};
         if isfield(LD,'wind_crit')
-            avg_wind = mean(WC.windvel(WC.windvel >= LD.wind_crit))/1000*3600; % windvel in m/s, convert to km/h
-            emis = 1.32 .* A(1,:) .* avg_wind ./ A(2,:);
+            wc = WC.windvel >= LD.wind_crit;
+            avg_wind = mean(WC.windvel(wc)/1000*3600); % windvel in m/s, convert to km/h
+            student_t = tinv(0.975, sum(wc)); %tinv gives one-tailed, we want two-tailed 95% CI
+            err_wind = (student_t * std(WC.windvel(wc)/1000*3600))/sqrt(sum(wc));
+            emis = 1.32 .* A(1,:) .* avg_wind ./ A(3,:);
             
             % Calculate assumed mass of NOx if NOx:NO2 ratio is 1.32
             % MM NO = 30.01 g/mol
@@ -144,10 +164,27 @@ end
             mol2Mg = (1/1.32 * 46.01 + (1-1/1.32)*30.01)*1e-6;
             emis = emis * mol2Mg;
             
-            tau = A(2,:) ./ avg_wind;
-            A = cat(1,A,emis,tau);
-            fns = cat(2, fns, 'E (Mg NOx/h)', 'tau (h)');
-            latex_fns = cat(1, latex_fns, '$E$ (Mg \chem{NO_x} h$^{-1}$)', '$\tau_{\mathrm{eff}}$ (h)');
+            tau = A(3,:) ./ avg_wind;
+            % Uncertainty in emissions needs to add the uncertainty in the
+            % NOx:NO2 ratio (10%). Uncertainty in lifetime will just depend
+            % on uncertainty in x_0
+            
+            %Simple case (assumes average wind has no error)
+            %uncert_tau = A(4,:)  ./ avg_wind;
+            %Full case (consider uncertainty as 95% CI
+            uncert_tau = sqrt( (A(4,:) ./ avg_wind).^2 + ( err_wind .* -A(3,:) ./ avg_wind.^2 ).^2 );
+            
+            % We'll handle the uncertainty in E in two steps. First,
+            % compute the percent error due to error in a and tau. Then add
+            % this in quadrature with the 10% error due to the NOx:NO2
+            % ratio.
+            init_uncert_E_squared = (A(2,:) ./ tau).^2 + (uncert_tau .* -A(1,:) ./ (tau .^ 2)).^2;
+            per_uncert_E = sqrt( init_uncert_E_squared ./ (emis .^ 2) + 0.1 .^ 2 );
+            uncert_E = emis .* per_uncert_E;
+            
+            A = cat(1,A,emis,uncert_E,tau,uncert_tau);
+            fns = cat(2, fns, 'E (Mg NOx/h)','uncert. E', 'tau (h)','uncert. tau');
+            latex_fns = cat(1, latex_fns, '$E$ (Mg \chem{NO_x} h$^{-1}$)', {''}, '$\tau_{\mathrm{eff}}$ (h)',{''});
         else
             fprintf('Cannot compute emissions and tau without wind criterion\n');
         end
@@ -155,24 +192,35 @@ end
         % print the table
         T = array2table(A,'RowNames',fns,'VariableNames',varnames)
         % Print the latex output
-        L = cat(2, latex_fns, mat2cell_simple(A));
+        L = cat(2, latex_fns, num2cell(A));
         fprintf('\nLatex format:\n\n');
-        mat2latex(L,'%#.3g')
+        %mat2latex(L,'%#.3g',1)
+        mat2latex(L,'u',1)
     end
 
-    function residuals(Ffixed,F,prof_wind_type,resid_type)
+    function residuals(resid_type) 
         % Let's first just plot the relative sum of squared residuals vs. the fixed
-        % value for each parameter or the R-square value. THe last option
+        % value for each parameter or the R-square value. The last option
         % selects which one to use; input 'rel' or nothing to select the
         % ratio of SSresid to optimal and 'r2' to plot R-square values.
-        if ~exist('resid_type','var')
-            resid_type = 'rel';
+        
+        resid_type_in = exist('resid_type','var');
+        if resid_type_in
+            [Ffixed, F, ~, prof_wind_type] = resid_user_input(~resid_type_in);
+        else
+            [Ffixed, F, resid_type, prof_wind_type] = resid_user_input(~resid_type_in);
         end
+        
+        %%%%% MAIN FXN %%%%%
         params = {Ffixed(1,:).fixed_par};
         fns = fieldnames(F.ffit);
         for a=1:numel(params)
             x=[Ffixed(:,a).fixed_val];
-            switch resid_type
+            switch lower(resid_type)
+                case 'resid'
+                    y=[Ffixed(:,a).ssresid];
+                    yopt = F.ssresid;
+                    ytext = 'Sum of squared resid fixed';
                 case 'rel'
                     y=[Ffixed(:,a).ssresid] ./ F.ssresid;
                     yopt = 1;
@@ -203,6 +251,7 @@ end
             set(gca,'fontsize',16)
             title(sprintf('%s residuals - %s fixed, %d points',prof_wind_type,params{a},numel(x)))
         end
+        tilefigs;
     end
 
     function residuals_onepar(par, varargin)
@@ -255,9 +304,10 @@ end
         end
     end
 
-    function cross_effects(Ffixed,F,prof_wind_type)
+    function cross_effects()
         % Next let's see how the other parameters vary as we fix each
         % parameter in turn
+        [Ffixed, F, ~, prof_wind_type] = resid_user_input(false);
         params = {Ffixed(1,:).fixed_par};
         fns = fieldnames(F.ffit);
         for a=1:numel(params)
@@ -312,5 +362,141 @@ end
             line([ffit.(params{a}), ffit.(params{a})], y, 'color', 'r', 'linewidth', 2);
         end
     end
+
+    function stats_table
+        % Will load all the simple fit files in the selected directory and
+        % print out tables of the requested statistic.
+        fit_dir = uigetdir('.','Choose the directory with the simple fit files to query');
+        F_ss = dir(fullfile(fit_dir,'*SimpleFits-ssresid*'));
+        F_unex = dir(fullfile(fit_dir,'*SimpleFits-unexvar*'));
+        
+        % Load one file to get some information from
+        D = load(fullfile(fit_dir,F_ss(1).name));
+        fns = fieldnames(D);
+        stats = fieldnames(D.(fns{1}).stats);
+        
+        % Ask the user which statistic to summarize in the table
+        stat = ask_multichoice('Which statistic to summarize?',stats,'list',true);
+        
+        [tstr_ss, rownames_ss] = make_stats_table(fit_dir, F_ss, stat);
+        [tstr_unex, rownames_unex] = make_stats_table(fit_dir, F_unex, stat);
+        
+        fprintf('SSRESID table:')
+        struct2table(tstr_ss, 'RowNames', rownames_ss)
+        fprintf('UNEXVAR table:')
+        struct2table(tstr_unex, 'RowNames', rownames_unex)
+    end
+
+    function uncert = calc_total_fit_uncert(sfit, LD)
+        % Calculate the overall uncertainty of the parameters, following the
+        % supplement in Beirle et. al. They assign the following uncertainties:
+        %   VCD = 30%, 25% in Lu et al. 2015
+        %   NOx:NO2 ratio = 10%
+        %   Fit confidence interval = ~10-50%
+        %   SME (standard mean error?) of fit results = ~10-40%
+        %   Choice of b (across wind integration distance) = 10%
+        %   Choice of wind fields = 30%
+        % I will ignore the SME as Lu et al 2015 does, because that was for their
+        % average over 8 different sectors, rather than the method of aligning wind
+        % directions. Lu goes on to specify that NOx:NO2 ratio only matters for
+        % emissions (E ~ a*w/x0 where w is avg. wind speed) but not burdens (a) or
+        % lifetime (tau = x0 / w) and the uncertainty in VCDs does not matter for
+        % lifetime. However, I would argue that the uncertainty in VCDs DOES matter
+        % for lifetime as a spatial bias in the VCDs could introduce essentially a
+        % second lifetime that would convolve with the true lifetime. So this will
+        % assume that all the sources of uncertainty count for all the fit
+        % parameters, except for the NOx:NO2 ratio.
+        
+        if ~isfield(LD,'num_valid_obs')
+            s_vcd = 0.3;
+            if first_warning
+                first_warning = false;
+                warning('No number of valid observations given in the line density structure, setting VCD uncertainty to 30%')
+            end
+        else
+            % If there is a number of valid observations variable, then we
+            % will reduce the uncertainty in the line density by the
+            % smallest number present to be conservative.
+            s_vcd = 0.3 / sqrt(min(LD.num_valid_obs(:)));
+        end
+        s_b = 0.1;
+        s_wind = 0.3;
+        per_uncert = sqrt((sfit.stats.percent_ci95/100).^2 + s_vcd.^2 + s_b.^2 + s_wind.^2);
+        uncert = abs(struct2array(sfit.ffit)) .* per_uncert';
+    end
 end
+
+function [tstr, rownames] = make_stats_table(fit_dir, F, stat)
+D = load(fullfile(fit_dir,F(1).name));
+fns = fieldnames(D);
+apriori = fns;
+for a=1:numel(apriori)
+    % clean up a priori names for column headers
+    apriori{a} = strrep(apriori{a},'f_','');
+end
+% Prep the structure and cell array to hold the row names
+tstr = make_empty_struct_from_cell(apriori,'');
+tstr = repmat(tstr,numel(F),1);
+rownames = cell(numel(F),1);
+
+
+for a=1:numel(F)
+    D = load(fullfile(fit_dir,F(a).name));
+    % Get the city name and wind sep speed
+    [s,e] = regexp(F(a).name,'(Atlanta|Birmingham|Montgomery)');
+    city_name = F(a).name(s:e);
+    [s,e] = regexp(F(a).name,'\dpt\d');
+    wind_spd = F(a).name(s:e);
+    rownames{a} = sprintf('%s_%s',city_name,wind_spd);
+    for f=1:numel(fns)
+        tstr(a).(apriori{f}) = nanmean(D.(fns{f}).stats.(stat));
+    end
+end
+end
+
+function [Ffixed, F, resid_type, prof_wind_type] = resid_user_input(ask_resid_type)
+%%%%% USER INPUT %%%%%
+[filename, filepath] = uigetfile('*VariationalFits*.mat','Choose the file to plot');
+if isnumeric(filename) && filename == 0
+    return
+end
+
+% Get file and apriori to plot
+D = load(fullfile(filepath, filename));
+fns = fieldnames(D);
+apriori = cell(numel(fns)/2,1);
+a = 1;
+for f=1:numel(fns)
+    if ~isempty(strfind(fns{f},'F_'))
+        apriori{a} = fns{f}(3:end);
+        a=a+1;
+    end
+end
+[sel,ok] = listdlg('ListString',apriori,'SelectionMode','single','PromptString','Choose which to plot');
+if ok == 1
+    fn1 = strcat('F_',apriori{sel});
+    fn2 = strcat('Ffix_',apriori{sel});
+    F = D.(fn1);
+    Ffixed = D.(fn2);
+else
+    return
+end
+
+% Which residual type to plot
+if ask_resid_type
+    allowed_resid = {'resid','rel','r2','r'};
+    resid_type = ask_multichoice('Which residual type to use?',allowed_resid,'list',true);
+else 
+    resid_type = '';
+end
+
+% Make plot name
+[s,e] = regexp(filename,'(Atlanta|Birmingham|Montgomery)');
+city_name = filename(s:e);
+[s,e] = regexp(filename,'\dpt\d');
+wind_spd = regexprep(filename(s:e),'pt','\.');
+prof_wind_type = sprintf('%s (%s)',city_name,wind_spd);
+end
+
+
 
