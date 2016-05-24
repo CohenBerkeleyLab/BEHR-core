@@ -46,9 +46,15 @@ end
 %%%%% MAIN FUNCTION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
-avg_wind = mean(wind_speed_vec/1000*3600); % windvel in m/s, convert to km/h
-student_t = tinv(0.975, numel(wind_speed_vec)); %tinv gives one-tailed, we want two-tailed 95% CI
-err_wind = (student_t * std(wind_speed_vec/1000*3600))/sqrt(numel(wind_speed_vec));
+if strcmpi(wind_mode, 'vec')
+    wind_speed_vec = varargin{1};
+    avg_wind = mean(wind_speed_vec/1000*3600); % windvel in m/s, convert to km/h
+    student_t = tinv(0.975, numel(wind_speed_vec)); %tinv gives one-tailed, we want two-tailed 95% CI
+    err_wind = (student_t * std(wind_speed_vec/1000*3600))/sqrt(numel(wind_speed_vec));
+else
+    avg_wind = varargin{1};
+    err_wind = varargin{2};
+end
 E = 1.32 .* a .* avg_wind ./ x0;
 
 % Calculate assumed mass of NOx if NOx:NO2 ratio is 1.32

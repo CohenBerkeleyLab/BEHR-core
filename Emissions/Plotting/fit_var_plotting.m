@@ -365,10 +365,13 @@ end
         % Calculate the overall uncertainty of the parameters, following
         % the supplement in Beirle et. al. They assign the following
         % uncertainties:
-        %   VCD = 30%, 25% in Lu et al. 2015 NOx:NO2 ratio = 10% Fit
-        %   confidence interval = ~10-50% SME (standard mean error?) of fit
-        %   results = ~10-40% Choice of b (across wind integration
-        %   distance) = 10% Choice of wind fields = 30%
+        %   VCD = 30%, 25% in Lu et al. 2015 
+        %   NOx:NO2 ratio = 10% Fit
+        %   confidence interval = ~10-50% 
+        %   SME (standard mean error?) of fit results = ~10-40% 
+        %   Choice of b (across wind integration distance) = 10% 
+        %   Choice of wind fields = 30%
+        %
         % I will ignore the SME as Lu et al 2015 does, because that was for
         % Beirle's average over 8 different sectors, rather than the method
         % of aligning wind directions. Lu goes on to specify that NOx:NO2
@@ -381,22 +384,19 @@ end
         % this will assume that all the sources of uncertainty count for
         % all the fit parameters, except for the NOx:NO2 ratio.
         num_obs_fn = sprintf('num_obs_%s',apriori);
+        fit_params = struct2array(sfit.ffit);
+        frac_uncerts = sfit.stats.percent_ci95'/100;
         if ~isfield(LD,num_obs_fn)
-            s_vcd = 0.25;
+            uncert = calc_fit_param_uncert(fit_params, frac_uncerts, 'warn', first_warning);
             if first_warning
                 first_warning = false;
-                warning('No number of valid observations given in the line density structure, setting VCD uncertainty to 25%')
             end
         else
             % If there is a number of valid observations variable, then we
             % will reduce the uncertainty in the line density by the
             % smallest number present to be conservative.
-            s_vcd = 0.25 / sqrt(min(LD.(num_obs_fn)(LD.(num_obs_fn)>0)));
+            uncert = calc_fit_param_uncert(fit_params, frac_uncerts, num_obs, 'warn', first_warning);
         end
-        s_b = 0.1;
-        s_wind = 0.3;
-        per_uncert = sqrt((sfit.stats.percent_ci95/100).^2 + s_vcd.^2 + s_b.^2 + s_wind.^2);
-        uncert = abs(struct2array(sfit.ffit)) .* per_uncert';
     end
 end
 
