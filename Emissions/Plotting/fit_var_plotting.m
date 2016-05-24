@@ -140,7 +140,8 @@ end
             
             for a=1:numel(fns)
                 vals = struct2array(SF.(fns{a}).ffit);
-                uncertainty = calc_total_fit_uncert(SF.(fns{a}), LD);
+                apriori = fns{a}(3:end); % remove the "f_" bit
+                uncertainty = calc_total_fit_uncert(SF.(fns{a}), LD, apriori);
                 a_row = nan(1,10);
                 a_row(1:2:9) = vals;
                 a_row(2:2:10) = uncertainty;
@@ -153,34 +154,7 @@ end
         latex_fns = {'$a$ (mol \chem{NO_2})';'';'$x_0$ (km)';'';'$\mu_x$ (km)';'';'$\sigma_x$ (km)';'';'$B$ (mol \chem{NO_2} km$^{-1}$)';''};
         if isfield(LD,'wind_crit')
             wc = WC.windvel >= LD.wind_crit;
-            avg_wind = mean(WC.windvel(wc)/1000*3600); % windvel in m/s, convert to km/h
-            student_t = tinv(0.975, sum(wc)); %tinv gives one-tailed, we want two-tailed 95% CI
-            err_wind = (student_t * std(WC.windvel(wc)/1000*3600))/sqrt(sum(wc));
-            emis = 1.32 .* A(1,:) .* avg_wind ./ A(3,:);
-            
-            % Calculate assumed mass of NOx if NOx:NO2 ratio is 1.32
-            % MM NO = 30.01 g/mol
-            % MM NO2 = 46.01 g/mol
-            mol2Mg = (1/1.32 * 46.01 + (1-1/1.32)*30.01)*1e-6;
-            emis = emis * mol2Mg;
-            
-            tau = A(3,:) ./ avg_wind;
-            % Uncertainty in emissions needs to add the uncertainty in the
-            % NOx:NO2 ratio (10%). Uncertainty in lifetime will just depend
-            % on uncertainty in x_0
-            
-            %Simple case (assumes average wind has no error)
-            %uncert_tau = A(4,:)  ./ avg_wind;
-            %Full case (consider uncertainty as 95% CI
-            uncert_tau = sqrt( (A(4,:) ./ avg_wind).^2 + ( err_wind .* -A(3,:) ./ avg_wind.^2 ).^2 );
-            
-            % We'll handle the uncertainty in E in two steps. First,
-            % compute the percent error due to error in a and tau. Then add
-            % this in quadrature with the 10% error due to the NOx:NO2
-            % ratio.
-            init_uncert_E_squared = (A(2,:) ./ tau).^2 + (uncert_tau .* -A(1,:) ./ (tau .^ 2)).^2;
-            per_uncert_E = sqrt( init_uncert_E_squared ./ (emis .^ 2) + 0.1 .^ 2 );
-            uncert_E = emis .* per_uncert_E;
+            [emis, uncert_E, tau, uncert_tau] = compute_emg_emis_tau(A(1,:),A(2,:),A(3,:),A(4,:), 'vec', WC.windvel(wc));
             
             A = cat(1,A,emis,uncert_E,tau,uncert_tau);
             fns = cat(2, fns, 'E (Mg NOx/h)','uncert. E', 'tau (h)','uncert. tau');
@@ -387,37 +361,37 @@ end
         struct2table(tstr_unex, 'RowNames', rownames_unex)
     end
 
-    function uncert = calc_total_fit_uncert(sfit, LD)
-        % Calculate the overall uncertainty of the parameters, following the
-        % supplement in Beirle et. al. They assign the following uncertainties:
-        %   VCD = 30%, 25% in Lu et al. 2015
-        %   NOx:NO2 ratio = 10%
-        %   Fit confidence interval = ~10-50%
-        %   SME (standard mean error?) of fit results = ~10-40%
-        %   Choice of b (across wind integration distance) = 10%
-        %   Choice of wind fields = 30%
-        % I will ignore the SME as Lu et al 2015 does, because that was for their
-        % average over 8 different sectors, rather than the method of aligning wind
-        % directions. Lu goes on to specify that NOx:NO2 ratio only matters for
-        % emissions (E ~ a*w/x0 where w is avg. wind speed) but not burdens (a) or
-        % lifetime (tau = x0 / w) and the uncertainty in VCDs does not matter for
-        % lifetime. However, I would argue that the uncertainty in VCDs DOES matter
-        % for lifetime as a spatial bias in the VCDs could introduce essentially a
-        % second lifetime that would convolve with the true lifetime. So this will
-        % assume that all the sources of uncertainty count for all the fit
-        % parameters, except for the NOx:NO2 ratio.
-        
-        if ~isfield(LD,'num_valid_obs')
-            s_vcd = 0.3;
+    function uncert = calc_total_fit_uncert(sfit, LD, apriori)
+        % Calculate the overall uncertainty of the parameters, following
+        % the supplement in Beirle et. al. They assign the following
+        % uncertainties:
+        %   VCD = 30%, 25% in Lu et al. 2015 NOx:NO2 ratio = 10% Fit
+        %   confidence interval = ~10-50% SME (standard mean error?) of fit
+        %   results = ~10-40% Choice of b (across wind integration
+        %   distance) = 10% Choice of wind fields = 30%
+        % I will ignore the SME as Lu et al 2015 does, because that was for
+        % Beirle's average over 8 different sectors, rather than the method
+        % of aligning wind directions. Lu goes on to specify that NOx:NO2
+        % ratio only matters for emissions (E ~ a*w/x0 where w is avg. wind
+        % speed) but not burdens (a) or lifetime (tau = x0 / w) and the
+        % uncertainty in VCDs does not matter for lifetime. However, I
+        % would argue that the uncertainty in VCDs DOES matter for lifetime
+        % as a spatial bias in the VCDs could introduce essentially a
+        % second lifetime that would convolve with the true lifetime. So
+        % this will assume that all the sources of uncertainty count for
+        % all the fit parameters, except for the NOx:NO2 ratio.
+        num_obs_fn = sprintf('num_obs_%s',apriori);
+        if ~isfield(LD,num_obs_fn)
+            s_vcd = 0.25;
             if first_warning
                 first_warning = false;
-                warning('No number of valid observations given in the line density structure, setting VCD uncertainty to 30%')
+                warning('No number of valid observations given in the line density structure, setting VCD uncertainty to 25%')
             end
         else
             % If there is a number of valid observations variable, then we
             % will reduce the uncertainty in the line density by the
             % smallest number present to be conservative.
-            s_vcd = 0.3 / sqrt(min(LD.num_valid_obs(:)));
+            s_vcd = 0.25 / sqrt(min(LD.(num_obs_fn)(LD.(num_obs_fn)>0)));
         end
         s_b = 0.1;
         s_wind = 0.3;
