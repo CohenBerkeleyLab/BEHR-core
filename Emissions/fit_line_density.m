@@ -50,6 +50,32 @@ function [ ffit, emgfit, param_stats, f0, history, fitresults, N, L ] = fit_line
 %       difference is in the definition of a: a_defoy = a_lu / x0. Defaults
 %       to 'lu.'
 %
+%       'fittype' - allows you to decide the normalization of the fit
+%       function. 'ssresid' (default) makes the fit function simply the sum
+%       of squared residuals between the line density and EMG fit:
+%
+%           f(a,x0,mux,sigma,B) = nansum( (no2_ld - emgfit(no2_x) ).^2 )
+%
+%       The other option is 'unexvar' which stands for 'unexplained
+%       variance.' It normalizes the sum of squared residuals by the
+%       variance in the line density:
+%
+%           f_unexvar() = f / nansum( (no2_ld - nanmean(no2_ld)).^2 )
+%
+%       These should not give different answers for the actual fitting
+%       parameters, but they do affect the uncertainty, as naturally the
+%       unexplained variance has much shallower minima, and so the Hessian
+%       matrix (which the uncertainties are derived from) reflects the
+%       weaker curvature.
+%
+%       'nattempts' - defaults to 10, how many times the fitting function
+%       should run fmincon. This function will always use the best guess
+%       for the initial point first, then randomize f0 nattempts - 1 times.
+%       The randomization is such that it will uniformly select a value
+%       between the upper and lower bounds unless one bound is infinity,
+%       then it will use a bound around 10x larger than the typical value
+%       for that parameter.
+%
 %       DEBUG_LEVEL - integer controlling the amount of messages printed to
 %       the console. Set to 0 to disable.
 %

@@ -395,6 +395,7 @@ end
             % If there is a number of valid observations variable, then we
             % will reduce the uncertainty in the line density by the
             % smallest number present to be conservative.
+            num_obs = LD.(num_obs_fn);
             uncert = calc_fit_param_uncert(fit_params, frac_uncerts, num_obs, 'warn', first_warning);
         end
     end
