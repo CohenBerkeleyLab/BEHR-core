@@ -46,12 +46,13 @@ equivalent to the one with the period and is used interchangeably.
    This is still true; however, the way Matlab treats NaNs meant that a NaN AMF was changed to
    1e-6, when really we would prefer that it remain a NaN as this usually indicates that either
    the scattering weights or a priori profile were all NaNs as well, due to either the inputs
-   to the scattering weight lookup table being outside the ranges defined in that table.
+   to the scattering weight lookup table being outside the ranges defined in that table or 
+   the a priori profile being undefined (usually because we are outside the BEHR-US domain).
    Many cases where the AMF should have remained a NaN were returned to NaNs by a later check
    in the code, however now pixels where the AMF is a NaN are never converted to 1e-6 in the 
    first place. *Note: as long as you have been following the recommendation to remove all VCDs
    >1e17 (as an extra guarentee against including row anomaly pixels), you will notice no change,
-   as AMFs of 1e-6 lead to VCDs ~1e20 or greater. 
+   as AMFs of 1e-6 lead to VCDs of about 1e20 or greater. 
 -- Rarely, cloud pressure may be >1013 hPa. This causes the scattering weight lookup to fail, 
    because the algorithm treats cloud pressure as surface pressure for the cloudy AMF, and the
    lookup table is only defined for surface pressure <= 1013 hPa. Therefore, cloud pressures are
