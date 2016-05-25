@@ -200,11 +200,12 @@ else
     % and 5 m/s winds = 54 km for 1 lifetime
     f0(2) = 54;
     % f(1) is a or the mass of NO2 in one length scale. Tried considering this
-    % the integral of line density from ~0 to one x_0 downwind, but that tends
-    % to be too large by a factor of 10. 
+    % the integral of line density from ~0 to one x_0 downwind, but that
+    % gives a lot of warnings about the matrix being singular or badly
+    % scaled,
     %      i = find(no2_x > 0, 1, 'first');
-    %       j = find(no2_x > no2_x(i) + f0(2), 1, 'first');
-    %       f0(1) = trapz(no2_x(i:j), no2_ld(i:j));
+    %      j = find(no2_x > no2_x(i) + f0(2), 1, 'first');
+    %      f0(1) = trapz(no2_x(i:j), no2_ld(i:j));
     % Instead, let's just try starting out as half the maximum value of the
     % line density.
     f0(1) = max(no2_ld)/2;
@@ -218,7 +219,7 @@ else
     % FWHM/2.355.
     halfmax = (max(no2_ld) - no2_ld(1))/2 + no2_ld(1);
     mpre = find(no2_ld(1:m) < halfmax, 1, 'last');
-    fwhm = abs(interp1(no2_ld(mpre:mpre+1), no2_x(mpre:mpre+1), halfmax));
+    fwhm = abs(interp1(no2_ld(mpre:mpre+1), no2_x(mpre:mpre+1), halfmax) - no2_x(m));
     f0(4) = fwhm / 2.355;
 
     % f(5) is the constant term B, or background. So let's just set to be the
@@ -419,8 +420,8 @@ param_stats.percentsd = param_stats.sd ./ abs(fitparams') * 100;
 % so alpha must be halved, thus 97.5% certainty one-tailed is equivalent to
 % 95% two-tailed. Also, since we're dealing with a fit, we've used up two
 % degrees of freedom (slope & intercept).
-student_t = tinv(0.975,numel(no2_x)-2);
-param_stats.ci95 = param_stats.sd .* student_t ./ sqrt(numel(no2_x)-2);
+student_t = tinv(0.975,numel(no2_x)-5);
+param_stats.ci95 = param_stats.sd .* student_t ./ sqrt(numel(no2_x)-5);
 param_stats.percent_ci95 = param_stats.ci95 ./ abs(fitparams') * 100;
 fitresults.fminunc_soln = f_unc;
 fitresults.fminunc_hessian = unc_hessian;
@@ -499,7 +500,7 @@ function f0 = randomize_f0(f_lb, f_ub, inds)
 % between f_lb and f_ub for fully bounded values.  For those with an
 % infinite limit, use some senisibly large but finite bound.
 % Reasonable upper bound for each parameter if set to infinity:
-ub_lim = [5e4, 1e3, 1e3, 1e3, 5e4];
+ub_lim = [5e6, 1e3, 1e3, 1e3, 5e4];
 ub_lim = ub_lim(inds);
 lb_lim = [0 0 -1e3 0 0];
 lb_lim = lb_lim(inds);
