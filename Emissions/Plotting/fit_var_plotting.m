@@ -32,6 +32,8 @@ end
 switch lower(plottype)
     case 'fits'
         plot_3_fits()
+    case 'e-tau'
+        emis_tau_table();
     case 'residuals'
         residuals(varargin{:})
     case 'residuals-onepar'
@@ -168,8 +170,137 @@ end
         % Print the latex output
         L = cat(2, latex_fns, num2cell(A));
         fprintf('\nLatex format:\n\n');
-        %mat2latex(L,'%#.3g',1)
-        mat2latex(L,'u',1)
+        %mat2latex(L,'%#.2g',1)
+        mat2latex(L,'u10',1)
+    end
+
+    function emis_tau_table
+        % This function allows you to create a table of just emissions and
+        % lifetimes (with uncertainty) for fast winds. Will divide all
+        % selected files by city, a priori, and wind speed bin. Note that
+        % it will not include the WRF sum of NEI emissions (computed by
+        % misc_wrf_wind_plots('sum-emis')) so you'll need to add that
+        % yourself.
+        [fnames, pname] = uigetfile('*SimpleFits*.mat','Choose all files to use','multiselect','on');
+        
+        % First find all cities represented, then all the wind speeds.
+        cities = cell(size(fnames));
+        wind_speeds = cell(size(fnames));
+        for a=1:numel(fnames)
+            [s,e] = regexp(fnames{a},'(Atlanta|Birmingham|Montgomery)');
+            cities{a} = fnames{a}(s:e);
+            [s,e] = regexp(fnames{a},'\d*pt\d*');
+            wind_speeds{a} = fnames{a}(s:e);
+        end
+        cities = sort(unique(cities));
+        wind_speeds = sort(unique(wind_speeds));
+        
+        
+        
+        % the final table will have 3 a priori per city and will have
+        % uncertainty alternate with value along the first dimension
+        emis = nan(2*numel(wind_speeds), 3*numel(cities)); 
+        tau = nan(2*numel(wind_speeds), 3*numel(cities));
+        
+        % the apriori cases to look at
+        apri = {'f_mn108fast','f_mnfast','f_hyfast'};
+        
+        % for each city and wind speed, find the right file and load it. It
+        % may not exist, then skip.
+        for a=1:numel(cities)
+            % Get the wind vector file, we'll need it for the uncertainty
+            % of tau
+            wind_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed';
+            wind_name = sprintf('%s-Wind-Conditions-1900UTC-5layers.mat',cities{a});
+            W = load(fullfile(wind_path, wind_name));
+            
+            for b=1:numel(wind_speeds)
+                xx = ~iscellcontents(strfind(fnames,cities{a}),'isempty') & ~iscellcontents(strfind(fnames,wind_speeds{b}),'isempty');
+                if sum(xx) == 0
+                    continue
+                elseif sum(xx) > 1
+                    E.toomanyfiles(sprintf('%s %s wind file',cities{a},wind_speeds{b}));
+                end
+                
+                SF = load(fullfile(pname, fnames{xx}));
+                % find the corresponding line density file; we'll need it
+                % for the number of observations
+                ldname = regexprep(fnames{xx},'SimpleFits(-ssresid|-unexvar)*','LineDensities');
+                LD = load(fullfile(pname, ldname));
+                
+                for c=1:numel(apri)
+                    fitparams = struct2array(SF.(apri{c}).ffit)';
+                    fitci95 = SF.(apri{c}).stats.percent_ci95 / 100;
+                    
+                    num_obs_fn = sprintf('num_obs_%s',apri{c}(3:end));
+                    if isfield(LD,num_obs_fn)
+                        num_obs = LD.(num_obs_fn);
+                    else
+                        num_obs = 1;
+                    end
+                    fit_uncert = calc_fit_param_uncert(fitparams, fitci95, num_obs);
+                    
+                    windcrit = str2double(strrep(wind_speeds{b},'pt','.'));
+                    
+                    [emis_i, u_emis_i, tau_i, u_tau_i] = compute_emg_emis_tau(fitparams(1), fit_uncert(1), fitparams(2), fit_uncert(2), 'vec', W.windvel(W.windvel>=windcrit));
+                    i = (a-1)*3 + c;
+                    j = (b-1)*2 + 1;
+                    emis(j,i) = emis_i;
+                    emis(j+1,i) = u_emis_i;
+                    tau(j,i) = tau_i;
+                    tau(j+1,i) = u_tau_i;
+                end
+            end
+        end
+        
+        wind_labels = cell(numel(wind_speeds)*2,1);
+        for b=1:numel(wind_speeds)
+            wind_labels{(b-1)*2 + 1} = sprintf('$\\geq %s$', strrep(wind_speeds{b},'pt','.'));
+        end
+        
+        latex_header1 = '& ';
+        table_header = cell(1,numel(cities)*3);
+        for a=1:numel(cities)
+            latex_header1 = [latex_header1, sprintf('& \\multicolumn{3}{c}{%s} ',cities{a})];
+            for c=1:numel(apri)
+                i = (a-1)*3+c;
+                table_header{i} = sprintf('%s_%s',cities{a},apri{c}(3:end));
+            end
+        end
+        latex_header1 = [latex_header1, '\\'];
+        latex_header2 = '& Wind speed bin & \parbox[t]{1.5cm}{Monthly\\108 km} & \parbox[t]{1.5cm}{Monthly\\12 km} & \parbox[t]{1.5cm}{Daily\\12 km} & \parbox[t]{1.5cm}{Monthly\\108 km} & \parbox[t]{1.5cm}{Monthly\\12 km} & \parbox[t]{1.5cm}{Daily\\12 km} \\ \middlehline';
+        
+        
+        emis_rownames = cell(6,1);
+        emis_rownames{1} = '\multirow{3}{*}{E (Mg \chem{NO_x} h$^{-1}$)}';
+        emis_rownames(2:end) = {''};
+        emis_rownames = cat(2, emis_rownames, wind_labels);
+        
+        tau_rownames = cell(6,1);
+        tau_rownames{1} = '\multirow{3}{*}{$\tau$ (h)}';
+        tau_rownames(2:end) = {''};
+        tau_rownames = cat(2, tau_rownames, wind_labels);
+        
+        table_rownames = wind_labels;
+        for a=2:2:numel(table_rownames)
+            table_rownames(a) = {sprintf('%s uncert.', wind_labels{a-1})};
+        end
+        
+        emis_cell = cat(2, emis_rownames, num2cell(emis));
+        tau_cell = cat(2, tau_rownames, num2cell(tau));
+        
+        emis_table = array2table(emis, 'VariableNames', table_header, 'RowNames', table_rownames)
+        tau_table = array2table(tau, 'VariableNames', table_header, 'RowNames', table_rownames)
+        
+        fprintf('\n\n Latex format \n\n')
+        
+        fprintf('%s\n',latex_header1);
+        fprintf('%s\n',latex_header2);
+        mat2latex(emis_cell,'u10',1);
+        fprintf('\b\b \\middlehline\n');
+        mat2latex(tau_cell,'u10',1);
+        
+        
     end
 
     function residuals(resid_type) 
