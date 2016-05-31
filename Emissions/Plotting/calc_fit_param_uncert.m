@@ -7,6 +7,10 @@ function uncert = calc_fit_param_uncert(fit_params, fit_frac_uncerts, varargin)
 % one-half the value of the parameter, it should be represented by 0.5, not
 % 50. The return value, UNCERT is an array the same size as FIT_PARAMS and
 % FIT_FRAC_UNCERTS that contains the absolute uncertainties for each value.
+% FIT_PARAMS can be either the "ffit" structure from fit_line_density.m or
+% a vector of those parameters in the same order as the uncertainties. If a
+% structure is given, then the uncertainties will be returned in a column
+% vector, regardless of the shape of the inputs.
 %
 % The calculation of uncertainty follows the supplement in Beirle
 % et. al. They assign the following uncertainties:
@@ -55,6 +59,12 @@ pout = p.Results;
 
 num_obs_array = pout.num_obs_array;
 warning_bool = pout.warn;
+
+if isstruct(fit_params)
+    fit_params = struct2array(fit_params);
+    fit_params = fit_params(:); % ensure that it is a column vector
+    fit_frac_uncerts = fit_frac_uncerts(:);
+end
 
 if ~isequal(size(fit_params), size(fit_frac_uncerts))
     E.badinput('FIT_PARAM_VEC and FIT_FRAC_UNCERT_VEC must be the same size');

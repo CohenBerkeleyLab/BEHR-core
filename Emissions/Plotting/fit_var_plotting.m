@@ -34,6 +34,8 @@ switch lower(plottype)
         plot_3_fits()
     case 'e-tau'
         emis_tau_table();
+    case 'xwind'
+        xwind_emis_tau();
     case 'residuals'
         residuals(varargin{:})
     case 'residuals-onepar'
@@ -196,62 +198,10 @@ end
         wind_speeds = sort(unique(wind_speeds));
         
         
-        
-        % the final table will have 3 a priori per city and will have
-        % uncertainty alternate with value along the first dimension
-        emis = nan(2*numel(wind_speeds), 3*numel(cities)); 
-        tau = nan(2*numel(wind_speeds), 3*numel(cities));
-        
         % the apriori cases to look at
         apri = {'f_mn108fast','f_mnfast','f_hyfast'};
         
-        % for each city and wind speed, find the right file and load it. It
-        % may not exist, then skip.
-        for a=1:numel(cities)
-            % Get the wind vector file, we'll need it for the uncertainty
-            % of tau
-            wind_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed';
-            wind_name = sprintf('%s-Wind-Conditions-1900UTC-5layers.mat',cities{a});
-            W = load(fullfile(wind_path, wind_name));
-            
-            for b=1:numel(wind_speeds)
-                xx = ~iscellcontents(strfind(fnames,cities{a}),'isempty') & ~iscellcontents(strfind(fnames,wind_speeds{b}),'isempty');
-                if sum(xx) == 0
-                    continue
-                elseif sum(xx) > 1
-                    E.toomanyfiles(sprintf('%s %s wind file',cities{a},wind_speeds{b}));
-                end
-                
-                SF = load(fullfile(pname, fnames{xx}));
-                % find the corresponding line density file; we'll need it
-                % for the number of observations
-                ldname = regexprep(fnames{xx},'SimpleFits(-ssresid|-unexvar)*','LineDensities');
-                LD = load(fullfile(pname, ldname));
-                
-                for c=1:numel(apri)
-                    fitparams = struct2array(SF.(apri{c}).ffit)';
-                    fitci95 = SF.(apri{c}).stats.percent_ci95 / 100;
-                    
-                    num_obs_fn = sprintf('num_obs_%s',apri{c}(3:end));
-                    if isfield(LD,num_obs_fn)
-                        num_obs = LD.(num_obs_fn);
-                    else
-                        num_obs = 1;
-                    end
-                    fit_uncert = calc_fit_param_uncert(fitparams, fitci95, num_obs);
-                    
-                    windcrit = str2double(strrep(wind_speeds{b},'pt','.'));
-                    
-                    [emis_i, u_emis_i, tau_i, u_tau_i] = compute_emg_emis_tau(fitparams(1), fit_uncert(1), fitparams(2), fit_uncert(2), 'vec', W.windvel(W.windvel>=windcrit));
-                    i = (a-1)*3 + c;
-                    j = (b-1)*2 + 1;
-                    emis(j,i) = emis_i;
-                    emis(j+1,i) = u_emis_i;
-                    tau(j,i) = tau_i;
-                    tau(j+1,i) = u_tau_i;
-                end
-            end
-        end
+        [emis, tau] = tabulate_emis_tau(fnames, pname, cities, wind_speeds, apri);
         
         wind_labels = cell(numel(wind_speeds)*2,1);
         for b=1:numel(wind_speeds)
@@ -300,6 +250,130 @@ end
         fprintf('\b\b \\middlehline\n');
         mat2latex(tau_cell,'u10',1);
         
+        
+    end
+
+    function xwind_emis_tau()
+        % This function will compare the lifetimes and emissions derived
+        % from line densities using 4 different across-wind integration
+        % distances for the three a priori at fast winds. Different figures
+        % will be made for each wind bin defined. This assumes that each
+        % across wind distance is in it's own subfolder.
+        
+        cities = {'Atlanta','Birmingham'};
+        wind_speeds = {'3pt0','4pt0','5pt0'}; % must be as written in the file names
+        apriori = {'f_mn108fast','f_mnfast','f_hyfast'};
+        apri_names = {'Coarse monthly','Fine monthly','Fine daily'}; % for use in legend. should be same size as apriori
+        
+        xwind_subfolders = {'25km-side','50km-side','75km-side','100km-side','120km-side'}; % should have the number of km/degrees in there somewhere
+        xwind_root = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs';
+        
+        emis_tables = cell(size(xwind_subfolders));
+        tau_tables = cell(size(xwind_subfolders));
+        
+        for a=1:numel(xwind_subfolders)
+            F = dir(fullfile(xwind_root, xwind_subfolders{a}, '*SimpleFits*.mat'));
+            fnames = {F.name};
+            pname = fullfile(xwind_root, xwind_subfolders{a});
+            [emis_tables{a}, tau_tables{a}] = tabulate_emis_tau(fnames, pname, cities, wind_speeds, apriori);
+        end
+        
+        % Now we need to reorganize these so that we have vectors for each
+        % city, each a priori, each wind speed with an emission and tau for
+        % each across wind distance.
+        %
+        % Each table is organized by wind bin down the first dimension,
+        % alternating value and uncertainty. Along the second dimensions,
+        % the a priori are grouped by city, in the order specified by the
+        % apriori cell array.
+        %
+        % Basically we'll concatenate the tables together to form the
+        % vectors so that they'll be organized in the same way, just with
+        % vectors in each place instead of individual
+        
+        emis = cat(3, emis_tables{:});
+        tau = cat(3, tau_tables{:});
+        
+        % Convert the subfolder names into numbers. Remember though, when
+        % we define the box width, we actually do so in degrees and just
+        % name the files by km by assuming 100 km to a degree.
+        xwind_dist = regexp(xwind_subfolders, '\d*', 'match', 'once');
+        for a=1:numel(xwind_dist)
+            xwind_dist{a} = str2double(xwind_dist{a});
+        end
+        xwind_dist = cell2mat(xwind_dist)/100*2; % back in degrees now, also the whole distance (kind of diameter vs radius)
+        
+        % Marker and color will differentiate a priori.  Match a priori
+        % color to the EMG fit plots.
+        markers = {'o','^','x'};
+        colors = {[0 0.5 0],'r','b'};
+        
+        % Now plot, one per wind bin. Stagger in the x-direction slightly
+        % to make it easier to tell the error bars apart.
+        for a=1:2:size(emis,1)
+            f_emis = figure;
+            l_emis = gobjects(numel(apriori),1);
+            
+            f_tau = figure;
+            l_tau = gobjects(numel(apriori),1);
+            
+            stagger_range = 0.05;
+            stagger = linspace(-1,1,numel(apriori))*stagger_range;
+            for c=1:numel(apriori)
+                for b=1:numel(cities)
+                    ax_emis = subplot(numel(cities),1,b,'parent',f_emis);
+                    i = (b-1)*numel(apriori) + c;
+                    if b==1
+                        l_emis(c) = line(xwind_dist+stagger(c), squeeze(emis(a,i,:)), 'color', colors{c}, 'linewidth', 2, 'marker', markers{c}, 'markersize', 8, 'parent', ax_emis);
+                    else
+                        line(xwind_dist+stagger(c), squeeze(emis(a,i,:)), 'color', colors{c}, 'linewidth', 2, 'marker', markers{c}, 'markersize', 8, 'parent', ax_emis);
+                    end
+                    scatter_errorbars(xwind_dist+stagger(c), squeeze(emis(a,i,:)), squeeze(emis(a+1,i,:)), 'color', colors{c}, 'linewidth', 1, 'parent', ax_emis);
+                    
+                    if c == numel(apriori)
+                        if b == 1
+                            legend(ax_emis, l_emis, apri_names, 'Location', 'northwest');
+                        end
+                        title(ax_emis, sprintf('%s: %s',cities{b},wind_speeds{(a+1)/2}));
+                        if b == numel(cities)
+                            xlabel(ax_emis, 'Across wind integration distance (degrees)');
+                        end
+                        ylabel(ax_emis, sprintf('Emissions\n(Mg NO_x hr^{-1})'))
+                        xlim(ax_emis, [min(xwind_dist)-2*stagger_range, max(xwind_dist)+2*stagger_range]);
+                        set(ax_emis, 'xtick', xwind_dist);
+                        set(ax_emis, 'ygrid', 'on');
+                        set(ax_emis,'fontsize',14);
+                    end
+                    
+                    ax_tau = subplot(numel(cities),1,b,'parent',f_tau);
+                    if b==1
+                        l_tau(c) = line(xwind_dist+stagger(c), squeeze(tau(a,i,:)), 'color', colors{c}, 'linewidth', 2, 'marker', markers{c}, 'markersize', 8, 'parent', ax_tau);
+                    else
+                        line(xwind_dist+stagger(c), squeeze(tau(a,i,:)), 'color', colors{c}, 'linewidth', 2, 'marker', markers{c}, 'markersize', 8, 'parent', ax_tau);
+                    end
+                    
+                    scatter_errorbars(xwind_dist+stagger(c), squeeze(tau(a,i,:)), squeeze(tau(a+1,i,:)), 'color', colors{c}, 'linewidth', 1, 'parent', ax_tau);
+                    if c == numel(apriori)
+                        if b == 1
+                            legend(l_tau, apri_names, 'Location', 'northwest');
+                        end
+                        title(ax_tau, sprintf('%s: %s',cities{b},wind_speeds{(a+1)/2}))
+                        if b == numel(cities)
+                            xlabel(ax_tau, 'Across wind integration distance (degrees)');
+                        end
+                        ylabel(ax_tau, 'Lifetime (h)');
+                        xlim(ax_tau, [min(xwind_dist)-2*stagger_range, max(xwind_dist)+2*stagger_range]);
+                        set(ax_tau, 'xtick', xwind_dist);
+                        set(ax_tau, 'ygrid', 'on');
+                        set(ax_tau,'fontsize',14);
+                    end
+                end
+            end
+            
+            
+            
+            
+        end
         
     end
 
@@ -604,5 +678,68 @@ wind_spd = regexprep(filename(s:e),'pt','\.');
 prof_wind_type = sprintf('%s (%s)',city_name,wind_spd);
 end
 
+function [emis, tau] = tabulate_emis_tau(fnames, pname, cities, wind_speeds, apri)
+% -- fnames must be the file names of the simple fits files.
+% -- pnames is the path name for where those files are located, it must also
+% contain the line density files.
+% -- cities is a cell array of city names
+% -- wind_speeds is a cell array of wind speeds as strings as written in
+% the file names.
+% -- apri is a cell array of the variables within the simple fits files
+% that contain the fits for a particular a priori - they'll be e.g.
+% "f_hyfast"
+    
+% the final table will have 3 a priori per city and will have
+% uncertainty alternate with value along the first dimension
+emis = nan(2*numel(wind_speeds), 3*numel(cities));
+tau = nan(2*numel(wind_speeds), 3*numel(cities));
 
+% for each city and wind speed, find the right file and load it. It
+% may not exist, then skip.
+for a=1:numel(cities)
+    % Get the wind vector file, we'll need it for the uncertainty
+    % of tau
+    wind_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed';
+    wind_name = sprintf('%s-Wind-Conditions-1900UTC-5layers.mat',cities{a});
+    W = load(fullfile(wind_path, wind_name));
+    
+    for b=1:numel(wind_speeds)
+        xx = ~iscellcontents(strfind(fnames,cities{a}),'isempty') & ~iscellcontents(strfind(fnames,wind_speeds{b}),'isempty');
+        if sum(xx) == 0
+            continue
+        elseif sum(xx) > 1
+            E.toomanyfiles(sprintf('%s %s wind file',cities{a},wind_speeds{b}));
+        end
+        
+        SF = load(fullfile(pname, fnames{xx}));
+        % find the corresponding line density file; we'll need it
+        % for the number of observations
+        ldname = regexprep(fnames{xx},'SimpleFits(-ssresid|-unexvar)*','LineDensities');
+        LD = load(fullfile(pname, ldname));
+        
+        for c=1:numel(apri)
+            fitparams = struct2array(SF.(apri{c}).ffit)';
+            fitci95 = SF.(apri{c}).stats.percent_ci95 / 100;
+            
+            num_obs_fn = sprintf('num_obs_%s',apri{c}(3:end));
+            if isfield(LD,num_obs_fn)
+                num_obs = LD.(num_obs_fn);
+            else
+                num_obs = 1;
+            end
+            fit_uncert = calc_fit_param_uncert(fitparams, fitci95, num_obs);
+            
+            windcrit = str2double(strrep(wind_speeds{b},'pt','.'));
+            
+            [emis_i, u_emis_i, tau_i, u_tau_i] = compute_emg_emis_tau(fitparams(1), fit_uncert(1), fitparams(2), fit_uncert(2), 'vec', W.windvel(W.windvel>=windcrit));
+            i = (a-1)*3 + c;
+            j = (b-1)*2 + 1;
+            emis(j,i) = emis_i;
+            emis(j+1,i) = u_emis_i;
+            tau(j,i) = tau_i;
+            tau(j+1,i) = u_tau_i;
+        end
+    end
+end
+end
 
