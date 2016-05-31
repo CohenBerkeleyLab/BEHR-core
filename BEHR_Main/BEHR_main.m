@@ -96,7 +96,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/W US BEHR Hourly - No ghost';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/W US BEHR Monthly - No ghost';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -142,7 +142,7 @@ if exist('prof_mode','var')
     end
     wrf_avg_mode = prof_mode;
 else
-    wrf_avg_mode = 'hourly';
+    wrf_avg_mode = 'monthly';
     fprintf('BEHR_main: Used hard-coded wrf_avg_mode = %s\n',wrf_avg_mode);
 end
 %****************************%
@@ -202,17 +202,11 @@ else
 end
 
 
-parfor (j=1:length(datenums), n_workers)
-%for j=1:length(datenums)
-    %Read the desired year, month, and day
-    R=datenums(j);
-    date=datestr(R,26);
-    year=date(1:4);
-    month=date(6:7);
-    day=date(9:10);
-    if DEBUG_LEVEL > 0; disp(['Processing data for ', date]); end
-    
-    filename = ['OMI_SP_',year,month,day,'.mat'];
+%parfor (j=1:length(datenums), n_workers)
+for j=1:length(datenums)
+    month=datestr(datenums(j),'mm');
+    if DEBUG_LEVEL > 0; disp(['Processing data for ', datestr(datenums(j))]); end
+    filename = sprintf('OMI_SP_%s_%s.mat',BEHR_version,datestr(datenums(j),'yyyymmdd'));
     
     if DEBUG_LEVEL > 1; disp(['Looking for SP file ',fullfile(sp_mat_dir,filename),'...']); end %#ok<PFGV> % The concern with using global variables in a parfor is that changes aren't synchronized.  Since I'm not changing them, it doesn't matter.
     if isequal(exist(fullfile(sp_mat_dir,filename),'file'),0)
@@ -232,7 +226,7 @@ parfor (j=1:length(datenums), n_workers)
                 if DEBUG_LEVEL > 1; fprintf('  Note: Data(%u) is empty\n',d); end
                 continue %JLL 17 Mar 2014: Skip doing anything if there's really no information in this data
             else
-                if DEBUG_LEVEL>0; fprintf('  Swath %u of %s \n',d,date); end
+                if DEBUG_LEVEL>0; fprintf('  Swath %u of %s \n',d,datestr(datenums(j))); end
                 c=numel(Data(d).Longitude);
                 
                 Data(d).MODISAlbedo(isnan(Data(d).MODISAlbedo))=0; %JLL 17 Mar 2014: replace NaNs with fill values
@@ -373,7 +367,7 @@ parfor (j=1:length(datenums), n_workers)
         % Clean up any unused elements in OMI
         OMI(hh+1:end) = [];
         
-        savename=[file_prefix,year,month,day];
+        savename = sprintf('%s_%s_%s.mat',satellite,retrieval,datestr(datenums(j),'yyyymmdd'));
         if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
         saveData(fullfile(behr_mat_dir,savename),Data,OMI)
     end
