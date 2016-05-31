@@ -33,13 +33,20 @@ cd "$OMNO2DIR"
 # file name we need to look for.
 dlf="DN_$(date +'%Y%m%d')"
 
+safety=0
 while true
 do
     if [[ -f $dlf ]]
     then
+        echo "Using download notice $dlf"
         break
+    elif [[ $safety -gt 360 ]]
+    then
+        automessage.sh "get_omno2.sh failed" "After six hours, the download notice $dlf has not been found"
+        exit 1
     else
         echo "download notice $dlf not found, waiting 60 sec..."
+        safety=$((safety+1))
         sleep 60
     fi
 done
