@@ -20,6 +20,12 @@
 
 \usepackage{appendix}
 
+\usepackage[section]{placeins}
+
+\usepackage[round]{natbib}
+\usepackage{bibentry}
+\nobibliography*
+
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric, arrows, positioning, fit}
 %%%%%% TIKZ FLOWCHARTS %%%%%
@@ -49,6 +55,7 @@
 
 \begin{document}
 \maketitle
+\setlength{\emergencystretch}{3em}
 
 \noindent\textbf{Summary:}
 
@@ -74,6 +81,20 @@
 	If you contribute to the development of BEHR, add your name and contribution to this list and update the change log.
 
 \section{Literature}
+
+	The following are important papers in the history of BEHR:
+
+	\vspace{1em}
+	\bibentry{russell11}
+	
+	\vspace{1em}
+	\bibentry{russell12}
+	
+	\vspace{1em}
+	\bibentry{laughner16}
+	
+	\vspace{1em}
+	Other literature will be cited in the relevant section; see the full references list beginning on pg. \pageref{thebib}.
 
 \section{Getting started}
 	\subsection{Before you begin}
@@ -190,9 +211,12 @@
 	Once you have Git installed and working on your machine, navigate to the folder that will be your working directory for the project in either Terminal (Mac) or Command Prompt (Windows) and run the command:
 
 \vspace{12pt}
-	\begin{sloppypar}
-\noindent\texttt{git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHR\_GitRepo.git}
-	\end{sloppypar}
+\lstset{basicstyle=\scriptsize\ttfamily}
+\begin{lstlisting}
+git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo.git
+\end{lstlisting}
+\lstset{basicstyle=\ttfamily}
+
 	
 \vspace{12pt}
 \noindent This will mirror the repository as a new folder in that directory.  A second repository, at \texttt{128.32.208.13/volume1/share-sat/SAT/BEHR/MiscUtils.git} contains some general utility Matlab scripts that I have found useful.  Some were downloaded from the Matlab file exchange, many were functions I found myself needing rather often.  A third repository is \texttt{128.32.208.13/volume1/share-sat/SAT/BEHR/AircraftProfiles.git}, with functions to work with aircraft data sets.  Additional repositories will be added to Table \ref{GitReposTable}.  I recommend that these be downloaded to folders called ``BEHR'', ``Utils'', and ``NO2 Profiles'' within your main Matlab directory (which you can check with \texttt{userpath} at the Matlab command prompt.  This way, any internal links that I've set up to be robust as \texttt{fullfile(userpath,x,y,z,...,file)} should work smoothly on either a Windows or Mac platform.
@@ -492,6 +516,149 @@ exit $MATLAB_EXIT
 	
 \section{Additional utilities}
 	\subsection{Verification}
+		\subsubsection{Reading}
+		\begin{itemize}
+		\item \citealt{bucsela08}
+		\item \citealt{hains10}
+		\item \citealt{russell11}
+		\end{itemize}
+		
+		\subsubsection{Background}
+		One method of describing the validity of a satellite retrieval is to compare it against \emph{in situ} aircraft measurements. In general, there are two ways of calculating a column from aircraft measurements:
+		\begin{enumerate}
+		\item Use a profile that extends over most of the troposphere and integrate this directly, making whatever corrections are needed at the top and bottom of the profile.
+		\item \label{item:blver} Use measurements taken at the interface of the boundary layer and free troposphere, assuming each are well mixed, and integrate up and down from there.
+		\end{enumerate}
+		
+		\#\ref{item:blver} is much less common, but was used in \citet{russell11} to validate the original BEHR product.  There have been a large number of aircraft campaigns which can be used for validation, available online at \url{http://www-air.larc.nasa.gov}.
+		
+		\subsubsection{A caveat}
+		I'm writing this description about a year after I last worked with this code, so I might forget some details. If there's a discrepancy between how the code works and what I say here, don't be terribly surprised.
+		
+		\subsubsection{Code base}
+		This code is not actually contained directly in the BEHR repo, instead it is in the \path{AircraftProfiles.git} repo under the \path{satellite_verification_scripts} subfolder. There are several components to this code base, we will take each in turn.
+
+		\paragraph{Reading in merge files}
+		
+		The data you usually want to download from the LARC website is called a ``merge'' file, meaning that all the different instruments on the flight have their data merged into a single file. These are text files in a specific format, so we first want to read them into a format Matlab can handle.  The function \lstinline$read_merge_data.m$ in the \path{read_icart_files} subfoler does so, saving a .mat file with a \lstinline$Merge$ structure as well as a data table. The \lstinline$Merge$ structure is used in the remainder of the code.
+		
+		I've already run this for most of the campaigns, and customized the data a little bit. This is saved (as of 24 May 2016) on the file server at 128.32.208.13 in \path{/volume2/share2/USERS/LaughnerJ/CampaignMergeMats} (also look in the archive directory if I've already graduated). That in turn is organized by campaign, platform (aircraft ID or ground), and time resolution. Much of the other code expects this organization. 
+		
+		Different campaigns can have slightly different names for important variables, so \lstinline$merge_field_names.m$ in the \path{utility_scripts} is the central location where these are stored. It will return a structure with the proper field names for each variable, along with the directory of that campaign. If you add a new campaign, you should include it in \lstinline$merge_field_names.m$.
+		
+		\paragraph{Spiral/profile verification}
+		
+		The most common method of verification is to use full profiles. This has two further subcategories: the DISCOVER campaigns were geared specifically towards satellite validation and so have aircraft spirals up or down over a small area (and more importantly identified in the data with a profile number).  Other campaigns do not focus on satellite validation, and so you will need to manually identify what parts of the data constitute a profile.
+		
+		Manually identifying profiles ranges is done with the \lstinline$select_campaign_ranges.m$ script in the \path{GUIs} subfolder. This uses the \lstinline$select_changing_altitude.m$ GUI, which presents you with a graph of the aircraft altitude vs. time. You can select periods where the aircraft is consistently climbing or descending and these will be stored in the Ranges structure. This approach was used because it seemed more reliable than trying to have the computer decide, as the aircraft does not necessarily monotonically ascend or descend. Plus it allows you to look for other flight patterns. The Ranges structure should be saved in the main directory for each campaign and added to \lstinline$merge_field_names.m$.
+		
+		To actually execute the comparison, use the \lstinline$Run_Spiral_Verification.m$ function in the \path{satellite_verification_scripts} subfolder. This is a driver script for \lstinline$spiral_verification_avg_pix2prof.m$, which has so many input options it became easier to enumerate them in an outside script than to try to remember to set them all. Plus this iterates over all days in the campaign and cleans up the output afterwards. (There is, or maybe used to be, another script called \lstinline$spiral_verification.m$ that instead of averaging together all pixels intersected by a profile did the opposite---compared the profile against each pixel individually. I realized that this wasn't as useful, but left the code around for reference. Don't use it though.)
+		
+		\paragraph{Boundary layer verification}
+		
+		This one requires a few more steps.  The core of the code is the \lstinline$Run_BL_Verification_w_Heights.m$ script, which is the driver for \lstinline$boundary_layer_verification_presel_heights.m$. What makes this more complicated is that is requires you to identify the boundary layer height from profiles in the flight for each day. This requires two steps:
+		
+		\begin{enumerate}
+		\item Find the ranges of time during the flight where the aircraft is consistently ascending or descending using \lstinline$select_campaign_ranges.m$.
+		\item Give the Ranges structure (along with other inputs) to \lstinline$select_BL_heights.m$ in the \path{GUIs} folder. This function will make a best guess at the boundary layer height using \lstinline$find_bdy_layer_height.m$ in the \path{plotting_scripts} folder, then allow you to examine, modify, accept, or reject it.
+		\end{enumerate}
+		
+		You then need to point \lstinline$Run_BL_Verification_w_Heights.m$ to the file where you've saved the output from \lstinline$select_BL_heights.m$. As in \citet{russell11}, it will then find parts of the flight in the boundary layer and extrapolate down to the ground to compute the column. Also as in \citet{russell11}, the three fields you usually want to use to determine potential temperature are [\ce{NO2}], [\ce{H2O}], and potential temperature.
+		
+		\paragraph{Other utilities}
+		
+		One other goal of the code in this repository was to experimentally verify the conclusion in \citet{bousserez14}, that the relative position of aerosol and \ce{NO2} layers controls the impact aerosols have on the \ce{NO2} retrieval.  This involved subsetting the profiles in DISCOVER-AQ and SEAC4RS campaigns based on the relative position of the two layers and the extinction of aerosol present, then running \lstinline$Run_Spiral_Verification.m$ for each subset of profiles, and seeing if the correlation was different. That is why \lstinline$Run_Spiral_Verification.m$ accepts profile numbers as inputs.
+		
+		This ended up not generating any very exciting conclusions, as the uncertainty from other sources seemed to overwhelm the aerosol effect at the AODs observable. The code is still available for future use.
+		
+		Key functions are:
+		\begin{itemize}
+		\item \lstinline$multiple_categorize_profile.m$ which handles the categorization of each profile into aerosol above, \ce{NO2} above, or coincident. This is superior to \lstinline$categorize_aerosol_profile.m$, which it calls several times with different criteria to get the best guess at the proper categorization.
+		
+		\item \lstinline$Run_all_aer_categories.m$ then is a driver script for the driver script (yeah, it's Inception but with code) \lstinline$Run_Spiral_Verification.m$, which it calls with each subset of profiles.
+		\end{itemize}
+		
+		There are also several functions that take figures from \citet{leitao10} to compare my experiment against her theory.
+		
+		It was for this project that I obtained the aerosol extinction in the blue wavelength from Lee Thornhill at Langley, which was appended to the Merge structure. Therefore my existing Merge structures do have extra fields not present in the standard merge files from the LARC site.
+		
+		\subsubsection{Summary}		
+		\begin{enumerate}
+		\item Read in Merge files if necessary using \lstinline$read_merge_data.m$
+		
+		\item (if using a campaign without profile numbers) Identify profiles using \lstinline$select_campaign_ranges.m$. Save the resultant Ranges structure and add it to the \lstinline$merge_field_names.m$ file.
+		
+		\item (if doing boundary layer verification) Identify boundary layer heights with \lstinline$select_BL_heights.m$ and save the results.
+		
+		\item Running, do either:
+			\begin{enumerate}
+			\item Modify \lstinline$Run_Spiral_Verification.m$ with the desired settings and run it, pointing to the proper range file if necessary (note that if done properly, \lstinline$merge_field_names.m$ can ask interactively which range file to use).
+			\item Modify \lstinline$Run_BL_Verification_w_Heights.m$ with the desired settings, pointing to the proper heights file and run.
+			\end{enumerate}
+		\end{enumerate}
+	
+	
+	\subsection{EMG fitting}
+		\subsubsection{Reading}
+		\begin{itemize}
+		\item \citealt{beirle11}
+		\item \citealt{valin13}
+		\item \citealt{deFoy14}
+		\item \citealt{lu15}
+		\item \citealt{laughner16}
+		\end{itemize}
+		
+		\subsubsection{Background}
+		The idea behind EMG (exponetially modified Gaussian) fitting is that by taking satellite \ce{NO2} observations, rotating them so that the wind direction is aligned to the positive $x$-axis, and integrating across the plume (perpendicular to the wind direction), you get a line density that is a one-dimensional representation of the \ce{NO2} concentrations as you move downwind of the city. By fitting this with an exponentially modified Gaussian function with 5 fitting parameters, one can extract information about emissions and chemical lifetime.
+		
+		\subsubsection{Code base}
+		There are four main files for this analysis: \lstinline$calc_line_density.m$, \lstinline$fit_line_density.m$, \lstinline$calc_fit_param_uncert.m$, and \lstinline$compute_emg_emis_tau.m$.  All are stored in the folder \path{BEHR/Emissions}, where \path{BEHR} is the BEHR repository folder; the latter two are further in the \path{Plotting} subfolder.
+		
+		As you might expect, \lstinline$calc_line_density.m$ produces the actual line densities and returns them along with a lot of other information that can be useful for calculating uncertainties. It expects that you have satellite data stored in Data structures, as in the BEHR .mat files. It also requires that you pass in a vector of wind directions (and speeds if you want to subset days by wind speed) that is the same length as the number of days to average. This allows you to use this function with whatever wind data you want rather than tying it to a specific way of getting the wind data necessary to rotate the plumes. This function can take a fairly long time to run, so it's well worth running it once (if possible) and saving the output rather than running it every time a line density is required.
+		
+		\lstinline$fit_line_density.m$ then takes the output of \lstinline$calc_line_density$ and fits the EMG function to it. It only needs two inputs: the $x$-coordinates and values of the line densities itself, but it has a number of additional options. Some (like the ability to turn off the iterative output of \lstinline$fmincon$) are useful for switching between running interactively and in batch mode. Others are useful for exploring the uncertainty of the fitting parameters. In general, it is set such that the defaults are those used in \citet{laughner16}.
+		
+		\lstinline$calc_fit_param_uncert.m$ then takes the 5-element vectors of the fit parameters and their fitting uncertainties, along with some other optional inputs, and computes the total, absolute uncertainty in each parameter. This is based of the uncertainty calculations in \citet{beirle11} and \citet{lu15}, but I have adjusted the assumptions slightly, as detailed in the comments in that function.
+		
+		\lstinline$comptue_emg_emis_tau.m$ takes the values of $a$, $x_0$, their uncertainties, and the subset of wind speeds considered to compute the values of emissions and lifetime and their uncertainties.
+		
+		There are some other functions that may be useful. In descending order of usefulness:
+		\begin{itemize}
+		\item \lstinline$Plotting/fit_var_plotting.m$ has several miscellaneous plotting functions. As of 24 May 2016, this is also where the calculation of full uncertainty in the fitting parameters is contained (see the \lstinline$plot_3_fits$ subfunction). I may move that to its own function eventually.
+		
+		\item \lstinline$preproc_WRF2Data.m$ was meant to preprocess WRF-Chem output into Data structure which could be used by \lstinline$calc_line_density.m$ to make line densities. Works fine, just didn't end up using it because the results weren't helpful at the time.
+		
+		\item \lstinline$fit_line_density_variation.m$ was a way to test how the fit would respond if each of its parameters was fixed to a certain value and the others reoptimized. Good for understanding the uncertainty in the parameters in more detail.
+		
+		\item \lstinline$Scripts/run_many_line_densities.m$ is a function used for \citet{laughner16} to automate the creation of multiple line densities for different cities, with different wind bins, using different \emph{a priori} profiles in the retrieval. Can serve as a prototype for your own automation.
+		
+		\item \lstinline$Scripts/run_many_emg_fits.m$ is likewise a function to automate the creation of many line densities.
+		
+		\item Other files in the Scripts folder (if they're there) are older, less general versions of these last two.
+		
+		\item Many other files in the main \path{Emissions} folder involved using Monte Carlo sampling to try a different way of estimating uncertainty. It never quite worked, so take these with a grain of salt.		
+		\end{itemize}
+		
+		\subsubsection{Summary}
+		\begin{enumerate}
+		\item Prepare your wind information by creating a vector of speed (in whatever units you prefer) and direction (in degrees counterclockwise from east, north is $+90^\circ$, south is $-90^\circ$).
+		\item Point \lstinline$calc_line_density.m$ to the proper directory and files, give it the wind data vector, wait for a while.
+		\item Give the output of \lstinline$calc_line_density.m$ to \lstinline$fit_line_density.m$ to generate the fit.
+		\item See \lstinline$fit_var_plotting.m$, subfunction \lstinline$plot_3_fits.m$ for how to compute emissions, lifetime, and uncertainties.
+		\end{enumerate}
+		
+		
+	\subsection{Production version comparison}
+		\subsubsection{Background}
+		When producing a new publicly available BEHR product, it's a good idea to make sure that it's behaving as you expect. I've written some functions that will randomly sample a number of the .txt, .hdf, or gridded .hdf files and report on the statistical differences.
+		
+		\subsubsection{Code base} 
+		All the functions can be found in the \path{BEHR/Production tests} folder, where \path{BEHR} is the BEHR repository.  The main function is \lstinline$behr_prod_test.m$ which actually carries out the tests. It can be run as a function with inputs, or the paths and fields to test can be modified in the USER INPUT section of the code. It will generate two structures, \lstinline$indiv_stats$ which breaks down the differences file-by-file, and \lstinline$overall_stats$, which gives a summary of the differences. These will be directly placed in the base workspace if no outputs are requested from the function.  This function can compare OMI\_BEHR .mat files, .hdf files, or .txt files. Currently it does not support cross comparing (i.e. .hdf to .txt)
+		
+		The other two .m files, \lstinline$prod_test_load_hdf.m$ and \lstinline$prod_test_load_txt.m$ are simply helper functions that read in the .hdf and .txt formatted files.
+		
+		\subsubsection{What should you look for?}
+		There's no hard and fast rule, it really depends on what you changed. In general though, you want to make sure that the BEHRColumnAmountNO2 field is not changed in ways you did not expect.
 
 \section{Current development}
 	The current focus of work on BEHR is to give it daily (rather than monthly average) \emph{a priori} \ce{NO2} profiles. To do so, I've completely rewritten how the \ce{NO2} profiles are imported into \lstinline$BEHR_main.m$.
@@ -571,8 +738,12 @@ exit $MATLAB_EXIT
 	This information is extracted from the raw WRF-Chem output files, \path{wrfout_d0X_yyyy-mm-dd_hh:mm:ss}. My scripts assume that there is one output ``frame'' per file, that is, each file represents a single slice in time. It is possible that WRF-Chem might save multiple time slices to each file, although the resulting files will likely be huge. 
 	
 	\lstinline$rProfile_WRF.m$ is also fairly intelligent about how it reads and applies the \ce{NO2} profiles, accounting for different spatial resolutions as well as being able to use different temporal resolutions. However to do the latter, it expects the profiles to be organized in subfolders named by the temporal resolution of the \emph{a priori} profiles in them: ``hourly,'' ``daily,'' or ``monthly.''
-	
-	
+
+\newpage
+\label{thebib}
+\bibliographystyle{copernicus}
+\bibliography{BEHR_Readme.bib}
+
 
 \newpage
 \appendix

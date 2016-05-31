@@ -58,6 +58,11 @@ the BEHR product based on that would be v3.0A.
 does not change the core algorithm), a revision number will be appended to the
 version number. For example, v2.1A and v2.1Arev0 will be the same, but v2.1Arev1
 would indicate this sort of minor change.
+
+	The version number may also be formatted as, e.g. v2-1A. This is used as the version
+string in file names to prevent any issue with file systems unable to handle a . in
+a filename that is not separating the file extension. This form is completely
+equivalent to the one with the period and is used interchangeably.
 	
 	\subsection{File format}
 	All products will be made available as HDF version 5 (\texttt{.h5}) files (\emph{c.f.} \url{https://www.hdfgroup.org}).  Please note when trying to open these that many programming languages and utilities have different commands and tools for opening version 4 and 5 HDF files. If you are having trouble opening these files:
@@ -140,7 +145,7 @@ would indicate this sort of minor change.
 	BEHRAvgKernels		&	Native 		&	BEHR			&	[0, $\infty$)	& unitless \\
 	BEHRColumnAmountNO2Trop & Both	 	& 	BEHR		&	[0, $\infty$) & molec. cm$^{-2}$ \\
 	BEHRGhostFraction	&	Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
-	BEHRNO2Apriori		&	Native 		&	BEHR			& 	($-\infty$, $\infty$) & parts-per-part \\
+	BEHRNO2Apriori		&	Native 		&	BEHR			& 	($-\infty$, $\infty$) & unscaled mixing ratio\\
 	BEHRPressureLevels	&	Native	 	& 	BEHR			& 	[0, $\infty$) & hPa \\
 	BEHRScatteringWeights & Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
 	CloudFraction		&	Both 		&	SP			&	[0.0, 1.0]	 & unitless \\

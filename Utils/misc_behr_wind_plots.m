@@ -2741,6 +2741,8 @@ end
             % are relatively clear and have changes > 1e15.
             dnums=datenum('2013-06-01'):datenum('2013-08-30');
             city_logs = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
+            city_logs_6e14 = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
+            city_logs_20percent = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
             city_npix = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
             city_npixclr = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
             city_ndays_someclear = zeros(size(city_names));
@@ -2778,6 +2780,8 @@ end
                 
                 absdiff = vcd_new - vcd_base;
                 absdiff(badpix_new | badpix_base) = nan;
+                perdiff = (vcd_new - vcd_base)./vcd_base * 100;
+                perdiff(badpix_new | badpix_base) = nan;
                 
                 for c=1:numel(city_names)
                     opts.center_lon = city_lons(c);
@@ -2787,6 +2791,8 @@ end
                     % Are any pixels above the single pixel uncertainty for
                     % change in VCD?
                     city_logs{c}(d) = any(abs(absdiff(in)) >= 1e15);
+                    city_logs_6e14{c}(d) = any(abs(absdiff(in)) >= 0.6e15); % boersma 04: DOAS uncertainty (0.4e15) plus slant column (0.45e15) added in quadrature
+                    city_logs_20percent{c}(d) = any(abs(perdiff(in)) >= 20 & abs(absdiff(in)) >= 0.6e15); % bucsela 13: 20% estimated clear sky AMF error.
                     % If all the pixels were bad, then this day is probably
                     % falling in the row anomaly, but it could be heavily
                     % clouded. In either case, it shouldn't be counted as
@@ -2829,20 +2835,26 @@ end
                 for c=1:numel(city_names)
                     fracclr = city_npixclr{c} ./ city_npix{c};
                     
-                    varnames{1,1} = 'NumDaysDVCDGT1e15';
-                    tabcell{c,1} = sum(city_logs{c});
+                    varnames{1,1} = 'PercentDaysDVCDGT1e15';
+                    tabcell{c,1} = sum(city_logs{c})/city_ndays_someclear(c)*100;
                     
-                    varnames{1,2} = 'MinChange';
-                    tabcell{c,2} = city_minchange(c);
-                    varnames{1,3} = 'MaxChange';
-                    tabcell{c,3} = city_maxchange(c);
+                    varnames{1,2} = 'PercentDaysDVCDGT6e14';
+                    tabcell{c,2} = sum(city_logs_6e14{c})/city_ndays_someclear(c)*100;
                     
-                    varnames{1,4} = 'NumDaysWithGT0percentClearPix';
-                    tabcell{c,4} = city_ndays_someclear(c);
-                    varnames{1,5} = 'FracDaysGT50percentClearChange';
-                    tabcell{c,5} = sum(fracclr > 0.5 & city_logs{c})/sum(fracclr > 0.5);
-                    varnames{1,6} = 'FracDaysGT80percentClearChange';
-                    tabcell{c,6} = sum(fracclr > 0.8 & city_logs{c})/sum(fracclr > 0.8);
+                    varnames{1,3} = 'PercentDaysDVCDGT20percentOR1e15';
+                    tabcell{c,3} = sum(city_logs_20percent{c})/city_ndays_someclear(c)*100;
+                    
+                    varnames{1,4} = 'MinChange';
+                    tabcell{c,4} = city_minchange(c);
+                    varnames{1,5} = 'MaxChange';
+                    tabcell{c,5} = city_maxchange(c);
+                    
+                    varnames{1,6} = 'NumDaysWithGT0percentClearPix';
+                    tabcell{c,6} = city_ndays_someclear(c);
+                    varnames{1,7} = 'FracDaysGT50percentClearChange';
+                    tabcell{c,7} = sum(fracclr > 0.5 & city_logs{c})/sum(fracclr > 0.5);
+                    varnames{1,8} = 'FracDaysGT80percentClearChange';
+                    tabcell{c,8} = sum(fracclr > 0.8 & city_logs{c})/sum(fracclr > 0.8);
                     
                     dVCDStats.dVCD_logical.(city_names{c}) = city_logs{c};
                     dVCDStats.npix.(city_names{c}) = city_npix{c};
