@@ -156,7 +156,12 @@ end
 % EMG fit and the actual line density. The five variational parameters will
 % be set as the five elements of the vector f, necessary for inserting them
 % into the fmincon routine.
-
+%
+% We set nans to infs to make sure that if a fit contains any single nan,
+% that fit is rejected and fmincon tries again.  We could just leave that
+% out and use SUM instead of NANSUM in fitfxn, but this way fitfxn will
+% ignore any cases of NaNs in the line density but will fail for NaNs in
+% the fit.
     function e = emgfxn_defoy(f,x)
 %emgfxn = @(f,x) 
         e = f(1)/2 .* exp( (f(4)^2 / (2 * f(2)^2)) - (x - f(3)) ./ f(2) )...
@@ -219,7 +224,7 @@ else
     % FWHM/2.355.
     halfmax = (max(no2_ld) - no2_ld(1))/2 + no2_ld(1);
     mpre = find(no2_ld(1:m) < halfmax, 1, 'last');
-    fwhm = abs(interp1(no2_ld(mpre:mpre+1), no2_x(mpre:mpre+1), halfmax) - no2_x(m));
+    fwhm = abs(interp1(no2_ld(mpre:mpre+1), no2_x(mpre:mpre+1), halfmax) - no2_x(m))*2;
     f0(4) = fwhm / 2.355;
 
     % f(5) is the constant term B, or background. So let's just set to be the
