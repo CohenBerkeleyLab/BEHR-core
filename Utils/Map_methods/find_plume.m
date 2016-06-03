@@ -45,7 +45,8 @@ while true
         n_row = [row(a) - 1, row(a) - 1, row(a) - 1, row(a), row(a) row(a) + 1, row(a) + 1, row(a) + 1];
         n_col = [col(a) - 1, col(a), col(a) + 1, col(a) - 1, col(a) + 1, col(a) - 1, col(a), col(a) + 1];
         for b = 1:8;
-            if plume_mat(n_row(b), n_col(b)) > 0 %A 0 indicates this cell has not yet been visited.  If the value is >0, skip this cell because it has already been considered
+            if n_row(b) < 1 || n_row(b) > size(plume_mat,1) || n_col(b) < 1 || n_col(b) > size(plume_mat,2) % edge case. Cannot evaluate b/c requested grid cell does not exist
+            elseif plume_mat(n_row(b), n_col(b)) > 0 %A 0 indicates this cell has not yet been visited.  If the value is >0, skip this cell because it has already been considered
             elseif matrix_in(n_row(b), n_col(b)) >= threshold
                 plume_mat(n_row(b), n_col(b)) = 1; %A value of 1 indicates that this pixel is part of the plume but its neighbors have not yet been checked.
             end                              %By setting this to 1, the loop will catch it next time and check its neighbors.
@@ -54,30 +55,33 @@ while true
     end
 end
 
-in_plume = find(plume_mat == 2);
+in_plume = plume_mat == 2;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Now find the edge pixels, i.e. any with a neighbor marked 0 %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 [row2, col2] = find(plume_mat == 2);
-edge_pixels = zeros(1,numel(row2)); edge_pixels(:)=NaN;
+edge_pixels_ind = zeros(1,numel(row2)); edge_pixels_ind(:)=NaN;
 edge_ind = 1;
 for a = 1:length(row2);
     n_row = [row2(a) - 1, row2(a) - 1, row2(a) - 1, row2(a), row2(a) row2(a) + 1, row2(a) + 1, row2(a) + 1];
     n_col = [col2(a) - 1, col2(a), col2(a) + 1, col2(a) - 1, col2(a) + 1, col2(a) - 1, col2(a), col2(a) + 1];
-    
+    % Edge cases - restrict to valid indices
+    n_row = max(min(n_row,size(plume_mat,1)),1);
+    n_col = max(min(n_col,size(plume_mat,2)),1);
     plume_mat_sub = plume_mat(n_row,n_col);
     
     for b=1:8
         if any(plume_mat_sub(:)==0)
             lin_ind = sub2ind(size(plume_mat),row2(a),col2(a));
-            edge_pixels(edge_ind) = lin_ind;
+            edge_pixels_ind(edge_ind) = lin_ind;
             edge_ind = edge_ind + 1;
         end
     end
 end
-edge_pixels(isnan(edge_pixels)) = [];
-
+edge_pixels_ind(isnan(edge_pixels_ind)) = [];
+edge_pixels = false(size(plume_mat));
+edge_pixels(edge_pixels_ind) = true;
 end
 

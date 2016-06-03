@@ -17,7 +17,11 @@
 
 source ~/.bashrc
 
-DEBUG=1
+# Debugging level, set higher to print more information
+DEBUG=2
+# How many days back in time to look for OMI_SP .mat files. Must be < 0
+# as it is tested against offset back in time.
+stopoffset=-90
 
 if [[ -z $SPDIR ]]
 then
@@ -39,21 +43,50 @@ then
     echo -e "SPDIR=${SPDIR}\nMODDIR=${MODDIR}\nMATRUNDIR=${MATRUNDIR}"
 fi
 
+# Check that the SPDIR and MODDIR folders exist, if not, the file server
+# likely isn't mounted
+if [[ ! -d $SPDIR ]];
+then
+    echo "ERROR run_read_omno2.sh: $SPDIR is not a directory. Is the file server mounted?"
+    automessage.sh "ERROR run_read_omno2.sh" "$SPDIR does not exist"
+    exit 1
+fi
+if [[ ! -d $MODDIR ]];
+then
+    echo "ERROR run_read_omno2.sh: $MODDIR is not a directory. Is the file server mounted?"
+    automessage.sh "ERROR run_read_omno2.sh" "$MODDIR does not exist"
+    exit 1
+fi
+
+
 # Find the last existing OMI_SP_YYYYMMDD.mat file
 offset=0
+foundit=false
 while true
 do
     startdate=$(date -d "${offset} days" +'%Y%m%d')
-    testfile="${SPDIR}/OMI_SP_${startdate}.mat"
+    testfile="${SPDIR}/OMI_SP_*${startdate}.mat"
 
     if [[ $DEBUG -gt 1 ]]; then echo "Checking for $testfile"; fi
 
-    if [[ -f $testfile ]]
+    for f in $testfile
+    do
+        if [[ -f $f ]]
+        then
+            if [[ $DEBUG -gt 0 ]]; then echo "Found $f"; fi
+            offset=$((offset+1))
+            startdate=$(date -d "${offset} days" +'%Y-%m-%d')
+            foundit=true
+            break
+        fi
+    done
+    if $foundit
     then
-        if [[ $DEBUG -gt 0 ]]; then echo "Found $testfile"; fi
-        offset=$((offset+1))
-        startdate=$(date -d "${offset} days" +'%Y-%m-%d')
         break
+    elif [[ $offset -lt $stopoffset ]]
+    then
+        automessage.sh "run_read_omno2.m failed" "No OMI_SP files found within $((-stopoffset)) days."
+        exit 1
     else
         offset=$((offset - 1))
     fi
@@ -76,6 +109,10 @@ do
         if [[ $DEBUG -gt 0 ]]; then echo "Found $testfile"; fi
         enddate=$(date -d "${offset} days" +'%Y-%m-%d')
         break
+    elif [[ $offset -lt $stopoffset ]]
+    then
+        automessage.sh "run_read_omno2.m failed" "No MCD43C3 files found within $((-stopoffset)) days."
+        exit 1
     else
         offset=$((offset-1))
     fi
@@ -99,15 +136,15 @@ echo "global modis_myd06_dir; modis_myd06_dir = '/mnt/sat/SAT/MODIS/MYD06_L2'" >
 echo "global modis_mcd43_dir; modis_mcd43_dir = '/mnt/sat/SAT/MODIS/MCD43C3'" >> ${MATRUNDIR}/runscript.m
 echo "global globe_dir; globe_dir = '/mnt/sat/SAT/BEHR/GLOBE_Database'" >> ${MATRUNDIR}/runscript.m
 
-echo "read_omno2_v_aug2012(${startdate}, ${enddate}); exit(0)" >> ${MATRUNDIR}/runscript.m
+echo "read_omno2_v_aug2012('${startdate}', '${enddate}'); exit(0)" >> ${MATRUNDIR}/runscript.m
 
 startmatlab -r "run('${MATRUNDIR}/runscript.m')" > "${MATRUNDIR}/mat.log"
 
 matexit=$?
 if [[ $matexit -ne 0 ]]
 then
-    automessage.sh "MATLAB: read_omno2_v_aug2012.m failed" "Error in MATLAB. Log file appended:\n $(cat $MATRUNDIR/mat.log)"
+    automessage.sh "MATLAB: read_omno2_v_aug2012.m failed" -f "$MATRUNDIR/mat.log"
 else
-    automessage.sh "MATLAB: read_omno2_v_aug2012.m succeeded" "OMI SP processing succeeded. Log file appended:\n $(cat $MATRUNDIR/mat.log)"
+    automessage.sh "MATLAB: read_omno2_v_aug2012.m succeeded" -f "$MATRUNDIR/mat.log"
 fi
 exit 0

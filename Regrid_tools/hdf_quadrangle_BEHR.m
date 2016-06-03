@@ -127,7 +127,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     %respective min and max values (derived from the lat/lon bound
     %specified in the main BEHR file) and arranged so that the points are in order
     %going around the outside (i.e., pt. 2 will not be caddycorner to pt. 1). Further,
-    %the points usually end up counterclockwise, with 1 as the bottom
+    %the points usually end up clockwise, with 1 as the bottom
     %point.
     
     %JLL 2-14-2014: Load, in turn, each value of the fields loaded from the
@@ -176,7 +176,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     end
     
     for y_quad=bottom:1:top; %JLL 19 Mar 2014:
-        if (x2>=calcline(y2,x1,y1,x3,y3)) && (x4<=calcline(y4,x1,y1,x3,y3)); %JLL 18 Mar 2014: Tests if the points are arranged counterclockwise
+        if (x2>=calcline(y2,x1,y1,x3,y3)) && (x4<=calcline(y4,x1,y1,x3,y3)); %JLL 18 Mar 2014: Tests if the points are arranged clockwise
             if y_quad<y4; %JLL 19 Mar 2014: y1 and y3 will be the bottom and top point of the quadrangle, so y2 and y4 are vertices on the sides
                 left=calcline(y_quad,x1,y1,x4,y4); %JLL 19 Mar 2014: Use the line between y1 and y4 to calc the left side for the given row...
             else
@@ -187,7 +187,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
             else
                 right=calcline(y_quad,x2,y2,x3,y3);
             end
-        else %JLL 19 Mar 2014: This section *should* handle any cases in which the corners are not arranged counterclockwise
+        else %JLL 19 Mar 2014: This section *should* handle any cases in which the corners are not arranged clockwise
             left=calcline(y_quad,x1,y1,x3,y3);
             if y2>y4;
                 [x4,y4,x2,y2]=exchange_coord(x4,y4,x2,y2);

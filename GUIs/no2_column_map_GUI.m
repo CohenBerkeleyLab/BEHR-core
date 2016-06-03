@@ -22,7 +22,7 @@ function varargout = no2_column_map_GUI(varargin)
 
 % Edit the above text to modify the response to help no2_column_map_GUI
 
-% Last Modified by GUIDE v2.5 04-Jul-2014 20:32:09
+% Last Modified by GUIDE v2.5 01-Apr-2016 13:43:57
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -774,11 +774,8 @@ function no2_column_map_CloseRequestFcn(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: delete(hObject) closes the figure
-if isequal(get(handles.no2_column_map_GUI,'waitstatus'),'waiting')
+if exist('handles','var') && isstruct(handles) && isfield(handles,'no2_column_map_GUI') && isequal(get(handles.no2_column_map_GUI,'waitstatus'),'waiting')
 uiresume(handles.no2_column_map_GUI);
 else
 delete(hObject);
 end
-
-
-

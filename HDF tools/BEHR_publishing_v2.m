@@ -16,6 +16,9 @@ end
 if onCluster
     addpath('~/MATLAB/Utils');
     addpath('~/MATLAB/Classes');
+    
+    % Cleanup object will safely exit if there's a problem
+    cleanupobj = onCleanup(@() mycleanup());
 end
 
 E = JLLErrors;
@@ -31,12 +34,22 @@ DEBUG_LEVEL = 1;
 % resolution only.
 if ~exist('output_type','var')
     output_type = 'txt';
+else
+    allowed_outtype = {'txt','hdf'};
+    if ~ismember(output_type,allowed_outtype)
+        E.badinput('output_type must be one of %s',strjoin(allowed_outtype,', '));
+    end
 end
 
 % Set to 'native' to save the native OMI resolution pixels. Set to
 % 'gridded' to save the 0.05 x 0.05 gridded data
 if ~exist('pixel_type','var')
     pixel_type = 'native';
+else
+    allowed_pixtype = {'native','gridded'};
+    if ~ismember(pixel_type,allowed_pixtype)
+        E.badinput('pixel_type must be one of %s',strjoin(allowed_pixtype,', '));
+    end
 end
 
 % options - add 'reprocessed' here if doing in situ files
@@ -64,8 +77,12 @@ global mat_file_dir
 global save_dir
 global numThreads
 if ~onCluster
-    mat_file_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014';
-    save_dir = '/Volumes/share-sat/SAT/BEHR/WEBSITE/staging/behr_txt_v2.1A';
+    mat_file_dir = BEHR_paths('behr_mat_dir');
+    save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,BEHR_version);
+    save_dir = fullfile(BEHR_paths('website_staging_dir'),save_subdir);
+    if ~exist(save_dir,'dir')
+        mkdir(save_dir)
+    end
 else
     % Check that all global variables are set
     global_unset = {};
@@ -165,7 +182,7 @@ if ~onCluster
             if strcmpi(output_type,'hdf')
                 ask_to_overwrite = make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
             elseif strcmpi(output_type,'txt')
-                ask_to_overwrite = make_txt_file(Data_to_save,vars,date_string,save_dir,savename,ask_to_overwrite);
+                ask_to_overwrite = make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,ask_to_overwrite);
             end
         end
     end
@@ -201,7 +218,7 @@ else
             if strcmpi(output_type,'hdf')
                 make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
             elseif strcmpi(output_type,'txt')
-                make_txt_file(Data_to_save,vars,date_string,save_dir,savename,ask_to_overwrite);
+                make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,ask_to_overwrite);
             end
         end
     end
@@ -233,7 +250,7 @@ vars = {'AMFStrat','AMFTrop','BEHRAMFTrop','BEHRColumnAmountNO2Trop',...
 
 % 
 
-savename = 'OMI_BEHR_';
+savename = sprintf('OMI_BEHR_%s_',BEHR_version);
 
 % Add additional variable categories here. You'll need to add the variable
 % names to the "vars" variable, and you should consider adding an
@@ -264,6 +281,7 @@ end
 if ismember('txt', varargin)
     vars = remove_vector_variables(vars);
 end
+
 
 end
 
@@ -308,23 +326,22 @@ attr = make_empty_struct_from_cell(vars);
 
 % This cell array will have the variable name, unit, range, fill, product
 % (SP or BEHR) and description in that order.
-longfill = -1.267650600228229401496703205376e30;
-shortfill = -32767;
-shortfill2 = shortfill / 1000; % This should be fixed in the next run of BEHR to be the same as shortfill
-behrfill = -9e9;
+longfill = single(-1.267650600228229401496703205376e30);
+shortfill = single(-32767);
+behrfill = single(-3.402e38);
 nofill = NaN;
 
 attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric AMF';...
                 'AMFTrop', 'unitless', [0, Inf], nofill, 'SP', 'Tropospheric AMF (standard product)';...
                 'Areaweight', 'unitless', [0, Inf], behrfill, 'BEHR', 'Reciprocal of pixel area; use to weight a temporal average of grids to account for pixel representativeness';...
-                'BEHRAMFTrop', 'unitless', [0, Inf], shortfill, 'BEHR', 'Tropospheric AMF (BEHR) calculated with MODIS Albedo, GLOBE Terr. Pres., and 12 km NO2 profiles';...
-                'BEHRColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], longfill, 'BEHR', 'Tropospheric NO2 VCD (BEHR) calculated as SCD_trop / AMF_BEHR';...
+                'BEHRAMFTrop', 'unitless', [0, Inf], behrfill, 'BEHR', 'Tropospheric AMF (BEHR) calculated with MODIS Albedo, GLOBE Terr. Pres., and 12 km NO2 profiles';...
+                'BEHRColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], behrfill, 'BEHR', 'Tropospheric NO2 VCD (BEHR) calculated as SCD_trop / AMF_BEHR';...
                 'BEHRScatteringWeights', 'unitless', [0, Inf], behrfill, 'BEHR', 'Scattering weights derived from the MODIS albedo and GLOBE surface pressure. Includes NO2 cross section temperature correction.';...
                 'BEHRAvgKernels', 'unitless', [0, Inf], behrfill, 'BEHR', 'Averaging kernels computed for the weighted average of cloudy and clear conditions';...
-                'BEHRPressureLevels', 'hPa', [0, Inf], behrfill, 'BEHR', 'Pressure levels that correspond to the scattering weight and averaging kernel vectors';...
-                'CloudFraction', 'unitless', [0, 1], shortfill2, 'SP', 'OMI geometric cloud fraction';...
+                'BEHRPressureLevels', 'hPa', [0, Inf], behrfill, 'BEHR', 'Pressure levels that correspond to the scattering weight, averaging kernel, and NO2 a priori vectors';...
+                'CloudFraction', 'unitless', [0, 1], shortfill, 'SP', 'OMI geometric cloud fraction';...
                 'CloudPressure', 'hPa', [0, Inf], shortfill, 'SP', 'OMI cloud top pressure';...
-                'CloudRadianceFraction', 'unitless', [0, 1], shortfill2, 'SP', 'OMI cloud radiance (top of atmosphere light fraction)';...
+                'CloudRadianceFraction', 'unitless', [0, 1], shortfill, 'SP', 'OMI cloud radiance (top of atmosphere light fraction)';...
                 'ColumnAmountNO2', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Total NO2 VCD';...
                 'ColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Tropospheric NO2 VCD (standard product)';...
                 'ColumnAmountNO2TropStd', 'molec./cm^2', [0, Inf], nofill, 'SP', 'Standard deviation of SP NO2 tropospheric VCD';...
@@ -344,7 +361,7 @@ attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric A
                 'Swath', 'unitless', [0, Inf], nofill, 'SP', 'Swath number since OMI launch';...
                 'TerrainHeight', 'm', [-Inf, Inf], nofill, 'SP', 'Terrain height';...
                 'TerrainPressure', 'hPa', [0, Inf], nofill 'SP', 'Terrain pressure';...
-                'TerrainReflectivity', 'unitless', [0, 1], shortfill2, 'SP', 'Terrain albedo (OMI albedo product)';...
+                'TerrainReflectivity', 'unitless', [0, 1], shortfill, 'SP', 'Terrain albedo (OMI albedo product)';...
                 'Time', 's', [0, Inf], nofill, 'SP', 'Time at start of scan (TAI93: seconds since Jan 1, 1993)';...
                 'ViewingAzimuthAngle', 'deg', [-180, 180], nofill, 'SP', 'Viewing azimuth angle';...
                 'ViewingZenithAngle', 'deg', [0, 90], nofill, 'SP', 'Viewing zenith angle';...
@@ -357,7 +374,7 @@ attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric A
                 'BEHRColumnAmountNO2Trop_L3', 'molec./cm^2', [0, Inf], behrfill, 'BEHR-L3','BEHR tropospheric NO2 VCDs filtered for quality and row anomaly';...
                 'BEHRColumnAmountNO2Trop_L3MODISCloud', 'molec./cm^2', [0, Inf], behrfill, 'BEHR-L3','BEHR tropospheric NO2 VCDs additionally filtered for MODIS Cloud < 20%';...
                 'BEHRNO2apriori', 'parts-per-part', [-Inf, Inf], behrfill, 'BEHR', 'NO2 a priori profile used for each pixel. Pressure levels given in BEHRPressureLevels.';...
-                'BEHRGhostFraction', 'unitless', [0, Inf], behrfill, 'BEHR', 'Factor that multiplies the initial AMF to get one corrected for the ghost column.'...
+                'BEHRGhostFraction', 'unitless', [0, Inf], behrfill, 'BEHR', 'Multiply the VCD by this value to estimate the full column (visible + ghost).'...
                 };
             
 fns = fieldnames(attr);
@@ -415,6 +432,8 @@ if exist(hdf_fullfilename,'file')
         %return
     end
 end
+
+
 
 % Iterate through each swath and save it as under the group
 % /Data/Swath#####.
@@ -483,7 +502,7 @@ for d=1:numel(Data_in)
     end
     
     % Write an attribute to the swath group describing if it is gridded or
-    % native
+    % native. Also include the version string
     switch lower(pixel_type)
         case 'native'
             swath_attr = 'OMI SP and BEHR data at native OMI resolution';
@@ -493,13 +512,14 @@ for d=1:numel(Data_in)
             E.badinput('"pixel_type" not recognized');
     end
     h5writeatt(hdf_fullfilename,group_name,'Description',swath_attr);
+    h5writeatt(hdf_fullfilename,group_name,'Version',BEHR_version());
     if DEBUG_LEVEL > 2; toc; end
 end
 end
 
 
 
-function ask_to_overwrite = make_txt_file(Data_in, vars, date_string, save_dir, savename, ask_to_overwrite)
+function ask_to_overwrite = make_txt_file(Data_in, vars, attr, date_string, save_dir, savename, ask_to_overwrite)
 E = JLLErrors;
 
 global DEBUG_LEVEL
@@ -577,23 +597,59 @@ for s=1:numel(Data_in)
         for a=1:numel(header_cell)
             switch header_cell{a}
                 case 'Loncorn1'
-                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(1,p));
+                    v = Data_in(s).Loncorn(1,p);
+                    if isnan(v)
+                        v = attr.Loncorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Loncorn2'
-                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(2,p));
+                    v = Data_in(s).Loncorn(2,p);
+                    if isnan(v)
+                        v = attr.Loncorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Loncorn3'
-                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(3,p));
+                    v = Data_in(s).Loncorn(3,p);
+                    if isnan(v)
+                        v = attr.Loncorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Loncorn4'
-                    fprintf(fid,format_spec{a},Data_in(s).Loncorn(4,p));
+                    v = Data_in(s).Loncorn(4,p);
+                    if isnan(v)
+                        v = attr.Loncorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Latcorn1'
-                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(1,p));
+                    v = Data_in(s).Latcorn(1,p);
+                    if isnan(v)
+                        v = attr.Latcorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Latcorn2'
-                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(2,p));
+                    v = Data_in(s).Latcorn(2,p);
+                    if isnan(v)
+                        v = attr.Latcorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Latcorn3'
-                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(3,p));
+                    v = Data_in(s).Latcorn(3,p);
+                    if isnan(v)
+                        v = attr.Latcorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 case 'Latcorn4'
-                    fprintf(fid,format_spec{a},Data_in(s).Latcorn(4,p));
+                    v = Data_in(s).Latcorn(4,p);
+                    if isnan(v)
+                        v = attr.Latcorn.Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
                 otherwise
-                    fprintf(fid,format_spec{a},Data_in(s).(header_cell{a})(p));
+                    v = Data_in(s).(header_cell{a})(p);
+                    if isnan(v)
+                        v = attr.(header_cell{a}).Fill;
+                    end
+                    fprintf(fid,format_spec{a},v);
             end
             
             if a<numel(header_cell)
@@ -609,3 +665,14 @@ fclose(fid);
 
 end
 
+function mycleanup()
+err=lasterror;
+if ~isempty(err.message)
+    fprintf('MATLAB exiting due to problem: %s\n', err.message);
+    if ~isempty(gcp('nocreate'))
+        delete(gcp)
+    end 
+
+    exit(1)
+end
+end

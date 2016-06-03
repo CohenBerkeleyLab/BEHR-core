@@ -87,7 +87,7 @@ do
     if [[ ! -f $fname ]]; 
     then 
         echo "Retrieving $fname"
-        wget -nH -nd $fullRemDir$fname
+        wget -q -nH -nd $fullRemDir$fname
     fi
 done
 
@@ -120,9 +120,10 @@ fi
 # only retrieve granules with daytime information
 
 echo "Getting file list..."
-filelist=$(python ${scriptdir}/automodis.py --products MYD06_L2 --startTime "$startdate" --endTime "$enddate" --dayNightBoth 'DB')
+#filelist=$(python ${scriptdir}/automodis.py --products MYD06_L2 --startTime "$startdate" --endTime "$enddate" --dayNightBoth 'DB')
+python ${scriptdir}/automodis.py --products MYD06_L2 --startTime "$startdate" --endTime "$enddate" --dayNightBoth 'DB'
 echo "Done."
-
+filelist=$(cat $MATRUNDIR/modis_urls.txt)
 for f in $filelist
 do
     fname=$(basename $f)
@@ -141,7 +142,7 @@ do
     if [[ ! -f $fname ]]
     then
         echo "Retrieving $fname"
-        wget -nH -nd $f
+        wget -q -nH -nd $f
     fi
 done
 
