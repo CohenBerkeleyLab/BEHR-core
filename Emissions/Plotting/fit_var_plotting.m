@@ -89,7 +89,7 @@ end
         % change with one parameter over many cases. Inputs: par must be a
         % the index of the parameter to plot (a = 1, x_0 = 2, etc). The
         % rest of the inputs must be pairs of Ffixed and F structures.
-        if ismember(varargin{end},{'rel','r2','r'})
+        if ischar(varargin{end}) && ismember(varargin{end},{'rel','r2','r'})
             resid_type = varargin{end};
             varargin(end) = [];
         else
@@ -126,7 +126,7 @@ end
             end
             figure;
             plot(x,y,'ko','markersize',8,'linewidth',2)
-            line(F.ffit.(fns{par}),yopt,'linestyle','none','marker','x','markersize',8,'color','k','linewidth',2)
+            line(F.ffit.(fns{par}),yopt,'linestyle','none','marker','x','markersize',8,'color','r','linewidth',2)
             xlabel(sprintf('Fixed value of %s',params{par}));
             ylabel(ytext)
             set(gca,'fontsize',16)
