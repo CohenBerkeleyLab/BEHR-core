@@ -85,7 +85,7 @@ end
         end
         
         figure; hold on
-        lstr = {'Coarse monthly data','Coarse monthly fit', 'Fine monthly data', 'Fine monthly fit', 'Hybrid data', 'Hybrid fit'};
+        lstr = {'Line densities using coarse monthly a priori','Fit - coarse monthly', 'Line densities using fine monthly a priori', 'Fit - fine monthly', 'Line densities using fine daily a priori', 'Fit - fine daily'};
         plot(LD.no2x_mn108slow, LD.no2ld_mn108slow, 'go', 'linewidth', 2);
         plot(LD.no2x_mn108slow, SF.f_mn108slow.emgfit, '--', 'color', [0 0.5 0], 'linewidth', 2);
         plot(LD.no2x_mnslow, LD.no2ld_mnslow, 'o', 'linewidth', 2, 'color', [1 0.5 0]);
