@@ -1,4 +1,4 @@
-function [  ] = fit_var_plotting(plottype, varargin )
+function [ varargout ] = fit_var_plotting(plottype, varargin )
 %FIT_VAR_PLOTTING(PLOTTYPE, FFIXED, F, ...) Misc. plotting functions for output of fit_line_density_var.m
 %   Collection of miscellaneous plotting functions that takes the Ffixed
 %   and F or Nfixed and N outputs from fit_line_density_variation.m to show
@@ -29,11 +29,19 @@ if ~exist('plottype','var')
     plottype = ask_multichoice('Which plot to make?', {'fits'},'list',true);
 end
 
+if nargout > 0
+    vout = cell(1, nargout);
+else
+    vout = {};
+end
+
 switch lower(plottype)
     case 'fits'
         plot_3_fits()
     case 'e-tau'
         emis_tau_table();
+    case 't-pairs'
+        [vout{:}] = pairwise_t(nargout);
     case 'xwind'
         xwind_emis_tau();
     case 'residuals'
@@ -51,6 +59,8 @@ switch lower(plottype)
     otherwise
         fprintf('Plot type not recognized\n')
 end
+
+varargout = vout;
 
     function plot_3_fits
         [data_file, data_path] = uigetfile('*SimpleFits*.mat','Select the fits file for the conditions to plot');
@@ -184,29 +194,16 @@ end
         % misc_wrf_wind_plots('sum-emis')) so you'll need to add that
         % yourself.
         [fnames, pname] = uigetfile('*SimpleFits*.mat','Choose all files to use','multiselect','on');
+        table_uncert = questdlg('Use confidence intervals or standard deviations?','CI or SD','CI','SD','CI');
+        table_uncert = lower(table_uncert);
         
         % First find all cities represented, then all the wind speeds.
-        cities = cell(size(fnames));
-        wind_speeds = cell(size(fnames));
-        for a=1:numel(fnames)
-            [s,e] = regexp(fnames{a},'(Atlanta|Birmingham|Montgomery)');
-            cities{a} = fnames{a}(s:e);
-            [s,e] = regexp(fnames{a},'\d*pt\d*');
-            wind_speeds{a} = fnames{a}(s:e);
-        end
-        cities = sort(unique(cities));
-        wind_speeds = sort(unique(wind_speeds));
-        
+        [cities, wind_speeds, wind_labels] = get_cities_and_winds_from_fnames(fnames);
         
         % the apriori cases to look at
         apri = {'f_mn108fast','f_mnfast','f_hyfast'};
         
-        [emis, tau] = tabulate_emis_tau(fnames, pname, cities, wind_speeds, apri);
-        
-        wind_labels = cell(numel(wind_speeds)*2,1);
-        for b=1:numel(wind_speeds)
-            wind_labels{(b-1)*2 + 1} = sprintf('$\\geq %s$', strrep(wind_speeds{b},'pt','.'));
-        end
+        [emis, tau] = tabulate_emis_tau(fnames, pname, cities, wind_speeds, apri, table_uncert);
         
         latex_header1 = '& ';
         table_header = cell(1,numel(cities)*3);
@@ -231,25 +228,126 @@ end
         tau_rownames(2:end) = {''};
         tau_rownames = cat(2, tau_rownames, wind_labels);
         
-        table_rownames = wind_labels;
-        for a=2:2:numel(table_rownames)
-            table_rownames(a) = {sprintf('%s uncert.', wind_labels{a-1})};
+        if strcmp(table_uncert, 'ci')
+            table_rownames = wind_labels;
+            for a=2:2:numel(table_rownames)
+                table_rownames(a) = {sprintf('%s uncert.', wind_labels{a-1})};
+            end
+        else
+            table_rownames = cell(size(emis,1),1);
+            for a=1:3:numel(table_rownames)
+                wl = wind_labels{(a-1)*2/3+1};
+                table_rownames{a} = wl;
+                table_rownames{a+1} = ['sigma ',wl];
+                table_rownames{a+2} = ['N(DOF) ',wl];
+            end
         end
-        
-        emis_cell = cat(2, emis_rownames, num2cell(emis));
-        tau_cell = cat(2, tau_rownames, num2cell(tau));
         
         emis_table = array2table(emis, 'VariableNames', table_header, 'RowNames', table_rownames)
         tau_table = array2table(tau, 'VariableNames', table_header, 'RowNames', table_rownames)
         
-        fprintf('\n\n Latex format \n\n')
+        if strcmp(table_uncert,'ci')
+            emis_cell = cat(2, emis_rownames, num2cell(emis));
+            tau_cell = cat(2, tau_rownames, num2cell(tau));
+            
+            fprintf('\n\n Latex format \n\n')
+            
+            fprintf('%s\n',latex_header1);
+            fprintf('%s\n',latex_header2);
+            mat2latex(emis_cell,'u10',1);
+            fprintf('\b\b \\middlehline\n');
+            mat2latex(tau_cell,'u10',1);
+        end
         
-        fprintf('%s\n',latex_header1);
-        fprintf('%s\n',latex_header2);
-        mat2latex(emis_cell,'u10',1);
-        fprintf('\b\b \\middlehline\n');
-        mat2latex(tau_cell,'u10',1);
+    end
+
+    function varargout = pairwise_t(nout)
+        [fnames, pname] = uigetfile('*SimpleFits*.mat','Choose all files to use','multiselect','on');
+        [cities, wind_speeds] = get_cities_and_winds_from_fnames(fnames);
         
+        if ~iscell(fnames)
+            fnames = {fnames};
+        end
+        
+        % the apriori cases to look at
+        apri = {'f_mn108fast','f_mnfast','f_hyfast'};
+        
+        [emis, tau] = tabulate_emis_tau(fnames, pname, cities, wind_speeds, apri, 'sd');
+        
+        % Prep the array that the t-values will go into
+        nsets = numel(cities)*numel(wind_speeds)*numel(apri);
+        sets = cell(1,nsets);
+        set_names = cell(1,nsets);
+        emis_tarray = -inf(nsets, nsets); % using inf rather than nan so that I can tell the difference between unfilled value and t = nan
+        tau_tarray = -inf(nsets, nsets);
+        
+        emis_vals = nan(1,nsets);
+        emis_uncert = nan(1,nsets);
+        emis_dofs = nan(1,nsets);
+        
+        tau_vals = nan(1,nsets);
+        tau_uncert = nan(1,nsets);
+        tau_dofs = nan(1,nsets);
+        
+        i=1;
+        for a=1:numel(cities)
+            for b=1:numel(wind_speeds)
+                for c=1:numel(apri)
+                    S.city = cities{a};
+                    S.wind_speed = wind_speeds{b};
+                    S.apri = apri{c};
+                    sets{i} = S;
+                    set_names{i} = sprintf('%s_%s_%s', S.city, S.wind_speed, S.apri(3:end));
+                    
+                    % Need to translate indicies to get the values from the
+                    % emis and tau arrays which alternate value, SD, and
+                    % nDOF down the first dimension for each wind speed and
+                    % have a priori in order specified grouped by city
+                    % across the second dimension.
+                    x = (b-1)*3 + 1; % points to the row for the wind speed
+                    y = (a-1)*numel(apri) + c; % points to the column for the city and apriori
+                    
+                    emis_vals(i) = emis(x,y);
+                    emis_uncert(i) = emis(x+1,y);
+                    emis_dofs(i) = emis(x+2,y);
+                    tau_vals(i) = tau(x,y);
+                    tau_uncert(i) = tau(x+1,y);
+                    tau_dofs(i) = tau(x+2,y);
+                    
+                    i=i+1;
+                end
+            end
+        end
+        
+        % Now the painful bit, loop over every set and compare with every
+        % other set. Not duplicating calculations. Yay loops.
+        
+        for a=1:nsets
+            for b=a:nsets
+                % Emissions first
+                sigma_mean = sqrt(emis_uncert(a)^2 / emis_dofs(a) + emis_uncert(b)^2 / emis_dofs(b));
+                emis_tarray(a,b) = abs(emis_vals(a) - emis_vals(b))/sigma_mean;
+                
+                % Lifetimes second
+                sigma_mean = sqrt(tau_uncert(a)^2 / tau_dofs(a) + tau_uncert(b)^2 / tau_dofs(b));
+                tau_tarray(a,b) = abs(tau_vals(a) - tau_vals(b))/sigma_mean;
+            end
+        end
+        
+        % Make up the tables, print them to screen if no output requested
+        emis_table = array2table(emis_tarray, 'VariableNames', set_names, 'RowNames', set_names);
+        tau_table = array2table(tau_tarray, 'VariableNames', set_names, 'RowNames', set_names);
+        dof_table = array2table([emis_dofs; tinv(0.975, emis_dofs)], 'VariableNames', set_names, 'RowNames', {'DoFs','t_crit 95%'});
+        
+        if nout < 1
+            emis_table
+            tau_table
+            dof_table
+        else
+            varargout{1} = emis_table;
+            varargout{2} = tau_table;
+            varargout{3} = dof_table;
+        end
         
     end
 
@@ -678,7 +776,7 @@ wind_spd = regexprep(filename(s:e),'pt','\.');
 prof_wind_type = sprintf('%s (%s)',city_name,wind_spd);
 end
 
-function [emis, tau] = tabulate_emis_tau(fnames, pname, cities, wind_speeds, apri)
+function [emis, tau] = tabulate_emis_tau(fnames, pname, cities, wind_speeds, apri, uncert)
 % -- fnames must be the file names of the simple fits files.
 % -- pnames is the path name for where those files are located, it must also
 % contain the line density files.
@@ -688,7 +786,22 @@ function [emis, tau] = tabulate_emis_tau(fnames, pname, cities, wind_speeds, apr
 % -- apri is a cell array of the variables within the simple fits files
 % that contain the fits for a particular a priori - they'll be e.g.
 % "f_hyfast"
-    
+% -- uncert should be 'ci' (confidence interval) or 'sd' (standard
+% deviation). Defaults to 'ci' if not given.
+
+E = JLLErrors;
+HOMEDIR = getenv('HOME');
+
+if ~exist('uncert','var')
+    uncert = 'ci';
+else
+    uncert = lower(uncert);
+    allowed_uncerts = {'ci','sd'};
+    if ~ismember(uncert, allowed_uncerts)
+        E.badinput('UNCERT must be one of %s', strjoin(allowed_uncerts,', '));
+    end
+end
+
 % the final table will have 3 a priori per city and will have
 % uncertainty alternate with value along the first dimension
 emis = nan(2*numel(wind_speeds), 3*numel(cities));
@@ -699,7 +812,7 @@ tau = nan(2*numel(wind_speeds), 3*numel(cities));
 for a=1:numel(cities)
     % Get the wind vector file, we'll need it for the uncertainty
     % of tau
-    wind_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed';
+    wind_path = fullfile(HOMEDIR,'Documents','MATLAB','BEHR','Workspaces','Wind speed');
     wind_name = sprintf('%s-Wind-Conditions-1900UTC-5layers.mat',cities{a});
     W = load(fullfile(wind_path, wind_name));
     
@@ -719,7 +832,13 @@ for a=1:numel(cities)
         
         for c=1:numel(apri)
             fitparams = struct2array(SF.(apri{c}).ffit)';
-            fitci95 = SF.(apri{c}).stats.percent_ci95 / 100;
+            if strcmp(uncert, 'ci')
+                fituncert = SF.(apri{c}).stats.percent_ci95 / 100;
+            elseif strcmp(uncert, 'sd')
+                fituncert = SF.(apri{c}).stats.percentsd / 100;
+            else
+                E.notimplemented('uncertainty as %s',uncert);
+            end
             
             num_obs_fn = sprintf('num_obs_%s',apri{c}(3:end));
             if isfield(LD,num_obs_fn)
@@ -727,19 +846,50 @@ for a=1:numel(cities)
             else
                 num_obs = 1;
             end
-            fit_uncert = calc_fit_param_uncert(fitparams, fitci95, num_obs);
+            fit_uncert = calc_fit_param_uncert(fitparams, fituncert, num_obs);
             
             windcrit = str2double(strrep(wind_speeds{b},'pt','.'));
             
             [emis_i, u_emis_i, tau_i, u_tau_i] = compute_emg_emis_tau(fitparams(1), fit_uncert(1), fitparams(2), fit_uncert(2), 'vec', W.windvel(W.windvel>=windcrit));
             i = (a-1)*3 + c;
-            j = (b-1)*2 + 1;
+            if strcmp(uncert,'sd')
+                j = (b-1)*3 + 1; % leave an extra line for DoF
+            else
+                j = (b-1)*2 + 1;
+            end
             emis(j,i) = emis_i;
             emis(j+1,i) = u_emis_i;
             tau(j,i) = tau_i;
             tau(j+1,i) = u_tau_i;
+            if strcmp(uncert,'sd')
+                ld_fn = strrep(apri{c},'f_','no2ld_');
+                n_dof = sum(~isnan(LD.(ld_fn)))-5;
+                emis(j+2,i) = n_dof;
+                tau(j+2,i) = n_dof;
+            end
         end
     end
+end
+end
+
+function [cities, wind_speeds, wind_labels] = get_cities_and_winds_from_fnames(fnames)
+if ~iscell(fnames)
+    fnames = {fnames};
+end
+cities = cell(size(fnames));
+wind_speeds = cell(size(fnames));
+for a=1:numel(fnames)
+    [s,e] = regexp(fnames{a},'(Atlanta|Birmingham|Montgomery)');
+    cities{a} = fnames{a}(s:e);
+    [s,e] = regexp(fnames{a},'\d*pt\d*');
+    wind_speeds{a} = fnames{a}(s:e);
+end
+cities = sort(unique(cities));
+wind_speeds = sort(unique(wind_speeds));
+
+wind_labels = cell(numel(wind_speeds)*2,1);
+for b=1:numel(wind_speeds)
+    wind_labels{(b-1)*2 + 1} = sprintf('$\\geq %s$', strrep(wind_speeds{b},'pt','.'));
 end
 end
 
