@@ -320,33 +320,45 @@ varargout = vout;
         end
         
         % Now the painful bit, loop over every set and compare with every
-        % other set. Not duplicating calculations. Yay loops.
+        % other set. Not duplicating calculations. Yay loops. I will use
+        % the method from section 4-3 case 2 of Harris "Quantitative
+        % Chemical Analysis" 8th edition.
+        
+        emis_dof_tablecell = cell(size(emis_tarray));
+        tau_dof_tablecell = cell(size(tau_tarray));
         
         for a=1:nsets
             for b=a:nsets
                 % Emissions first
-                sigma_mean = sqrt(emis_uncert(a)^2 / emis_dofs(a) + emis_uncert(b)^2 / emis_dofs(b));
-                emis_tarray(a,b) = abs(emis_vals(a) - emis_vals(b))/sigma_mean;
+                s_pooled = sqrt( (emis_uncert(a)^2 * emis_dofs(a) + emis_uncert(b)^2 * emis_dofs(b)) / (emis_dofs(a) + emis_dofs(b)) );
+                dof_pooled = sqrt( emis_dofs(a) * emis_dofs(b) / (emis_dofs(a) + emis_dofs(b)) );
+                emis_tarray(a,b) = abs(emis_vals(a) - emis_vals(b))/s_pooled * dof_pooled;
+                emis_dof_tablecell{a,b} = sprintf('%g (t_crit95 = %g)', dof_pooled, tinv(0.975, dof_pooled));
                 
                 % Lifetimes second
-                sigma_mean = sqrt(tau_uncert(a)^2 / tau_dofs(a) + tau_uncert(b)^2 / tau_dofs(b));
-                tau_tarray(a,b) = abs(tau_vals(a) - tau_vals(b))/sigma_mean;
+                s_pooled = sqrt( (tau_uncert(a)^2 * tau_dofs(a) + tau_uncert(b)^2 * tau_dofs(b)) / (tau_dofs(a) + tau_dofs(b)) );
+                dof_pooled = sqrt( tau_dofs(a) * tau_dofs(b) / (tau_dofs(a) + tau_dofs(b)) );
+                tau_tarray(a,b) = abs(tau_vals(a) - tau_vals(b))/s_pooled * dof_pooled;
+                tau_dof_tablecell{a,b} = sprintf('%g (t_crit95 = %g)', dof_pooled, tinv(0.975, dof_pooled));
             end
         end
         
         % Make up the tables, print them to screen if no output requested
         emis_table = array2table(emis_tarray, 'VariableNames', set_names, 'RowNames', set_names);
+        emis_dof_table = cell2table(emis_dof_tablecell, 'VariableNames', set_names, 'RowNames', set_names);
         tau_table = array2table(tau_tarray, 'VariableNames', set_names, 'RowNames', set_names);
-        dof_table = array2table([emis_dofs; tinv(0.975, emis_dofs)], 'VariableNames', set_names, 'RowNames', {'DoFs','t_crit 95%'});
+        tau_dof_table = cell2table(tau_dof_tablecell, 'VariableNames', set_names, 'RowNames', set_names);
         
         if nout < 1
-            emis_table
+            emis_table %#ok<*NOPRT>
+            emis_dof_table
             tau_table
-            dof_table
+            tau_dof_table
         else
             varargout{1} = emis_table;
-            varargout{2} = tau_table;
-            varargout{3} = dof_table;
+            varargout{2} = emis_dof_table;
+            varargout{3} = tau_table;
+            varargout{4} = tau_dof_table;
         end
         
     end
