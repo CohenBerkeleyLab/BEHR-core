@@ -331,15 +331,18 @@ varargout = vout;
             for b=a:nsets
                 % Emissions first
                 s_pooled = sqrt( (emis_uncert(a)^2 * emis_dofs(a) + emis_uncert(b)^2 * emis_dofs(b)) / (emis_dofs(a) + emis_dofs(b)) );
-                dof_pooled = sqrt( emis_dofs(a) * emis_dofs(b) / (emis_dofs(a) + emis_dofs(b)) );
-                emis_tarray(a,b) = abs(emis_vals(a) - emis_vals(b))/s_pooled * dof_pooled;
-                emis_dof_tablecell{a,b} = sprintf('%g (t_crit95 = %g)', dof_pooled, tinv(0.975, dof_pooled));
+                % Since this is the number of measurements, not degrees of
+                % freedom, put back in the 5 that were "taken up" by
+                % fitting 5 parameters.
+                n_pooled = sqrt( (emis_dofs(a)+5) * (emis_dofs(b)+5) / (emis_dofs(a) + 5 + emis_dofs(b) + 5) );
+                emis_tarray(a,b) = abs(emis_vals(a) - emis_vals(b))/s_pooled * n_pooled;
+                emis_dof_tablecell{a,b} = sprintf('%d (t_crit95 = %g)', emis_dofs(a) + emis_dofs(b), tinv(0.975, emis_dofs(a) + emis_dofs(b)));
                 
                 % Lifetimes second
                 s_pooled = sqrt( (tau_uncert(a)^2 * tau_dofs(a) + tau_uncert(b)^2 * tau_dofs(b)) / (tau_dofs(a) + tau_dofs(b)) );
-                dof_pooled = sqrt( tau_dofs(a) * tau_dofs(b) / (tau_dofs(a) + tau_dofs(b)) );
-                tau_tarray(a,b) = abs(tau_vals(a) - tau_vals(b))/s_pooled * dof_pooled;
-                tau_dof_tablecell{a,b} = sprintf('%g (t_crit95 = %g)', dof_pooled, tinv(0.975, dof_pooled));
+                n_pooled = sqrt( (tau_dofs(a)+5) * (tau_dofs(b)+5) / (tau_dofs(a) + 5 + tau_dofs(b) + 5) );
+                tau_tarray(a,b) = abs(tau_vals(a) - tau_vals(b))/s_pooled * n_pooled;
+                tau_dof_tablecell{a,b} = sprintf('%d (t_crit95 = %g)', tau_dofs(a) + tau_dofs(b), tinv(0.975, tau_dofs(a) + tau_dofs(b)));
             end
         end
         

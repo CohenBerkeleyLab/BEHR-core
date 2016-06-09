@@ -1,4 +1,4 @@
-function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, num_valid_obs ] = calc_line_density( fpath, fnames, center_lon, center_lat, theta, varargin )
+function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, num_valid_obs, nox, debug_cell ] = calc_line_density( fpath, fnames, center_lon, center_lat, theta, varargin )
 %[ NO2_X, NO2_LINEDENS, NO2_LINEDENS_STD, LON, LAT, NO2_MEAN, NO2_STD, NUM_VALID_OBS] = CALC_LINE_DENSITY( FPATH, FNAMES, CENTER_LON, CENTER_LAT, THETA )
 %   Calculate a wind-aligned line density for a given time period.
 %
@@ -54,6 +54,12 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, nu
 %       num_valid_obs - an array the same size as no2_mean that counts the
 %       number of observations that went into each column density. NaNs and
 %       cases where areaweight = 0 do not count.
+%
+%       nox - 3D matrix of individual rotated swaths, mainly for debugging
+%       purposes.
+%
+%       debug_cell - a cell array with the file name and swath number
+%       corresponding to each 2D slice of the output NOX.
 %
 %   Parameter inputs:
 %
@@ -284,8 +290,11 @@ for d=1:numel(fnames_struct)
             aw = nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct)*n_swath);
             lon = OMI.Longitude;
             lat = OMI.Latitude;
+            debug_cell = cell(numel(fnames_struct)*n_swath,1);
             create_array = false;
         end
+        
+        debug_cell{i} = sprintf('%s: swath %d', fnames_struct(d).name, e);
 
         if interp_bool
             % This criterion accounts for how many neighbors are empty, giving more

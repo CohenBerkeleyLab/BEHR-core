@@ -7,6 +7,9 @@ function [  ] = check_new_fits(  )
 %   (fval) at the optimum solution and if any of the fitting parameters
 %   disagree by more than 0.1%. If so it gives the two values as new vs.
 %   old.
+always_print_params = false;
+always_print_cis = true;
+
 new_dir = uigetdir('.','Choose the directory with the NEW simple fits');
 old_dir = uigetdir('.','Choose the directory with the OLD simple fits');
 
@@ -16,6 +19,8 @@ F = dir(fullfile(new_dir,'*SimpleFits*'));
 % ffit parameters, which we'll say should agree within 0.1%.
 
 fitparams = {'a','x_0','mu_x','sigma_x','B'};
+
+frac_diff_crit = 0.001; % the value that the fractional difference must be greater than to be considered different
 
 for f=1:numel(F)
     if ~exist(fullfile(old_dir,F(f).name),'file')
@@ -34,13 +39,27 @@ for f=1:numel(F)
         newfval = N.(fns{a}).fitresults.fval;
         oldfval = O.(fns{a}).fitresults.fval;
         fprintf('%s: New fval = %.3g, old fval = %.3g\n',fns{a},newfval,oldfval);
+        
+        % Compare the actual fit parameter values
         for b=1:numel(fitparams)
             new = N.(fns{a}).ffit.(fitparams{b});
             old = O.(fns{a}).ffit.(fitparams{b});
             del = (new - old) * 2 / (new + old); % percent diff vs average value
-            if abs(del) > 0.001
-                fprintf('\t%s.%s disagree by >0.1%%: %.3g vs %.3g\n', fns{a}, fitparams{b}, new, old);
+            if abs(del) > frac_diff_crit || always_print_params
+                fprintf('\t%s.%s disagree by >%g%%: new = %.3g vs old = %.3g\n', fns{a}, fitparams{b}, frac_diff_crit*100, new, old);
             end
+        end
+        
+        % Also check the uncertainties
+        new = N.(fns{a}).stats.ci95;
+        old = O.(fns{a}).stats.ci95;
+        del = (new - old) * 2 ./ (new + old);
+        xx = abs(del) > frac_diff_crit;
+        if always_print_cis
+            fprintf('\n\t95%% C.I.s percent difference = %s%%\n', mat2str(del*100));
+        elseif any(xx)
+            badparams = strjoin(fitparams(xx), ', ');
+            fprintf('\n\t95%% C.I.s for %s in %s disagree by >%g%%\n', badparams, fns{a}, frac_diff_crit*100);
         end
     end
     fprintf('\n');
