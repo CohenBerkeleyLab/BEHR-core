@@ -423,10 +423,11 @@ param_stats.percentsd = param_stats.sd ./ abs(fitparams') * 100;
 
 % tinv gives the t value for a one-tailed distribution, we want two-tailed
 % so alpha must be halved, thus 97.5% certainty one-tailed is equivalent to
-% 95% two-tailed. Also, since we're dealing with a fit, we've used up two
-% degrees of freedom (slope & intercept).
-student_t = tinv(0.975,numel(no2_x)-5);
-param_stats.ci95 = param_stats.sd .* student_t ./ sqrt(numel(no2_x)-5);
+% 95% two-tailed. Also, since we're dealing with a fit, we've used up five
+% degrees of freedom, one for each of the parameters fitted.
+n_ld = sum(~isnan(no2_x));
+student_t = tinv(0.975,n_ld-5);
+param_stats.ci95 = param_stats.sd .* student_t ./ sqrt(n_ld);
 param_stats.percent_ci95 = param_stats.ci95 ./ abs(fitparams') * 100;
 fitresults.fminunc_soln = f_unc;
 fitresults.fminunc_hessian = unc_hessian;
