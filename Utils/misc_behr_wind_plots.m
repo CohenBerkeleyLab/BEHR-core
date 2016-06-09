@@ -53,6 +53,8 @@ switch lower(plttype)
         del_shape_vs_vcd();
     case 'mag-delvcd'
         mag_delvcd_stats();
+    case 'pix-pos-v-cld'
+        pix_pos_vs_cld();
     case 'wind-v-cld'
         wind_cond_vs_cld();
     otherwise
@@ -1297,9 +1299,9 @@ end
                 if a == 1
                     delmat = nan(numel(hr.Data.Longitude), n,3);
                 end
-                del = (hy.Data.BEHRAMFTrop ./ mn.Data.BEHRAMFTrop - 1)*100;
-                delmat(:,a,1) = del(:);
                 del = (hr.Data.BEHRAMFTrop ./ mn.Data.BEHRAMFTrop - 1)*100;
+                delmat(:,a,1) = del(:);
+                del = (hy.Data.BEHRAMFTrop ./ mn.Data.BEHRAMFTrop - 1)*100;
                 delmat(:,a,2) = del(:);
                 del = (hr.Data.BEHRAMFTrop ./ hy.Data.BEHRAMFTrop - 1)*100;
                 delmat(:,a,3) = del(:);
@@ -1422,7 +1424,7 @@ end
         elseif strcmpi(plot_mode, 'box-comp')
             delmat_final = reshape(delmat,[],3);
             boxplot(delmat_final)
-            set(gca,'xticklabels',{'Hybrid daily vs. monthly','Full daily vs. monthly','Full vs. hybrid daily'})
+            set(gca,'xticklabels',{'Full daily vs. monthly','Hybrid daily vs. monthly','Full vs. hybrid daily'})
             line(1:3, nanmean(delmat_final,1), 'color', 'k','marker','o','markersize',16,'linestyle','none');
         end
         set(gca,'fontsize',20)
@@ -2867,18 +2869,115 @@ end
         end
         
     end
+    
+    function pix_pos_vs_cld()
+        % This function will plot the pixel position as a function of
+        % distance or direction from Atlanta vs. cloud fraction and color
+        % by % change in AMF or VCD.
+        diff_type = ask_multichoice('Which diff type to use?',{'amf','vcd'},'default','vcd','list',true);
+        max_dist = ask_number('How far in km from Atlanta should we consider pixels for?','testfxn',@(x) x>0);
+        hybrid_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost'; 
+        monthly_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost'; 
         
+        city_lon = -84.39;
+        city_lat = 33.775;
+        
+        switch lower(diff_type)
+            case 'vcd'
+                behrfield = 'BEHRColumnAmountNO2Trop';
+                cblabel = '%\Delta VCD';
+            case 'amf'
+                behrfield = 'BEHRAMFTrop';
+                cblabel = '%\Delta AMF';
+            otherwise
+                E.notimplemented('No corresponding field for the diff type %s is available. Did you add that option recently and forget to update the fields?', diff_type);
+        end
+        
+        pixdist = [];
+        pixangle = [];
+        clds = [];
+        hyquant = [];
+        mnquant = [];
+        
+        opts.dist_limit = max_dist;
+        opts.quad_bool = 0;
+        opts.size_lim_type = 'none';
+        opts.lim_crit = [];
+        opts.center_lon = city_lon;
+        opts.center_lat = city_lat;
+        
+        if isDisplay
+            wb = waitbar(0,'Loading clouds');
+        end
+        
+        F = dir(fullfile(hybrid_path, 'OMI_BEHR*.mat'));
+        
+        for d=1:numel(F)
+            if isDisplay
+                waitbar(d/numel(F));
+            end
+                
+            H = load(fullfile(hybrid_path,F(d).name),'Data');
+            Data = H.Data;
+            M = load(fullfile(monthly_path,F(d).name),'Data');
+            
+            for s=1:numel(Data)
+                badpix = find_bad_pixels(Data(s),1);
+                Data(s).CloudFraction(badpix) = nan;
+                
+                in = subset_BEHR_pixels(Data(s),[-90 -80],[30 40],opts);
+                
+                dlon = Data(s).Longitude(in) - city_lon;
+                dlat = Data(s).Latitude(in) - city_lat;
+                this_dist = sqrt(dlon.^2 + dlat.^2);
+                this_angle = atan2d(dlat, dlon);
+                
+                pixdist = cat(1, pixdist, this_dist);
+                pixangle = cat(1, pixangle, this_angle);
+                clds = cat(1, clds, Data(s).CloudFraction(in));
+                hyquant = cat(1, hyquant, Data(s).(behrfield)(in));
+                mnquant = cat(1, mnquant, M.Data(s).(behrfield)(in));
+            end
+        end
+        
+        if isDisplay
+            close(wb)
+        end
+        
+        % I'm guessing these figures are going to be slow to draw b/c
+        % they'll have a lot of points, so be ready for that.
+        del = reldiff(hyquant, mnquant)*100;
+        figure; 
+        scatter(pixdist, clds, 32, del, 'filled');
+        xlabel('Distance (degrees)')
+        ylabel('Cloud fraction')
+        cb = colorbar;
+        cb.Label.String = cblabel;
+        set(gca,'fontsize',16);
+        
+        figure; 
+        scatter(pixangle, clds, 32, del, 'filled');
+        xlabel('Angle (degrees CCW from east)')
+        ylabel('Cloud fraction')
+        cb = colorbar;
+        cb.Label.String = cblabel;
+        set(gca,'fontsize',16);
+    end
+
     function wind_cond_vs_cld()
         % This function will plot wind speed and direction based off of the
         % wind conditions file for atlanta vs. cloud fraction.
-        hybrid_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost'; 
+        diff_type = ask_multichoice('Which diff type to use?',{'rel','abs'},'default','rel','list',true);
+        hybrid_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost'; 
         monthly_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost'; 
         W = load('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta-Wind-Conditions-1900UTC-5layers.mat');
         
         clds50 = nan(size(W.dnums));
         dAMF50 = nan(size(W.dnums));
+        dVCD50 = nan(size(W.dnums));
         clds150 = nan(size(W.dnums));
         dAMF150 = nan(size(W.dnums));
+        dVCD150 = nan(size(W.dnums));
         
         opts.quad_bool = 0;
         opts.size_lim_type = 'none';
@@ -2902,9 +3001,13 @@ end
             tmp_clds50 = [];
             tmp_hyamf50 = [];
             tmp_mnamf50 = [];
+            tmp_hyvcd50 = [];
+            tmp_mnvcd50 = [];
             tmp_clds150 = [];
             tmp_hyamf150 = [];
             tmp_mnamf150 = [];
+            tmp_hyvcd150 = [];
+            tmp_mnvcd150 = [];
             for s=1:numel(Data)
                 badpix = find_bad_pixels(Data(s),1);
                 Data(s).CloudFraction(badpix) = nan;
@@ -2914,18 +3017,34 @@ end
                 tmp_clds50 = cat(1, tmp_clds50, Data(s).CloudFraction(in50));
                 tmp_hyamf50 = cat(1, tmp_hyamf50, Data(s).BEHRAMFTrop(in50));
                 tmp_mnamf50 = cat(1, tmp_mnamf50, M.Data(s).BEHRAMFTrop(in50));
+                tmp_hyvcd50 = cat(1, tmp_hyvcd50, Data(s).BEHRColumnAmountNO2Trop(in50));
+                tmp_mnvcd50 = cat(1, tmp_mnvcd50, M.Data(s).BEHRColumnAmountNO2Trop(in50));
+                
                 
                 opts.dist_limit = 150;
                 in150 = subset_BEHR_pixels(Data(s),[-90, -80],[30 40],opts);
                 tmp_clds150 = cat(1, tmp_clds150, Data(s).CloudFraction(in150));
                 tmp_hyamf150 = cat(1, tmp_hyamf150, Data(s).BEHRAMFTrop(in150));
                 tmp_mnamf150 = cat(1, tmp_mnamf150, M.Data(s).BEHRAMFTrop(in150));
+                tmp_hyvcd150 = cat(1, tmp_hyvcd150, Data(s).BEHRColumnAmountNO2Trop(in150));
+                tmp_mnvcd150 = cat(1, tmp_mnvcd150, M.Data(s).BEHRColumnAmountNO2Trop(in150));
             end
             
             clds50(d) = nanmean(tmp_clds50);
             clds150(d) = nanmean(tmp_clds150);
-            dAMF50(d) = nanmean(reldiff(tmp_hyamf50, tmp_mnamf50))*100;
-            dAMF150(d) = nanmean(reldiff(tmp_hyamf150, tmp_mnamf150))*100;
+            if strcmpi(diff_type,'abs')
+                dAMF50(d) = nanmean(tmp_hyamf50 - tmp_mnamf50);
+                dAMF150(d) = nanmean(tmp_hyamf150 - tmp_mnamf150);
+                dVCD50(d) = nanmean(tmp_hyvcd50 - tmp_mnvcd50);
+                dVCD150(d) = nanmean(tmp_hyvcd150 - tmp_mnvcd150);
+            elseif strcmpi(diff_type,'rel')
+                dAMF50(d) = nanmean(reldiff(tmp_hyamf50, tmp_mnamf50))*100;
+                dAMF150(d) = nanmean(reldiff(tmp_hyamf150, tmp_mnamf150))*100;
+                dVCD50(d) = nanmean(reldiff(tmp_hyvcd50, tmp_mnvcd50))*100;
+                dVCD150(d) = nanmean(reldiff(tmp_hyvcd150, tmp_mnvcd150))*100;
+            else
+                E.notimplemented('diff_type = %s',diff_type)
+            end
         end
         
         if isDisplay
@@ -2971,6 +3090,46 @@ end
         title('Within 150 km');
         cb=colorbar;
         cb.Label.String = '%\Delta AMF';
+        colormap('jet')
+        caxis([-50 50])
+        
+        figure;
+        scatter(W.windvel, clds50, 32, dVCD50, 'filled');
+        xlabel('Wind speed (m/s)')
+        ylabel('Cloud fraction')
+        title('Within 50 km')
+        cb=colorbar;
+        cb.Label.String = '%\Delta VCD';
+        colormap('jet')
+        caxis([-50 50])
+        
+        figure;
+        scatter(W.theta, clds50, 32, dVCD50, 'filled');
+        xlabel('Wind direction (CCW from E)')
+        ylabel('Cloud fraction')
+        title('Within 50 km');
+        cb=colorbar;
+        cb.Label.String = '%\Delta VCD';
+        colormap('jet')
+        caxis([-50 50])
+        
+        figure;
+        scatter(W.windvel, clds150, 32, dVCD150, 'filled');
+        xlabel('Wind speed (m/s)')
+        ylabel('Cloud fraction')
+        title('Within 150 km')
+        cb=colorbar;
+        cb.Label.String = '%\Delta VCD';
+        colormap('jet')
+        caxis([-50 50])
+        
+        figure;
+        scatter(W.theta, clds150, 32, dVCD150, 'filled');
+        xlabel('Wind direction (CCW from E)')
+        ylabel('Cloud fraction')
+        title('Within 150 km');
+        cb=colorbar;
+        cb.Label.String = '%\Delta VCD';
         colormap('jet')
         caxis([-50 50])
     end

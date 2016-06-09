@@ -4,13 +4,19 @@ function [ varargout ] = misc_wrf_wind_plots( plttype, varargin )
 
 E = JLLErrors;
 wrf_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US';
+wrf_behr_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR/hourly';
+at_lonlat = [-84.39, 33.775];
+bi_lonlat = [-86.80, 33.52];
+mt_lonlat = [-86.3, 32.37];
 
 if ~exist('plttype','var')
-    allowed_plots = {'wrf_wind-cld','wrf-sat-cld','wrf-var-corr','2dvar-v-cld','3dvar-v-cld','nonlin-nox','wrf_stats','pick-rxns','mean-react','daily-react','sum-emis'};
+    allowed_plots = {'surf-conc-stats','wrf_wind-cld','wrf-sat-cld','wrf-var-corr','2dvar-v-cld','3dvar-v-cld','nonlin-nox','wrf_stats','pick-rxns','mean-react','daily-react','sum-emis'};
     plttype = ask_multichoice('Select a plot type',allowed_plots,'list',true);
 end
 
 switch plttype
+    case 'surf-conc-stats'
+        surface_conc_stats();
     case 'wrf_wind-cld'
         wrf_wind_cld_corr();
     case 'wrf-sat-cld'
@@ -42,6 +48,37 @@ end
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%% PLOTTING FUNCTION %%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    function surface_conc_stats
+        % Assuming for now that we want the entire time period. Use daily
+        % profiles
+        F = dir(fullfile(wrf_behr_path,'*.nc'));
+        [xlon, xlat, no2] = read_wrf_vars(wrf_behr_path,F,{'XLONG','XLAT','no2'});
+        
+        % Four plots: min, max, median, and mean no2. Taking surface only,
+        % and top of hour for 1900 UTC
+        f = gobjects(1,4);
+        f(1) = figure;
+        
+        no2_stats = nan(size(no2,1), size(no2,2), 4);
+        no2_stats(:,:,1) = min(squeeze(no2(:,:,1,1,:)),[],3);
+        no2_stats(:,:,2) = max(squeeze(no2(:,:,1,1,:)),[],3);
+        no2_stats(:,:,3) = median(squeeze(no2(:,:,1,1,:)),3);
+        no2_stats(:,:,4) = mean(squeeze(no2(:,:,1,1,:)),3);
+        stat_names = {'min','max','median','mean'};
+        
+        for a=1:numel(f)
+            f(a) = figure;
+            pcolor(xlon(:,:,1), xlat(:,:,1), no2_stats(:,:,a));
+            set(gca,'fontsize',16);
+            cb = colorbar;
+            cb.Label.String = sprintf('%s surface NO_2',stat_names{a});
+            title(stat_names{a});
+            line(at_lonlat(1), at_lonlat(2), 'linestyle','none','marker','p','markersize',20,'color','k','linewidth',2);
+            line(bi_lonlat(1), bi_lonlat(2), 'linestyle','none','marker','s','markersize',16,'color','k','linewidth',2);
+            line(mt_lonlat(1), mt_lonlat(2), 'linestyle','none','marker','x','markersize',20,'color','k','linewidth',2);
+        end
+    end
     
     function wrf_wind_cld_corr
         sdate = datenum(ask_date('Enter the starting date'));
@@ -541,15 +578,16 @@ end
         radius = ask_number('Radius in WRF grid cells to consider (1 will use a 3x3 subset)', 'default', 0, 'testfxn', @(x) x>=0);
         model_layers = ask_number('How many model layers to consider?', 'default', 1, 'testfxn', @(x) x>=1);
         unit = ask_multichoice('Plot in mixing ratio or number density?',{'mr','nd'},'default','mr');
+        react_bool = strcmpi(ask_multichoice('Color by organic OH reactivity',{'y','n'},'default','n'),'y');
         
         city_names = {'Atlanta','Birmingham','Montgomery','Background'};
-        city_lons = [   -84.39,...  %Atlanta
-                        -86.80,...  %Birmingham
-                        -86.30,...  %Montgomery
+        city_lons = [   at_lonlat(1),...  %Atlanta
+                        bi_lonlat(1),...  %Birmingham
+                        mt_lonlat(1),...  %Montgomery
                         -83.00];    %Background
-        city_lats = [   33.775,...  %Atlanta
-                        33.52,...   %Birmingham
-                        32.37,...   %Montgomery
+        city_lats = [   at_lonlat(2),...  %Atlanta
+                        bi_lonlat(2),...  %Birmingham
+                        mt_lonlat(2),...   %Montgomery
                         32.25];     %Background
         city_xx = cell(size(city_lons));
         city_yy = cell(size(city_lons));
@@ -563,6 +601,7 @@ end
             city_oh{c} = nan(size(F));
             city_nox{c} = nan(size(F));
         end
+        wrf_file_dates = nan(size(F));
         
         if isDisplay
             wb = waitbar(0, 'Loading files');
@@ -575,6 +614,7 @@ end
             wrfname = fullfile(wrf_path,F(a).name);
             % restrict to after 1 June (treat end of May as spinup)
             [s,e] = regexp(F(a).name,'\d\d\d\d-\d\d-\d\d');
+            wrf_file_dates(a) = datenum(F(a).name(s:e),'yyyy-mm-dd');
             if datenum(F(a).name(s:e),'yyyy-mm-dd') < datenum('2013-06-01')
                 continue
             end
@@ -601,6 +641,9 @@ end
                 OH = OH .* 1e-9 .* ndens_air; % ppb -> number density
                 NO = NO .* 1e-9 .* ndens_air; % ppb -> number density
                 NO2 = NO2 .* 1e-9 .* ndens_air; %ppb -> number density
+                xstr = '[NO_x] (molec. cm^{-3})';
+            else
+                xstr = '[NO_x] (ppb)';
             end
             % Subset for each city
             for c=1:numel(city_lons)
@@ -621,9 +664,28 @@ end
         % Make the plots
         for c=1:numel(city_lons)
             figure;
-            scatter(city_nox{c}, city_oh{c}, 32, 'k');
+            if react_bool
+                % We'll bin into 1 wide reactivity bins. This is probably
+                % somewhat crude in that we're comparing day-by-day rather
+                % than cell-by-cell but let's see how it works.
+                cmap = colormap('lines');
+                cmap_ind = 1;
+                dvec = datenum('2013-06-01'):datenum('2013-06-30');
+                city_react = calc_daily_total_reactivity(city_names{c}, 'VOC+OH', '2013-06-01','2013-06-30');
+                for r=0:floor(max(city_react))
+                    rr = city_react >= r & city_react < r+1;
+                    dd = ismember(wrf_file_dates, dvec(rr));
+                    if sum(dd) > 0
+                        l=line(city_nox{c}(dd), city_oh{c}(dd), 'color', cmap(cmap_ind,:), 'marker', 'o', 'linestyle','none');
+                        l.DisplayName = sprintf('VOC+OH react in [%d, %d)', r, r+1);
+                        cmap_ind = cmap_ind + 1;
+                    end
+                end
+            else
+                scatter(city_nox{c}, city_oh{c}, 32, 'k');
+            end
             title(sprintf('%1$s (%2$d x %2$d x %3$d)',city_names{c},radius*2+1,model_layers));
-            xlabel('[NO_x] (molec. cm^{-3})');
+            xlabel(xstr);
             ylabel('[OH] (molec. cm^{-3})');
             set(gca,'fontsize',16);
         end
@@ -1155,14 +1217,33 @@ end
         react_uncert = sqrt(nansum2((org_std .* all_rates).^2));
     end
 
-    function [reactivity, reactivity_uncer, speciated_reactivity, species_rates] = calc_daily_total_reactivity()
+    function [reactivity, reactivity_uncer, speciated_reactivity, species_rates] = calc_daily_total_reactivity(city_name, r_type, start_date, end_date)
         % This will calculate the total organic reactivity for the
         % requested city.
-        city_name = ask_multichoice('Which city to calculate for?',{'Atlanta','Birmingham','Montgomery'},'list',true);
+        allowed_cities = {'Atlanta','Birmingham','Montgomery','Background'};
+        if exist('city_name','var')
+            if ~ismember(city_name, allowed_cities)
+                E.badinput('CITY_NAME must be one of %s', strjoin(allowed_cities, ', '));
+            end
+        else
+            city_name = ask_multichoice('Which city to calculate for?',allowed_cities,'list',true);
+        end
         [city_lon, city_lat] = return_city_info(city_name);
-        r_type = ask_multichoice('Which type of reactivity to calculate for?',{'NO+RO2','VOC+OH'},'list',true);
-        start_date = ask_date('Enter the starting date');
-        end_date = ask_date('Enter the ending date');
+        allowed_rtypes = {'NO+RO2','VOC+OH'};
+        if exist('r_type','var')
+            if ~ismember(r_type, allowed_rtypes)
+                E.badinput('R_TYPE must be one of %s', strjoin(allowed_rtypes, ', '));
+            end
+        else
+            r_type = ask_multichoice('Which type of reactivity to calculate for?',allowed_rtypes,'list',true);
+        end
+        
+        if ~exist('start_date','var')
+            start_date = ask_date('Enter the starting date');
+        end
+        if ~exist('end_date', 'var')
+            end_date = ask_date('Enter the ending date');
+        end
         
         
         [~, ~, all_react, ~, all_rates] = pick_wrf_rxns(r_type);
@@ -1468,6 +1549,7 @@ files = files(xx);
 end
 
 function [city_lon, city_lat, windvel, theta, wind_dnums] = return_city_info(city_name)
+E = JLLErrors;
 switch lower(city_name)
     case 'atlanta'
         city_lon = -84.39;
@@ -1481,6 +1563,17 @@ switch lower(city_name)
         city_lon = -86.30;
         city_lat = 32.37;
         F=load('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Montgomery-Wind-Conditions-1900UTC-5layers.mat');
+    case 'background'
+        city_lon = -83;
+        city_lat = 32.25;
+        if nargout > 2
+            E.notimplemented('background wind data')
+        else
+            windvel = [];
+            theta = [];
+            wind_dnums = [];
+            return
+        end
     otherwise
         E=JLLErrors;
         E.badinput('%s not recognized as a city',city_name);
