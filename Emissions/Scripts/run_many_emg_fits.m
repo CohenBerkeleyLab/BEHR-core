@@ -1,9 +1,10 @@
 function [  ] = run_many_emg_fits(  )
 % Do all the EMG fitting steps specified for all the files specified
-load_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/25km-side';
+load_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/50km-side';
 F = dir(fullfile(load_dir,'*LineDensities*.mat'));
-fit_steps = {'simple'};
+fit_steps = {'var'};
 fitfxn = 'ssresid'; % ssresid or unexvar
+tic
 for a=1:numel(F)
     D = load(fullfile(load_dir,F(a).name));
     if ismember('simple',fit_steps)
@@ -19,7 +20,7 @@ for a=1:numel(F)
         savefields(O, load_dir, make_varfit_name(F(a).name, fitfxn));
     end
 end
-
+toc
 end
 
 function savefields(S, save_dir, save_name)

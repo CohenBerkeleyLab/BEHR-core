@@ -38,6 +38,8 @@ end
 switch lower(plottype)
     case 'fits'
         plot_3_fits()
+    case 'varfits'
+        plot_fit_envelopes()
     case 'e-tau'
         emis_tau_table();
     case 't-pairs'
@@ -47,6 +49,8 @@ switch lower(plottype)
     case 'residuals'
         residuals(varargin{:})
     case 'residuals-onepar'
+        residuals_onepar_wrapper();
+    case 'residuals-onepar-manual'
         residuals_onepar(varargin{:})
     case 'crosseffects'
         cross_effects(varargin{:})
@@ -184,6 +188,66 @@ varargout = vout;
         fprintf('\nLatex format:\n\n');
         %mat2latex(L,'%#.2g',1)
         mat2latex(L,'u10',1)
+    end
+
+    function plot_fit_envelopes
+        [data_files, data_path, varfns_to_keep, simpfns_to_keep, param_inds] = input_varfit_params;
+        
+        for f=1:numel(data_files)
+            % Load the selected file and separate the variables into the varied
+            % fits and the simple fits
+            V = load(fullfile(data_path, data_files{f}));
+            varfns = glob(fieldnames(V),'Ffix.*');
+            simpfns = glob(fieldnames(V),'F_.*');
+            
+            % Extract city name and wind speed from file name
+            city_name = regexp(data_files{f}, '(Atlanta|Birmingham|Montgomery)','match','once');
+            wind_spd = regexp(data_files{f}, '\dpt\d','match','once');
+            
+            % Just in case the order differs in other files, we'll actually
+            % compare the variables to keep
+            varfns(~ismember(varfns, varfns_to_keep)) = [];
+            simpfns(~ismember(simpfns, simpfns_to_keep)) = [];
+            
+            % For each apriori and each fitting parameter, plot the line
+            % densities and the best fit, then plot the fit as each parameter
+            % is tweaked by +/- 0.5 and +/- 1 sigma, represented by which
+            % indices to look at
+            
+            for a=1:numel(varfns)
+                Ffix = V.(varfns{a});
+                n_sd = size(Ffix,1);
+                ideal_frac_sigma = [-.2, -.13, -.07, .3, .6, .9];
+                inds = round((ideal_frac_sigma*0.5 + 0.5)*n_sd);
+                true_frac_sigma = (2*inds - n_sd)./n_sd;
+                
+                cols = {'r','r','r','b','b','b'};
+                lstyles = {'-','--','-.','-.','--','-'};
+                n_inds = numel(inds);
+                
+                for b=param_inds %size(Ffix,2) % the fixed parameter changes across the second dimension
+                    figure;
+                    plot(Ffix(1,b).no2x, Ffix(1,b).no2ld, 'ko'); % line densities same for all
+                    hold on
+                    plot(Ffix(1,b).no2x, V.(simpfns{a}).emgfit, 'k--','linewidth',2);
+                    
+                    % Get the varied fits
+                    l = gobjects(n_inds,1);
+                    vals = nan(n_inds,1);
+                    for c=1:n_inds
+                        i = inds(c);
+                        l(c) = line(Ffix(i,b).no2x, Ffix(i,b).emgfit, 'color', cols{c}, 'linewidth', 2, 'linestyle', lstyles{c});
+                        vals(c) = Ffix(i,b).fixed_val;
+                    end
+                    legend(l, sprintfmulti('Fit %1$.2f\\sigma_{%2$s} (%2$s = %3$.3g)', true_frac_sigma, Ffix(1,b).fixed_par, vals));
+                    set(gca,'fontsize',14)
+                    xlabel('Dist (km)')
+                    ylabel('Line dens. (mol km^{-1})');
+                    apri_name = strrep(simpfns{a},'F_','');
+                    title(sprintf('%s: %s, %s: %s', Ffix(1,b).fixed_par, city_name, wind_spd, apri_name))
+                end
+            end
+        end
     end
 
     function emis_tau_table
@@ -546,11 +610,46 @@ varargout = vout;
         tilefigs;
     end
 
+    function residuals_onepar_wrapper
+        % Gets the required input for residuals_onepar from user responses
+        % rather than having the user manually input all the structures.
+        [data_files, data_path, varfns, simpfns, par_inds] = input_varfit_params;
+        
+        % We can only have one parameter, so make sure that's the case.
+        if numel(par_inds) ~= 1
+            E.badinput('Can only select one parameter to plot')
+        end
+        
+        % Also get which residual type we're going to plot
+        allowed_resid_types = {'rel','r2','r'};
+        resid_ind = listdlg('ListString', allowed_resid_types, 'PromptString', 'Choose residual type to plot', 'selectionmode','single');
+        resid_type = allowed_resid_types{resid_ind};
+        
+        
+        % Now get each variable pair from all the files requested
+        vars = cell(1, numel(data_files)*numel(varfns)*2);
+        i=1;
+        for a=1:numel(data_files)
+            V = load(fullfile(data_path, data_files{a}));
+            for b=1:numel(varfns)
+                vars{i} = V.(varfns{b});
+                vars{i+1} = V.(simpfns{b});
+                i=i+2;
+            end
+        end
+        
+        % Now call the function that actually does the plotting
+        residuals_onepar(par_inds, vars{:}, resid_type);
+    end
+
     function residuals_onepar(par, varargin)
         % A variation on the last one that allows you to plot the residual
         % change with one parameter over many cases. Inputs: par must be a
-        % the index of the parameter to plot (a = 1, x_0 = 2, etc). The
-        % rest of the inputs must be pairs of Ffixed and F structures.
+        % the index of the parameter to plot (a = 1, x_0 = 2, etc).
+        % Including one of the strings 'rel', 'r2', or 'r' will change what
+        % measure of residuals is plotted. The rest of the inputs must be
+        % pairs of Ffixed and F structures.
+
         if ischar(varargin{end}) && ismember(varargin{end},{'rel','r2','r'})
             resid_type = varargin{end};
             varargin(end) = [];
@@ -563,6 +662,7 @@ varargout = vout;
             Ffixed = varargin{a*2-1};
             F = varargin{a*2};
             x=[Ffixed(:,par).fixed_val];
+            xu = (x - F.ffit.(fns{par})) ./ F.stats.sd(par);
             switch resid_type
                 case 'rel'
                     y=[Ffixed(:,par).ssresid] ./ F.ssresid;
@@ -588,10 +688,34 @@ varargout = vout;
             end
             figure;
             plot(x,y,'ko','markersize',8,'linewidth',2)
-            line(F.ffit.(fns{par}),yopt,'linestyle','none','marker','x','markersize',8,'color','r','linewidth',2)
-            xlabel(sprintf('Fixed value of %s',params{par}));
-            ylabel(ytext)
+            line(F.ffit.(fns{par}),yopt,'linestyle','none','marker','x','markersize',12,'color','r','linewidth',2)
+            
+            
+            % Compute each x tick as a multiple of the uncertainty away
+            % from the optimum value and add this information to the labels
             set(gca,'fontsize',16)
+            xt = get(gca,'xtick');
+            xl = get(gca,'xlim');
+            set(gca,'xtickmode','manual');
+            set(gca,'xlim',xl);
+            set(gca,'xtick',xt); % for some reason, sometime setting this to manual will remove all ticks
+            frac_u = (xt - F.ffit.(fns{par})) ./ F.stats.sd(par);
+            xt_labels = get(gca,'xticklabel');
+            % Check if the labels are a different power than the tick
+            test = str2double(xt_labels) ./ xt';
+            test = unique(test(~isnan(test)));
+            if numel(test) ~= 1
+                E.notimplemented('different label exponents')
+            elseif test ~= 1
+                p = -log10(test);
+                xt_labels = sprintfmulti('%s \\times 10^{%d}\\newline (%.2f{\\itu})', xt_labels, p, frac_u);
+            else
+                xt_labels = sprintfmulti('%s (%.2f{\\itu})', xt_labels, frac_u);
+            end
+            set(gca,'xticklabel',xt_labels);
+            
+            xlabel(sprintf('Fixed value of %s\n(dist. from optimum)',params{par}));
+            ylabel(ytext)
             title(sprintf('Residuals - %s fixed, %d points',params{par},numel(x)))
         end
     end
@@ -715,6 +839,37 @@ varargout = vout;
             % smallest number present to be conservative.
             num_obs = LD.(num_obs_fn);
             uncert = calc_fit_param_uncert(fit_params, frac_uncerts, num_obs, 'warn', first_warning);
+        end
+    end
+
+    function [data_files, data_path, varapri_to_keep, simpapri_to_keep, param_inds] = input_varfit_params()
+        % This subfunction will return variational fit fits files and their
+        % directory, the a priori variables in those files to use, and the
+        % indices of which parameters to plot (i.e. a = 1, x0 = 2...)
+        [data_files, data_path] = uigetfile('*VariationalFits*.mat','Select the fits file for the conditions to plot','multiselect','on');
+        if isnumeric(data_files) && data_files == 0
+            E.userCancel;
+        elseif ischar(data_files)
+            data_files = {data_files};
+        end
+        
+        V = load(fullfile(data_path, data_files{1}));
+        varfns = glob(fieldnames(V),'Ffix.*');
+        simpfns = glob(fieldnames(V),'F_.*');
+        
+        apris = listdlg('ListString',simpfns,'PromptString','Choose the apriori/wind bins to plot');
+        if isempty(apris)
+            E.userCancel;
+        end
+        % Assume that the apriori are in the same order in both lists and
+        % cut down to just the ones we selected.
+        varapri_to_keep = varfns(apris);
+        simpapri_to_keep = simpfns(apris);
+        
+        params = {V.(varfns{1})(1,:).fixed_par};
+        param_inds = listdlg('ListString',params,'PromptString','Choose which parameter(s) to vary');
+        if isempty(param_inds)
+            E.userCancel;
         end
     end
 end
