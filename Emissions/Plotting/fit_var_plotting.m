@@ -160,24 +160,23 @@ varargout = vout;
                 vals = struct2array(SF.(fns{a}).ffit);
                 apriori = fns{a}(3:end); % remove the "f_" bit
                 uncertainty = calc_total_fit_uncert(SF.(fns{a}), LD, apriori);
-                a_row = nan(1,15);
-                a_row(1:3:15) = vals;
-                a_row(2:3:15) = uncertainty(1,:);
-                a_row(3:3:15) = uncertainty(2,:);
+                a_row = nan(1,10);
+                a_row(1:2:9) = vals;
+                a_row(2:2:10) = uncertainty;
                 A = cat(1, A, a_row);
             end
             A = A';
             varnames = {'Mn108Fast','MnFast','HyFast','Mn108Slow','MnSlow','HySlow'};
         end
-        fns = {'a (mol)','uncert. a-','uncert. a+','x_0 (km)','uncert. x-','uncert x+','mu_x (km)','uncert. mu-','uncert. mu+','sigma_x (km)','uncert. sigma-','uncert. sigma+','B (mol)','uncert. B-','uncert. B+'};
-        latex_fns = {'$a$ (mol \chem{NO_2})';'';'';'$x_0$ (km)';'';'';'$\mu_x$ (km)';'';'';'$\sigma_x$ (km)';'';'';'$B$ (mol \chem{NO_2} km$^{-1}$)';'';''};
+        fns = {'a (mol)','uncert. a','x_0 (km)','uncert. x','mu_x (km)','uncert. mu','sigma_x (km)','uncert. sigma','B (mol)','uncert. B'};
+        latex_fns = {'$a$ (mol \chem{NO_2})';'';'$x_0$ (km)';'';'$\mu_x$ (km)';'';'$\sigma_x$ (km)';'';'$B$ (mol \chem{NO_2} km$^{-1}$)';''};
         if isfield(LD,'wind_crit')
             wc = WC.windvel >= LD.wind_crit;
-            [emis, uncert_E, tau, uncert_tau] = compute_emg_emis_tau(A(1,:),A(2:3,:),A(4,:),A(5:6,:), 'vec', WC.windvel(wc));
+            [emis, uncert_E, tau, uncert_tau] = compute_emg_emis_tau(A(1,:),A(2,:),A(3,:),A(4,:), 'vec', WC.windvel(wc));
             
             A = cat(1,A,emis,uncert_E,tau,uncert_tau);
-            fns = cat(2, fns, 'E (Mg NOx/h)','uncert. E-','uncert. E+', 'tau (h)','uncert. tau-','uncert. tau+');
-            latex_fns = cat(1, latex_fns, '$E$ (Mg \chem{NO_x} h$^{-1}$)', {''}, {''}, '$\tau_{\mathrm{eff}}$ (h)',{''},{''});
+            fns = cat(2, fns, 'E (Mg NOx/h)','uncert. E', 'tau (h)','uncert. tau');
+            latex_fns = cat(1, latex_fns, '$E$ (Mg \chem{NO_x} h$^{-1}$)', {''}, '$\tau_{\mathrm{eff}}$ (h)',{''});
         else
             fprintf('Cannot compute emissions and tau without wind criterion\n');
         end
@@ -188,7 +187,7 @@ varargout = vout;
         L = cat(2, latex_fns, num2cell(A));
         fprintf('\nLatex format:\n\n');
         %mat2latex(L,'%#.2g',1)
-        mat2latex(L,'u10',1,'asym')
+        mat2latex(L,'u10',1)
     end
 
     function plot_fit_envelopes
@@ -218,41 +217,19 @@ varargout = vout;
             for a=1:numel(varfns)
                 Ffix = V.(varfns{a});
                 n_sd = size(Ffix,1);
-                % if this is empty, it will use the scaling factors defined
-                % in emg_sd_scaling_factors
-                ideal_frac_sigma = []; 
-                cols = {'r','r','r','b','b','b'};
-                lstyles = {'-','--','-.','-.','--','-'};
-                
+                ideal_frac_sigma = [-.2, -.13, -.07, .3, .6, .9];
                 inds = round((ideal_frac_sigma*0.5 + 0.5)*n_sd);
                 true_frac_sigma = (2*inds - n_sd)./n_sd;
                 
+                cols = {'r','r','r','b','b','b'};
+                lstyles = {'-','--','-.','-.','--','-'};
                 n_inds = numel(inds);
                 
                 for b=param_inds %size(Ffix,2) % the fixed parameter changes across the second dimension
-                    if isempty(ideal_frac_sigma)
-                        sd_scales = emg_sd_scaling_factors;
-                        par_scale = sd_scales(:,b)'; 
-                        % these are given as both +ve values, need lower
-                        % one to be negative.
-                        tmp_frac_sigma = par_scale .* [-1 1];
-                        inds = round((tmp_frac_sigma*0.5 + 0.5)*n_sd);
-                        true_frac_sigma = (2*inds - n_sd)./n_sd;
-                        n_inds = numel(inds);
-                        
-                        cols = {'b', 'r'};
-                        lstyles = {'-','-'};
-                    end
-                    
-                    
                     figure;
                     plot(Ffix(1,b).no2x, Ffix(1,b).no2ld, 'ko'); % line densities same for all
                     hold on
-                    if ~isempty(ideal_frac_sigma)
-                        % for actual supplement figure, just want to show
-                        % the variants.
-                        plot(Ffix(1,b).no2x, V.(simpfns{a}).emgfit, 'k--','linewidth',2);
-                    end
+                    plot(Ffix(1,b).no2x, V.(simpfns{a}).emgfit, 'k--','linewidth',2);
                     
                     % Get the varied fits
                     l = gobjects(n_inds,1);
@@ -848,12 +825,9 @@ varargout = vout;
         % second lifetime that would convolve with the true lifetime. So
         % this will assume that all the sources of uncertainty count for
         % all the fit parameters, except for the NOx:NO2 ratio.
-        %
-        % I am using standard deviation rather than confidence interval
-        % because of how the scaling works
         num_obs_fn = sprintf('num_obs_%s',apriori);
         fit_params = struct2array(sfit.ffit);
-        frac_uncerts = sfit.stats.percentsd'/100;
+        frac_uncerts = sfit.stats.percent_ci95'/100;
         if ~isfield(LD,num_obs_fn)
             uncert = calc_fit_param_uncert(fit_params, frac_uncerts, 'warn', first_warning);
             if first_warning
