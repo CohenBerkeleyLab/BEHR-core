@@ -42,7 +42,7 @@ pout=p.Results;
 emgtype = pout.emgtype;
 f0in = pout.f0;
 
-    lb = [0, 1.6, min(no2_x), 2.5, 0];
+    lb = [100, 1.6, min(no2_x), 2.5, 0];
     [~,m] = max(no2_ld);
     ub = [Inf, Inf, max(no2_x), no2_x(m) - min(no2_x), max(no2_ld)];
     function emg = emgfxn_defoy(f)
@@ -80,7 +80,8 @@ end
 fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2) / nansum((no2_ld - nanmean(no2_ld)).^2);
 %fitfxn = @(x) nansum((emgfxn(x) - no2_ld).^2);
 
-P = @(f) exp(-fitfxn(f));
+
+
 if isempty(f0in)
     f0 = [rand*9e5+1e5, rand*100, 2*(rand-.5)*50, rand*100, rand*5e3];
 else
@@ -88,9 +89,12 @@ else
 end
 f0 = max(cat(1,f0,lb),[],1);
 f0 = min(cat(1,f0,ub),[],1);
-%delta = [1e5, 20, 20, 20, 5e3]; % max step size, found by trial and error to give fraction of accepted steps < 0.5.
-delta = [1, 2e-4, 2e-4, 2e-4, 0.5]; % max step size, found by trial and error to give fraction of accepted steps < 0.5.
+delta = [1e5, 20, 20, 20, 5e3]; % max step size, found by trial and error to give fraction of accepted steps < 0.5.
+%delta = [1, 2e-4, 2e-4, 2e-4, 0.5]; % max step size, found by trial and error to give fraction of accepted steps < 0.5.
 proprnd = @(f) f + rand(1,5) .* 2 .* delta - delta;
+
+P = @(f) exp(-fitfxn(f));
+%P = @(f) exp(-(fitfxn(f)-fitfxn(f0)));
 
 [x,nacc] = mhsample(f0,50000,'pdf',P,'proprnd',proprnd,'symmetric','sym','burnin',1000,'thin',10);
 

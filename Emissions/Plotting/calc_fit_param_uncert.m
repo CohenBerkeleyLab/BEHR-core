@@ -1,16 +1,18 @@
-function uncert = calc_fit_param_uncert(fit_params, fit_frac_uncerts, varargin)
+function uncert = calc_fit_param_uncert(fit_params, fit_frac_sds, varargin)
 %UNCERT = CALC_FIT_PARAM_UNCERT( FIT_PARAMS, FIT_FRAC_UNCERTS )
 % Given the values for the EMG fitting parameters, FIT_PARAMS, and their
-% fractional uncertainties, FIT_FRAC_UNCERTS, this will calculate the
-% overall uncertainty of the parameters. Note that FIT_FRAC_UNCERTS should
+% fractional standard deviations, FIT_FRAC_SDS, this will calculate the
+% overall uncertainty of the parameters. Note that FIT_FRAC_SDS should
 % truly be the fractional uncertainty, that is, if the uncertainty is
 % one-half the value of the parameter, it should be represented by 0.5, not
 % 50. The return value, UNCERT is an array the same size as FIT_PARAMS and
-% FIT_FRAC_UNCERTS that contains the absolute uncertainties for each value.
+% FIT_FRAC_SDS that contains the absolute uncertainties for each value.
 % FIT_PARAMS can be either the "ffit" structure from fit_line_density.m or
 % a vector of those parameters in the same order as the uncertainties. If a
 % structure is given, then the uncertainties will be returned in a column
-% vector, regardless of the shape of the inputs.
+% vector, regardless of the shape of the inputs.  It is recommended that
+% FIT_FRAC_SDS be derived from the Hessian of minimizing the unexplained
+% variance.
 %
 % The calculation of uncertainty follows the supplement in Beirle
 % et. al. They assign the following uncertainties:
@@ -35,6 +37,14 @@ function uncert = calc_fit_param_uncert(fit_params, fit_frac_uncerts, varargin)
 % use for emissions (which are not computed here, but instead in
 % compute_emg_emis_tau).
 %
+% This also does some asymmetrical scaling of the standard deviations based
+% on what I saw when I went through each parameter for Atlanta and
+% Birmingham and looked at how the fit changes as each parameter varied.
+% The dependence is definitely asymmetrical. This is also why you really
+% should pass in the uncertainty from minimizing the unexplained variance,
+% as the uncertainty from minimizing the sum of squared residuals is just
+% too small (usually < 0.01%).
+%
 %UNCERT = CALC_FIT_PARAM_UNCERT( FIT_PARAMS, FIT_FRAC_UNCERTS, NUM_OBS )
 % This will use the number of observations given in the array NUM_OBS to
 % reduce the error due to VCDs by sqrt(n). Here, n is conservatively taken
@@ -43,7 +53,8 @@ function uncert = calc_fit_param_uncert(fit_params, fit_frac_uncerts, varargin)
 % given, the value of 25% uncertainty in VCDs will be used unaltered.
 %
 %CALC_FIT_PARAM_UNCERT( ___ , 'warn', false ) will disable the warning
-%about the use of VCD uncertainty of 25%.
+%about the use of VCD uncertainty of 25% and if the parameter FIT_FRAC_SDS
+%is too small.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
@@ -63,11 +74,11 @@ warning_bool = pout.warn;
 if isstruct(fit_params)
     fit_params = struct2array(fit_params);
     fit_params = fit_params(:); % ensure that it is a column vector
-    fit_frac_uncerts = fit_frac_uncerts(:);
+    fit_frac_sds = fit_frac_sds(:);
 end
 
-if ~isequal(size(fit_params), size(fit_frac_uncerts))
-    E.badinput('FIT_PARAM_VEC and FIT_FRAC_UNCERT_VEC must be the same size');
+if ~isequal(size(fit_params), size(fit_frac_sds)) || ~isvector(fit_params) || ~isvector(fit_frac_sds)
+    E.badinput('FIT_PARAM_VEC and FIT_FRAC_UNCERT_VEC must be vectors of the same size');
 end
 
 if ~isnumeric(num_obs_array)
@@ -78,9 +89,26 @@ if ~isscalar(warning_bool) || (~islogical(warning_bool) && ~isnumeric(warning_bo
     E.badinput('The value for parameter WARN must be a scalar value that can be interpreted as a logical (either a logical or numeric value)');
 end
 
+if warning_bool && any(fit_frac_sds < 1e-3)
+    warning('Fractional SDs of < 0.1% detected, it is not recommended that the SDs from minimizing sum of squared residuals are used')
+end
+
+% Make input into row vectors and replicate them so that element-wise
+% products with the scaling factors (defined as rows in a 2x5 matrix) work
+if ~isrow(fit_params); fit_params = fit_params'; end
+fit_params = repmat(fit_params, 2, 1);
+if ~isrow(fit_frac_sds); fit_frac_sds = fit_frac_sds'; end
+fit_frac_sds = repmat(fit_frac_sds, 2, 1);
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN FUNCTION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Define the scaling factors for the fitting uncertainties. Bottom side in
+% first row, top side in second.
+sd_scales = emg_sd_scaling_factors;
+         
 
 if isempty(num_obs_array);
     s_vcd = 0.25;
@@ -95,6 +123,6 @@ else
 end
 s_b = 0.1;
 s_wind = 0.3;
-per_uncert = sqrt((fit_frac_uncerts).^2 + s_vcd.^2 + s_b.^2 + s_wind.^2);
+per_uncert = sqrt((fit_frac_sds .* sd_scales).^2 + s_vcd.^2 + s_b.^2 + s_wind.^2);
 uncert = abs(fit_params) .* per_uncert;
 end

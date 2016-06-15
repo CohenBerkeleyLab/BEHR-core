@@ -8,20 +8,36 @@ function [ E, uncert_E, tau, uncert_tau ] = compute_emg_emis_tau( a, uncert_a, x
 %   with wind 3 m/s were used, then pass windvel(windvel>3) as
 %   WIND_SPEED_VEC. This is used to compute the average wind speed and
 %   error in the wind (as a 95% confidence interval) for use in the
-%   uncertainty calculations.
+%   uncertainty calculations. A and X0 must be row vectors of the same
+%   size, and UNCERT_A and UNCERT_X0 must be 2-by-n matrices, where n is
+%   the number of elements of A and X0. The first row must be the
+%   uncertainty of the parameters below their value, the second row the
+%   uncertainty above. Sigh. I hate asymmetric uncertainties.
+%
+%   Even though the changes in a and x0 are correlated, we will still add
+%   them in quadrature because they are not perfectly correlated.  Ideally,
+%   we would have information on how the uncertainty envelope of e.g. x0
+%   changes for different values of a, but that would be much more
+%   complicated. Technically, that is what we should have because the
+%   assumption that the uncertainty is small enough to not significantly
+%   change the slopes is wrong, but we'll go with it for now.
 %
 %[ E, UNCERT_E, TAU, UNCERT_TAU ] = COMPUTE_EMG_EMIS_TAU( A, UNCERT_A, X0, UNCERT_X0, 'avg', WIND_SPEED_MEAN, WIND_SPEED_ERROR)
 %   In this format, the mean and error of the wind speed is given instead.
 %   This can be useful if you just stored these values rather than the full
 %   vector, or if you wish to use an alternate definition of error in the
-%   wind speed.
+%   wind speed 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if ~isequal(size(a), size(uncert_a)) || ~isequal(size(a),size(x0)) || ~isequal(size(a),size(uncert_x0))
-    E.badinput('A, UNCERT_A, X0, UNCERT_X0 must all be the same size.')
+if ~isrow(a) || ~isrow(x0) || length(a) ~= length(x0)
+    E.badinput('A and X0 must be row vectors of the same length')
+end
+
+if size(uncert_a,2) ~= length(a) || size(uncert_x0,2) ~= length(x0) || size(uncert_a,1) ~= 2 || size(uncert_x0,1) ~= 2
+    E.badinput('UNCERT_A and UNCERT_X0 must be 2-by-length(a) matrices')
 end
 
 allowed_wind_modes = {'vec','avg'};
@@ -68,6 +84,11 @@ tau = x0 ./ avg_wind;
 % NOx:NO2 ratio (10%). Uncertainty in lifetime will just depend
 % on uncertainty in x_0
 
+% We need the a and x0 matrices to be the same size as their uncertainty
+% now.
+a = repmat(a,2,1);
+x0 = repmat(x0,2,1);
+tau_tmp = repmat(tau,2,1);
 %Simple case (assumes average wind has no error)
 %uncert_tau = uncert_x0  ./ avg_wind;
 %Full case (consider uncertainty as 95% CI
@@ -82,7 +103,7 @@ uncert_tau = sqrt( (uncert_x0 ./ avg_wind).^2 + ( err_wind .* -x0 ./ avg_wind.^2
 % uncert_E = E .* per_uncert_E;
 NOxNO2 = 1.32;
 uncert_NOxNO2 = 0.1 * NOxNO2;
-uncert_E = sqrt((a .* mol2Mg ./ tau .* uncert_NOxNO2).^2 + (NOxNO2 ./ tau .* uncert_a .* mol2Mg).^2 + (-NOxNO2 .* a .* mol2Mg ./ tau.^2 .* uncert_tau).^2);
+uncert_E = sqrt((a .* mol2Mg ./ tau_tmp .* uncert_NOxNO2).^2 + (NOxNO2 ./ tau_tmp .* uncert_a .* mol2Mg).^2 + (-NOxNO2 .* a .* mol2Mg ./ tau_tmp.^2 .* uncert_tau).^2);
 
 end
 
