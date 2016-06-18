@@ -37,13 +37,13 @@ end
 
 switch lower(plottype)
     case 'fits'
-        plot_3_fits()
+        plot_3_fits(varargin{:})
     case 'varfits'
         plot_fit_envelopes()
     case 'e-tau'
         emis_tau_table();
     case 't-pairs'
-        [vout{:}] = pairwise_t(nargout);
+        [vout{:}] = pairwise_t(nargout, varargin{:});
     case 'xwind'
         xwind_emis_tau();
     case 'residuals'
@@ -66,16 +66,21 @@ end
 
 varargout = vout;
 
-    function plot_3_fits
-        [data_file, data_path] = uigetfile('*SimpleFits*.mat','Select the fits file for the conditions to plot');
-        if data_file == 0
-            fprintf('Cancelled\n')
-            return
+    function plot_3_fits(filename)
+        if ~exist('filename','var')
+            [data_file, data_path] = uigetfile('*SimpleFits*.mat','Select the fits file for the conditions to plot');
+            if data_file == 0
+                fprintf('Cancelled\n')
+                return
+            end
+        else
+            [data_path, data_file, ext] = fileparts(filename);
+            data_file = [data_file, ext];
         end
         SF = load(fullfile(data_path,data_file));
         ldfile = regexprep(data_file,'SimpleFits(-ssresid|-unexvar)*','LineDensities');
         if ~exist(fullfile(data_path,ldfile),'file')
-            E.filenotfound('simple fits file');
+            E.filenotfound('line density file');
         else
             LD = load(fullfile(data_path,ldfile));
         end
@@ -85,11 +90,11 @@ varargout = vout;
         city_name = data_file(s:e);
         
         % Get wind conditions
-        WC = load(sprintf('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/%s-Wind-Conditions-1900UTC-5layers.mat',city_name));
+        WC = load(sprintf('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/%s-Wind-Conditions-1900UTC-5layers-earthrel.mat',city_name));
         
         % Determine whether to plot the WRF ones too
         plot_wrf = false;
-        if all(isfield(LD,{'no2x_wrffast','no2x_wrfslow'}))
+        if all(isfield(LD,{'no2x_wrffast','no2x_wrfslow'})) && isDisplay
             plot_wrf_ans = questdlg('Include WRF line densities?');
             if strcmpi(plot_wrf_ans,'Yes')
                 plot_wrf = true;
@@ -100,15 +105,15 @@ varargout = vout;
         
         figure; hold on
         lstr = {'Line densities using coarse monthly a priori','Fit - coarse monthly', 'Line densities using fine monthly a priori', 'Fit - fine monthly', 'Line densities using fine daily a priori', 'Fit - fine daily'};
-        plot(LD.no2x_mn108slow, LD.no2ld_mn108slow, 'go', 'linewidth', 2);
-        plot(LD.no2x_mn108slow, SF.f_mn108slow.emgfit, '--', 'color', [0 0.5 0], 'linewidth', 2);
+        plot(LD.no2x_mn108slow, LD.no2ld_mn108slow, 'ko', 'linewidth', 2);
+        plot(LD.no2x_mn108slow, SF.f_mn108slow.emgfit, '--', 'color', 'k', 'linewidth', 2);
         plot(LD.no2x_mnslow, LD.no2ld_mnslow, 'o', 'linewidth', 2, 'color', [1 0.5 0]);
         plot(LD.no2x_mnslow, SF.f_mnslow.emgfit, 'r--', 'linewidth', 2);
         plot(LD.no2x_hyslow, LD.no2ld_hyslow, 'co', 'linewidth', 2);
         plot(LD.no2x_hyslow, SF.f_hyslow.emgfit, 'b--', 'linewidth', 2);
         if plot_wrf
-            plot(LD.no2x_wrfslow, LD.no2ld_wrfslow, 'ko', 'linewidth',2);
-            plot(LD.no2x_wrfslow, SF.f_wrfslow.emgfit, 'k--','linewidth',2)
+            plot(LD.no2x_wrfslow, LD.no2ld_wrfslow, 'go', 'linewidth',2);
+            plot(LD.no2x_wrfslow, SF.f_wrfslow.emgfit, '--','linewidth',2,'color',[0 0.5 0])
             lstr = [lstr, {'WRF data','WRF fit'}];
         end
         legend(lstr{:});
@@ -122,15 +127,15 @@ varargout = vout;
         end
         
         figure; hold on
-        plot(LD.no2x_mn108fast, LD.no2ld_mn108fast, 'go', 'linewidth', 2);
-        plot(LD.no2x_mn108fast, SF.f_mn108fast.emgfit, '--', 'color', [0 0.5 0], 'linewidth', 2);
+        plot(LD.no2x_mn108fast, LD.no2ld_mn108fast, 'ko', 'linewidth', 2);
+        plot(LD.no2x_mn108fast, SF.f_mn108fast.emgfit, '--', 'color', 'k', 'linewidth', 2);
         plot(LD.no2x_mnfast, LD.no2ld_mnfast, 'o', 'linewidth', 2, 'color', [1 0.5 0]);
         plot(LD.no2x_mnfast, SF.f_mnfast.emgfit, 'r--', 'linewidth', 2);
         plot(LD.no2x_hyfast, LD.no2ld_hyfast, 'co', 'linewidth', 2);
         plot(LD.no2x_hyfast, SF.f_hyfast.emgfit, 'b--', 'linewidth', 2);
         if plot_wrf
-            plot(LD.no2x_wrffast, LD.no2ld_wrffast, 'ko', 'linewidth',2);
-            plot(LD.no2x_wrffast, SF.f_wrffast.emgfit, 'k--','linewidth',2)
+            plot(LD.no2x_wrffast, LD.no2ld_wrffast, 'go', 'linewidth',2);
+            plot(LD.no2x_wrffast, SF.f_wrffast.emgfit, '--','linewidth',2,'color',[0 0.5 0])
             %lstr = [lstr, {'WRF data','WRF fit'}]; already done in slow
         end
         legend(lstr{:});
@@ -217,12 +222,13 @@ varargout = vout;
             for a=1:numel(varfns)
                 Ffix = V.(varfns{a});
                 n_sd = size(Ffix,1);
-                ideal_frac_sigma = [-.2, -.13, -.07, .3, .6, .9];
+                ideal_frac_sigma = [-1 -0.26 0.26 1];
                 inds = round((ideal_frac_sigma*0.5 + 0.5)*n_sd);
+                inds = min(max(inds,1),n_sd);
                 true_frac_sigma = (2*inds - n_sd)./n_sd;
                 
-                cols = {'r','r','r','b','b','b'};
-                lstyles = {'-','--','-.','-.','--','-'};
+                cols = {'r','r','b','b'};
+                lstyles = {'-','--','--','-'};
                 n_inds = numel(inds);
                 
                 for b=param_inds %size(Ffix,2) % the fixed parameter changes across the second dimension
@@ -325,8 +331,15 @@ varargout = vout;
         
     end
 
-    function varargout = pairwise_t(nout)
-        [fnames, pname] = uigetfile('*SimpleFits*.mat','Choose all files to use','multiselect','on');
+    function varargout = pairwise_t(nout, fnames)
+        if ~exist('fnames','var')
+            [fnames, pname] = uigetfile('*SimpleFits*.mat','Choose all files to use','multiselect','on');
+        else
+            if ~iscell(fnames)
+                fnames = {fnames};
+            end
+            pname = '.';
+        end
         [cities, wind_speeds] = get_cities_and_winds_from_fnames(fnames);
         
         if ~iscell(fnames)
@@ -972,6 +985,10 @@ else
     end
 end
 
+if ~iscell(fnames)
+    fnames = {fnames};
+end
+
 % the final table will have 3 a priori per city and will have
 % uncertainty alternate with value along the first dimension
 emis = nan(2*numel(wind_speeds), 3*numel(cities));
@@ -983,7 +1000,7 @@ for a=1:numel(cities)
     % Get the wind vector file, we'll need it for the uncertainty
     % of tau
     wind_path = fullfile(HOMEDIR,'Documents','MATLAB','BEHR','Workspaces','Wind speed');
-    wind_name = sprintf('%s-Wind-Conditions-1900UTC-5layers.mat',cities{a});
+    wind_name = sprintf('%s-Wind-Conditions-1900UTC-5layers-earthrel.mat',cities{a});
     W = load(fullfile(wind_path, wind_name));
     
     for b=1:numel(wind_speeds)
