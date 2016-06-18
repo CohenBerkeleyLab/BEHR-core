@@ -27,11 +27,11 @@ E = JLLErrors;
 
 switch city
     case 'Atlanta'
-        wind_file = 'Atlanta-Wind-Conditions-1900UTC-5layers.mat';
+        wind_file = 'Atlanta-Wind-Conditions-1900UTC-5layers-earthrel.mat';
     case 'Birmingham'
-        wind_file = 'Birmingham-Wind-Conditions-1900UTC-5layers.mat';
+        wind_file = 'Birmingham-Wind-Conditions-1900UTC-5layers-earthrel.mat';
     case 'Montgomery'
-        wind_file = 'Montgomery-Wind-Conditions-1900UTC-5layers.mat';
+        wind_file = 'Montgomery-Wind-Conditions-1900UTC-5layers-earthrel.mat';
     otherwise
         E.badinput('City %s not recognized',city);
 end
