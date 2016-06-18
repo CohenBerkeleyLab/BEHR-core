@@ -24,6 +24,7 @@ function [ varargout ] = fit_var_plotting(plottype, varargin )
 E=JLLErrors;
 
 first_warning = true;
+HOME_DIR = getenv('HOME');
 
 if ~exist('plottype','var')
     plottype = ask_multichoice('Which plot to make?', {'fits'},'list',true);
@@ -90,7 +91,7 @@ varargout = vout;
         city_name = data_file(s:e);
         
         % Get wind conditions
-        WC = load(sprintf('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/%s-Wind-Conditions-1900UTC-5layers-earthrel.mat',city_name));
+        WC = load(fullfile(HOME_DIR,'Documents','MATLAB','BEHR','Workspaces','Wind speed',sprintf('%s-Wind-Conditions-1900UTC-5layers-earthrel.mat',city_name)));
         
         % Determine whether to plot the WRF ones too
         plot_wrf = false;

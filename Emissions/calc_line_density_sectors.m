@@ -1,16 +1,11 @@
-function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, num_valid_obs, nox, debug_cell ] = calc_line_density( fpath, fnames, center_lon, center_lat, theta, varargin )
+function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, num_valid_obs, nox, debug_cell ] = calc_line_density_sectors( fpath, fnames, center_lon, center_lat, theta, varargin )
 %[ NO2_X, NO2_LINEDENS, NO2_LINEDENS_STD, LON, LAT, NO2_MEAN, NO2_STD, NUM_VALID_OBS] = CALC_LINE_DENSITY( FPATH, FNAMES, CENTER_LON, CENTER_LAT, THETA )
 %   Calculate a wind-aligned line density for a given time period.
 %
-%   Calculates a line density of NO2 up and downwind of a city by aligning
-%   each day's plume to the x-axis as described in Valin 2013.  By fitting
-%   an exponentially modified Gaussian function to the line density,
-%   certain features of the NOx emissions and chemistry can be derived.
+%   Calculates a line density of NO2 up and downwind of a city for 8
+%   different wind sectors a la Beirle et al. 2011.
 %
 %   c.f.    Beirle et al., Science, 2015, pp. 1737-1739
-%           Valin et al., Geophys. Res. Lett., 2013, pp. 1856-1860
-%           de Foy et al., Atmos. Environ., 2014, pp. 66-77
-%           Lu et al., ACP, 2015, pp. 10367-10383
 %
 %   Required inputs:
 %
@@ -33,7 +28,7 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, nu
 %   Outputs:
 %
 %       no2_x - the x-coordinates of the line density (in km from center
-%       lon/lat)
+%       lon/lat) as a structure for each direction.
 %
 %       no2_linedensity - the line density in mol/km.
 %
@@ -266,6 +261,9 @@ for d=1:numel(fnames_struct)
         n_swath = numel(data_ind);
     end
 
+    % We'll still "rotate" each day but divide it by sectors. This isn't so
+    % much trying to reproduce Beirle 11 as give me a way to find out which
+    % directions contribute to certain features of the line density.
     for s=1:n_swath
         i = i+1;
         if ~use_data_ind
@@ -286,8 +284,10 @@ for d=1:numel(fnames_struct)
         OMI = omi_pixel_reject(OMI,'omi',0.2,'XTrackFlags');
         xx = OMI.Areaweight > 0;
         if create_array
-            nox = nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct)*n_swath);
-            aw = nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct)*n_swath);
+            directions = {'W','SW','S','SE','E','NE','N','NW'};
+            theta_bin_edges = [-180, -157.5, -112.5, -67.5, -22.5, 22.5, 67.5, 112.5, 157.5];
+            nox = make_empty_struct_from_cell(directions, nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct)*n_swath));
+            aw = make_empty_struct_from_cell(directions, nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct)*n_swath));
             lon = OMI.Longitude;
             lat = OMI.Latitude;
             debug_cell = cell(numel(fnames_struct)*n_swath,1);
@@ -296,6 +296,15 @@ for d=1:numel(fnames_struct)
         
         debug_cell{i} = sprintf('%s: swath %d', fnames_struct(d).name, e);
 
+        
+        % Find which bin this belongs in
+        if theta(d) < theta_bin_edges(2) || theta(d) > theta_bin_edges(end)
+            bin = 'W';
+        else
+            theta_xx = theta_bin_edges(1:end-1) <= theta(d) & theta_bin_edges(2:end) > theta(d);
+            bin = directions{theta_xx};
+        end
+        
         if interp_bool
             % This criterion accounts for how many neighbors are empty, giving more
             % weight to large clumps of NaNs (due to row anomaly or clouds) and
@@ -313,63 +322,64 @@ for d=1:numel(fnames_struct)
             if DEBUG_LEVEL > 0; disp('Interpolating to fill in gaps in NO2 matrix'); end
             F = scatteredInterpolant(OMI.Longitude(xx), OMI.Latitude(xx), OMI.BEHRColumnAmountNO2Trop(xx));
             Faw = scatteredInterpolant(OMI.Longitude(xx), OMI.Latitude(xx), OMI.Areaweight(xx));
-            nox(:,:,i) = F(OMI.Longitude, OMI.Latitude)*nox_no2_scale;
-            aw(:,:,i) = Faw(OMI.Longitude, OMI.Latitude);
+            nox.(bin)(:,:,i) = F(OMI.Longitude, OMI.Latitude)*nox_no2_scale;
+            aw.(bin)(:,:,i) = Faw(OMI.Longitude, OMI.Latitude);
         else
             
             OMI.BEHRColumnAmountNO2Trop(~xx) = nan;
             OMI.Areaweight(~xx) = nan;
-            nox(:,:,i) = OMI.BEHRColumnAmountNO2Trop*nox_no2_scale;
-            aw(:,:,i) = OMI.Areaweight;
+            nox.(bin)(:,:,i) = OMI.BEHRColumnAmountNO2Trop*nox_no2_scale;
+            aw.(bin)(:,:,i) = OMI.Areaweight;
         end
     end
 end
 
 %no2_mean = nanmean(nox,3);
-no2_mean = nansum2(nox .* aw, 3) ./ nansum2(aw, 3);
-num_valid_obs = sum( ~isnan(nox) & aw > 0, 3);
-% Calculate the weighted standard deviation (c.f.
-% https://en.wikipedia.org/wiki/Mean_square_weighted_deviation)
-no2_var = (nansum2(aw .* nox.^2, 3) .* nansum2(aw,3) - (nansum2(aw .* nox, 3)).^2)./(nansum2(aw,3).^2 - nansum(aw.^2,3));
-no2_std = sqrt(no2_var);
-
-% Calculate the line density. See de Foy et al., Atmos. Environ. (2014) p.
-% 66. Basically an integration along the line perpendicular to the plume.
-
-if DEBUG_LEVEL > 0; disp('Calculating line density'); end
-no2_linedens = zeros(1,size(lon,2));
-no2_lindens_std = zeros(1,size(lon,2));
-no2_x = nan(1,size(lon,2));
-d_cm = nan(size(lon));
-for a=1:numel(no2_linedens)
-    for b=1:size(lon,1)-1 % because we need a latitudinal difference to average over, we can't do the last row.
-        d_cm(b,a) = m_lldist(lon(b:b+1,a),lat(b:b+1,a)) * 1e5;
-        if ~isnan(no2_mean(b,a))
-            no2_linedens(a) = no2_linedens(a) + no2_mean(b,a) * d_cm(b,a);
-            % add the uncertainties in quadrature.
-            no2_lindens_std(a) = no2_lindens_std(a) + no2_std(b,a).^2 * d_cm(b,a);
+for f=1:numel(directions)
+    no2_mean.(directions{f}) = nansum2(nox.(directions{f}) .* aw.(directions{f}), 3) ./ nansum2(aw.(directions{f}), 3);
+    num_valid_obs = sum( ~isnan(nox.(directions{f})) & aw.(directions{f}) > 0, 3);
+    % Calculate the weighted standard deviation (c.f.
+    % https://en.wikipedia.org/wiki/Mean_square_weighted_deviation)
+    no2_var.(directions{f}) = (nansum2(aw.(directions{f}) .* nox.(directions{f}).^2, 3) .* nansum2(aw.(directions{f}),3) - (nansum2(aw.(directions{f}) .* nox.(directions{f}), 3)).^2)./(nansum2(aw.(directions{f}),3).^2 - nansum(aw.(directions{f}).^2,3));
+    no2_std.(directions{f}) = sqrt(no2_var.(directions{f}));
+    
+    % Calculate the line density. See de Foy et al., Atmos. Environ. (2014) p.
+    % 66. Basically an integration along the line perpendicular to the plume.
+    
+    if DEBUG_LEVEL > 0; disp('Calculating line density'); end
+    no2_linedens.(directions{f}) = zeros(1,size(lon,2));
+    no2_lindens_std.(directions{f}) = zeros(1,size(lon,2));
+    no2_x.(directions{f}) = nan(1,size(lon,2));
+    d_cm = nan(size(lon));
+    for a=1:numel(no2_linedens.(directions{f}))
+        for b=1:size(lon,1)-1 % because we need a latitudinal difference to average over, we can't do the last row.
+            d_cm(b,a) = m_lldist(lon(b:b+1,a),lat(b:b+1,a)) * 1e5;
+            if ~isnan(no2_mean.(directions{f})(b,a))
+                no2_linedens.(directions{f})(a) = no2_linedens.(directions{f})(a) + no2_mean.(directions{f})(b,a) * d_cm(b,a);
+                % add the uncertainties in quadrature.
+                no2_lindens_std.(directions{f})(a) = no2_lindens_std.(directions{f})(a) + no2_std.(directions{f})(b,a).^2 * d_cm(b,a);
+            end
         end
+        % Calculate x in km distant from the center lon/lat. OMI is a gridded
+        % representation so OMI.Longitude(:,a) are all the same, as are
+        % OMI.Latitude(b,:).
+        no2_x.(directions{f})(a) = m_lldist([lon(1,a), center_lon], [center_lat, center_lat]) * sign(lon(1,a) - center_lon);
     end
-    % Calculate x in km distant from the center lon/lat. OMI is a gridded
-    % representation so OMI.Longitude(:,a) are all the same, as are
-    % OMI.Latitude(b,:).
-    no2_x(a) = m_lldist([lon(1,a), center_lon], [center_lat, center_lat]) * sign(lon(1,a) - center_lon);
+    
+    % Remove any values that never got anything added to them b/c there were no
+    % non-nan values for that transect.
+    rr = ~all(isnan(no2_mean.(directions{f})),1);
+    no2_x.(directions{f}) = no2_x.(directions{f})(rr);
+    no2_linedens.(directions{f}) = no2_linedens.(directions{f})(rr);
+    no2_lindens_std.(directions{f}) = no2_lindens_std.(directions{f})(rr);
+    
+    % Finalize the uncertainties
+    no2_lindens_std.(directions{f}) = sqrt(no2_lindens_std.(directions{f}));
+    
+    % Convert line density from molec/cm to moles/km
+    no2_linedens.(directions{f}) = no2_linedens.(directions{f}) * 1e5 / 6.022e23;
+    no2_lindens_std.(directions{f}) = no2_lindens_std.(directions{f}) * 1e5 / 6.022e23;
 end
-
-% Remove any values that never got anything added to them b/c there were no
-% non-nan values for that transect.
-rr = ~all(isnan(no2_mean),1);
-no2_x = no2_x(rr);
-no2_linedens = no2_linedens(rr);
-no2_lindens_std = no2_lindens_std(rr);
-
-% Finalize the uncertainties
-no2_lindens_std = sqrt(no2_lindens_std);
-
-% Convert line density from molec/cm to moles/km
-no2_linedens = no2_linedens * 1e5 / 6.022e23;
-no2_lindens_std = no2_lindens_std * 1e5 / 6.022e23;
-
 end
 
 function [mfrac, msum] = badpix_metric(xx)
