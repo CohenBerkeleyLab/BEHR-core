@@ -1,0 +1,46 @@
+\documentclass[12pt]{article}
+
+%Bring in the packages I'll need normally
+\usepackage{amsmath} %AMS Math Package
+\usepackage{amsthm} %Theorem formatting
+\usepackage{amssymb} %Math symbols like \mathbb
+\usepackage{cancel} %Allows you to draw diagonal cancelling out lines
+\usepackage{multicol} % Allows for multiple columns
+\usepackage{graphicx} %Allows images to be inserted using \includegraphics
+\usepackage{enumitem} %Allows for fancier lists, use [noitemsep] or [noitemsep, nolistsep] after \begin{}
+\usepackage{braket} %Dirac bra-ket notation
+\usepackage{textcomp}
+\usepackage{hyperref} %Allows the use of web links (\url, \href) and computer paths (\path)
+
+\usepackage{listings} %Way to typeset code; listings respect whitespace. Can be set inline with {\lstinline[breaklines=true]||} or as an environment
+\lstset{basicstyle=\ttfamily} %Causes the code environments to be typeset with a Courier-like font
+
+\usepackage[version=3]{mhchem} %Simpler chemistry notation, use \ce{} to typeset chemical formula
+	%e.g. \ce{H2O} for water and \ce{1/2SO4^2-} to set half a mol of sulfate ion.
+
+%Set the page to be letter sized with 1" margins
+\usepackage[dvips,letterpaper,margin=1in]{geometry}
+
+%title
+\title{Correction to DISCOVER-AQ BEHR Products}
+\author{Josh Laughner}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+	The ghost column is a correction factor that attempts to account for the fact that a UV/Vis satellite instrument will have nearly zero sensitivity to, in this case, \ce{NO2} below heavy clouds.  To correct for this, a multiplicative factor is calculated as:
+	\begin{equation}
+		g = \frac{V_{\mathrm{gnd}}}{(1-f)V_{\mathrm{gnd}} + f V_{\mathrm{cld}}}
+	\end{equation}
+where $f$ is the geometric cloud fraction, $V_{\mathrm{gnd}}$ is a modeled \ce{NO2} column integrated from the ground to the tropopause, and $V_{\mathrm{cld}}$ is similarly a modeled \ce{NO2} column integrated from the cloud to the tropopause.  Therefore, this factor is a best guess at the ratio of the total column to the visible column.
+
+	In the current operational BEHR algorithm, this factor is calculated but not applied; the BEHRColumnAmountNO2Trop and BEHR\_R\_ColumnAmountNO2Trop fields are to represent the visible column only.  The user may apply the correction as
+	\begin{equation}
+		V_{\mathrm{total}} = V_{\mathrm{obs}} \times g
+	\end{equation}
+	where $V_{\mathrm{obs}}$ is the column density given in the BEHR product. $g$ is given in the \textbf{BEHRGhostFraction} field.
+	
+	In the version of the specialized DISCOVER BEHR product release around 18 Aug 2015, a bug existed where the value provided in the BEHRColumnAmountNO2 variable already had the ghost correction applied, and because of where in the code the correction was applied, it was applied incorrectly, as $V_{\mathrm{total}} = V_{\mathrm{obs}} / g$. If you downloaded DISCOVER BEHR data labeled as ``InSitu'' prior to \textbf{date}, both the \textbf{BEHRColumnAmountNO2Trop} and \textbf{BEHRAMFTrop} fields will be incorrect due to this bug.  The \textbf{InSitu} fields and \textbf{BEHR\_R\_ColumnAmountNO2Trop} fields were unaffected.
+
+\end{document}
