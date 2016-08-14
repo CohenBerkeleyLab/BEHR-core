@@ -5,7 +5,7 @@ function run_many_line_densities_sectors
 cities = {'Atlanta','Birmingham'};
 wind_crits = {3,4,5};%{'mean',3,5};
 box = [1.0 2.0 0.5 0.5];%[1.0 2.0 0.5 0.5];
-save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/50km-side-debug';
+save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/50km-side-sectors';
 for a=1:numel(cities)
     for b=1:numel(wind_crits)
         if isnumeric(wind_crits{b})

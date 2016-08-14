@@ -250,6 +250,8 @@ if isempty(crit_logical) && windvel_set
     crit_logical = eval(sprintf('windvel %s windcrit',windop));
 end
 
+fid = fopen('index_date_and_swath.txt','w');
+
 create_array = true;
 i = 0;
 for d=1:numel(fnames_struct)
@@ -268,6 +270,7 @@ for d=1:numel(fnames_struct)
 
     for s=1:n_swath
         i = i+1;
+        fprintf(fid,'** %d: %s swath %d\n', i, fnames_struct(d).name, s);
         if ~use_data_ind
             e = s;
         else
@@ -324,6 +327,7 @@ for d=1:numel(fnames_struct)
         end
     end
 end
+fclose(fid);
 
 %no2_mean = nanmean(nox,3);
 no2_mean = nansum2(nox .* aw, 3) ./ nansum2(aw, 3);
