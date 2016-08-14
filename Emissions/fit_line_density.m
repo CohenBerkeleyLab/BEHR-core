@@ -211,9 +211,12 @@ else
     %      i = find(no2_x > 0, 1, 'first');
     %      j = find(no2_x > no2_x(i) + f0(2), 1, 'first');
     %      f0(1) = trapz(no2_x(i:j), no2_ld(i:j));
+    % Why not just try the overall integral?
+    f0(1) = trapz(no2_x, no2_ld);
+    
     % Instead, let's just try starting out as half the maximum value of the
     % line density.
-    f0(1) = max(no2_ld)/2;
+    %f0(1) = max(no2_ld)/2;
 
     % f(3) is mu_x or where the average for the Gaussian is, this should be
     % around the maximum.
@@ -239,8 +242,7 @@ f_lb = nan(1,5);
 f_ub = nan(1,5);
 
 % a (related to plume mass) must be > 0 to be physically meaningful
-% 100 mol/km is a little more than 
-f_lb(1) = 100; f_ub(1) = Inf; %f_ub(1) = max(no2_ld)*1.5;
+f_lb(1) = 0; f_ub(1) = Inf; %f_ub(1) = max(no2_ld)*1.5;
 
 % x0 (length scale of chemical decay) must be > 0 to be physically
 % meaningful. This term tends to cause problems in the fit when the
@@ -262,7 +264,6 @@ f_lb(2) = 1.6; f_ub(2) = Inf;
 % might be that it must lie within 1 std. dev. of the maximum of the line
 % density, that may be useful if fitting continues to be foolish.
 f_lb(3) = min(no2_x); f_ub(3) = max(no2_x);
-%f_lb(3) = -50; f_ub(3) = 50;
 
 % sigma_x describes the width of the Gaussian; it must be positive (and not
 % just technically positive - it should have at least some width. Therefore
@@ -414,23 +415,31 @@ emgfit = emgfxn_fix(fitparams, no2_x);
 ffit = unfix_params(fitparams, fixed_param, fixed_val);
 
 % The inverse of the Hessian is an approximation to the covariance matrix
-% (Dovi 1991, Appl. Math. Lett. Vol 4, No 1, pp. 87-90; also
+% (Dovi 1991, Appl. Math. Lett. Vol 4, No 1, pp. 87-90; for a
+% single-equation system, it should also be multiplied by the standard
+% squared error of the fit (basically the sum of squared residuals divided
+% by the number of degrees of freedom.) Ch. 7 of "Nonlinear Parameter
+% Estimation" by Yonathan Bard is also helpful here, along with notes from
+% 14 June 2016.
+%
 % http://www.mathworks.com/matlabcentral/answers/153414-estimator-standard-errors-using-fmincon-portfolio-optimization-context)
-% however the fmincon Hessian can be inaccurate, hence we take it from
+% says that the fmincon Hessian can be inaccurate, hence we take it from
 % fminunc that is initialized at the solution from fmincon.
-param_stats.sd = sqrt(diag(inv(unc_hessian)));
+n_ld = sum(~isnan(no2_x) & ~isnan(no2_ld));
+sse = nansum2((emgfit - no2_ld).^2) * 1/(n_ld - 5);
+param_stats.sd = sqrt(sse * diag(inv(unc_hessian)));
 param_stats.percentsd = param_stats.sd ./ abs(fitparams') * 100;
 
 % tinv gives the t value for a one-tailed distribution, we want two-tailed
 % so alpha must be halved, thus 97.5% certainty one-tailed is equivalent to
 % 95% two-tailed. Also, since we're dealing with a fit, we've used up five
 % degrees of freedom, one for each of the parameters fitted.
-n_ld = sum(~isnan(no2_x));
 student_t = tinv(0.975,n_ld-5);
 param_stats.ci95 = param_stats.sd .* student_t ./ sqrt(n_ld);
 param_stats.percent_ci95 = param_stats.ci95 ./ abs(fitparams') * 100;
 fitresults.fminunc_soln = f_unc;
 fitresults.fminunc_hessian = unc_hessian;
+fitresults.fminunc_cov = sse * unc_hessian;
 
 % Calculate r (http://onlinestatbook.com/2/describing_bivariate_data/calculation.html)
 x = no2_ld - nanmean(no2_ld);

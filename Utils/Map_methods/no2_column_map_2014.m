@@ -29,8 +29,9 @@ function [cbhandle, GriddedColumn, longrid, latgrid, GriddedCount] = no2_column_
 %       default, this will be set by MATLAB.
 %   states = Set to 0 to avoid plotting US state boundaries.
 %   behrdir = The directory where BEHR files can be found.
-%   fileprefix = 'OMI_BEHR_' by default. The part of the .mat filenames
-%       before the date.
+%   fileprefix = 'OMI_BEHR_VSTR_', where VSTR is replaced with the current
+%       version string defined by BEHR_version  by default. In general, this is
+%       the part of the .mat filenames before the date.
 %   flags = a cell array of flags that change the behavior of the function:
 %         'weekend'/'weekday' --> only average over weekend or weekdays respectively
 %         'r_weekend'/'r_weekday' --> average over Su only or Tu-F only
@@ -65,7 +66,7 @@ p.addParameter('coast','default',@(x) any(strcmpi(x,{'default','high','intermedi
 p.addParameter('color','w');
 p.addParameter('cbrange',[],@(x) length(x) == 2);
 p.addParameter('states',1,@isscalar);
-p.addParameter('fileprefix','OMI_BEHR_',@isstr);
+p.addParameter('fileprefix',sprintf('OMI_BEHR_%s_',BEHR_version),@isstr);
 p.addParameter('flags',{},@iscell);
 p.addParameter('clouds','omi',@isstr);
 p.addParameter('cloudfraccrit',-1,@isscalar)

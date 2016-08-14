@@ -4,13 +4,18 @@ function [ varargout ] = misc_wrf_wind_plots( plttype, varargin )
 
 E = JLLErrors;
 wrf_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US';
+wrf_path_west = '/Volumes/share2/USERS/LaughnerJ/WRF/W_US';
 wrf_behr_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR/hourly';
+wrf_behr_path_west = '/Volumes/share2/USERS/LaughnerJ/WRF/W_US_BEHR/hourly';
+HOMEDIR = getenv('HOME');
 at_lonlat = [-84.39, 33.775];
 bi_lonlat = [-86.80, 33.52];
 mt_lonlat = [-86.3, 32.37];
 
 if ~exist('plttype','var')
-    allowed_plots = {'surf-conc-stats','wrf_wind-cld','wrf-sat-cld','wrf-var-corr','2dvar-v-cld','3dvar-v-cld','nonlin-nox','wrf_stats','pick-rxns','mean-react','daily-react','sum-emis'};
+    allowed_plots = {'surf-conc-stats','wrf_wind-cld','wrf-sat-cld','wrf-var-corr',...
+        '2dvar-v-cld','3dvar-v-cld','nonlin-nox','wrf_stats','pick-rxns','mean-react',...
+        'daily-react','sum-emis','compare2geos','compare2runs'};
     plttype = ask_multichoice('Select a plot type',allowed_plots,'list',true);
 end
 
@@ -43,6 +48,10 @@ switch plttype
         varargout{1} = compute_wrf_emis();
     case 'lifetime'
         compute_avg_lifetime;
+    case 'compare2geos'
+        compare_to_geos_profs;
+    case 'compare2runs'
+        compare_2_runs;
 end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -830,6 +839,398 @@ end
                 
     end
 
+    function compare_to_geos_profs
+        % This function will serve as a driver to the external function
+        % compare_wrf_gc_profiles.
+        coast = ask_multichoice('Which WRF domain to compare?', {'east','west'}, 'list', true);
+        
+        gc_path = fullfile(HOMEDIR,'Documents','MATLAB','BEHR','Workspaces','Convergence Method','WRF-GEOS Comparison');
+        % Each of these files should only have one variable in it, so we
+        % extract it thus.
+        F = load(fullfile(gc_path, 'Std-Pickp0-OMI-TIME-SER_NO2.mat'));
+        fns = fieldnames(F);
+        gc_no2 = F.(fns{1});
+        F = load(fullfile(gc_path, 'Std-Pickp0-OMI-PEDGE-PSURF'));
+        fns = fieldnames(F);
+        gc_pres = F.(fns{1});
+        
+        gc_dnums = gc_no2.tVec;
+        
+        % GEOS-Chem was the easy part. Now we need to get the WRF profiles
+        % concatenated in time but isolate part of the day. We assume that
+        % the GEOS-Chem profiles were averaged over 1300 to 1500 local
+        % standard time, we'll try to do the same with WRF-Chem. 
+        if strcmpi(coast, 'east')
+            wrf_dir = wrf_behr_path;
+        elseif strcmpi(coast, 'west')
+            wrf_dir = wrf_behr_path_west;
+        else
+            E.notimplemented('Path for coast = %s not implemented', coast);
+        end
+        
+        F = dir(fullfile(wrf_dir,'*.nc'));
+        [utchr, xlon, xlat, wrf_no2_all, wrf_pres_all] = read_wrf_vars(wrf_dir, F, {'utchr','XLONG','XLAT','no2','pres'});
+        utchr = double(utchr);
+        
+        % Check that the longitude, latitude, and utc hour is constant
+        % throughout the time period (they really should be)
+        E.addCustomError('change_const','const_var_changed','The variable %s is not constant over all files and should be');
+        testdiff = diff(utchr, 1, 2);
+        if any(testdiff(:)~=0)
+            E.callCustomError('change_const','utchr');
+        end
+        testlon = reshape(xlon,size(xlon,1),size(xlon,2),[]);
+        testdiff = diff(testlon,1,3);
+        if any(testdiff(:) ~= 0)
+            E.callCustomError('change_const','XLONG');
+        end
+        testlat = reshape(xlat,size(xlat,1),size(xlat,2),[]);
+        testdiff = diff(testlat,1,3);
+        if any(testdiff(:) ~= 0)
+            E.callCustomError('change_const','XLAT');
+        end
+        
+        utchr = utchr(:,1);
+        xlon = xlon(:,:,1);
+        xlat = xlat(:,:,1);
+        
+        % Now we need to figure how which times are in between 1300 and
+        % 1500 local.
+        sz = size(wrf_no2_all);
+        if ~isequal(sz, size(wrf_pres_all))
+            E.sizeMismatch('wrf_no2_all', 'wrf_pres_all');
+        elseif ~isequal(sz(1:2), size(xlon))
+            E.sizeMismatch('wrf_no2_all','xlon');
+        end
+        
+        wrf_no2 = nan(sz([1:3,5]));
+        wrf_pres = nan(sz([1:3,5]));
+        for a=1:sz(1)
+            for b=1:sz(2)
+                utcoffset = round(xlon(a,b)/15);
+                lsthr = utchr + utcoffset;
+                tt = lsthr >= 13 & lsthr <= 15;
+                no2_tmp = wrf_no2_all(a,b,:,tt,:);
+                wrf_no2(a,b,:,:) = squeeze(nanmean(no2_tmp,4));
+                pres_tmp = wrf_pres_all(a,b,:,tt,:);
+                wrf_pres(a,b,:,:) = squeeze(nanmean(pres_tmp,4));
+            end
+        end
+        
+        % Lastly get the date nums for WRF
+        fnames = {F.name};
+        dstrings = regexp(fnames,'\d\d\d\d-\d\d-\d\d','match','once');
+        wrf_dnums = datenum(dstrings);
+        
+        [GC2WRF.gc_no2_match, GC2WRF.wrf_no2_match, GC2WRF.lon_match, GC2WRF.lat_match, GC2WRF.pres_match, GC2WRF.dnums_match] = compare_wrf_gc_profiles(gc_no2.dataBlock, gc_pres.dataBlock, gc_dnums, wrf_no2, wrf_pres, wrf_dnums, xlon, xlat);
+        
+        if strcmpi(ask_multichoice('Place output in base workspace?',{'y','n'}),'y')
+            putvar GC2WRF
+            fprintf('Structure GC2WRF placed in base workspace\n')
+        end
+        
+        % Create a GUI to examine the various profiles
+        wrf2geos_comp_GUI(GC2WRF.gc_no2_match, GC2WRF.wrf_no2_match, GC2WRF.lon_match, GC2WRF.lat_match, GC2WRF.pres_match, GC2WRF.dnums_match);
+    end
+
+    function compare_2_runs
+        % This function will compare my and Azimeh's run for the area
+        % around Atlanta, Birmingham, Montgomery to give a few statistics:
+        %   1) Time series of mean and median surface concentrations around
+        %   each city plus a few background locations 
+        %   2) Mean and median profiles at those same locations
+        % Okay it actually does 3 runs now. Things changed.
+        
+        timeser_uncert_bool = strcmpi(ask_multichoice('Show uncertainty on the timeseries?',{'y','n'},'default','y'),'y');
+        prof_uncert_bool = strcmpi(ask_multichoice('Show uncertainty on the profiles?',{'y','n'},'default','y'),'y');
+        
+        start_date = '2013-05-28';
+        end_date = '2013-06-30';
+        
+        dir_az = wrf_behr_path;
+        F_az = dir(fullfile(dir_az,'WRF*.nc'));
+        dnums_az = datenum(regexp({F_az.name},'\d\d\d\d-\d\d-\d\d','match','once'));
+        tt = dnums_az >= datenum(start_date) & dnums_az <= datenum(end_date);
+        F_az(~tt) = []; dnums_az(~tt) = [];
+        
+        dir_me = fullfile(wrf_behr_path,'..','..','E_US_BEHR_MyRun');
+        F_me = dir(fullfile(dir_me,'WRF*.nc'));
+        dnums_me = datenum(regexp({F_me.name},'\d\d\d\d-\d\d-\d\d','match','once'));
+        tt = dnums_me >= datenum(start_date) & dnums_me <= datenum(end_date);
+        F_me(~tt) = []; dnums_me(~tt) = [];
+        
+        dir_radm2 = fullfile(wrf_behr_path,'..','..','E_US_BEHR_RADM2');
+        F_radm2 = dir(fullfile(dir_radm2,'WRF*.nc'));
+        dnums_radm2 = datenum(regexp({F_radm2.name},'\d\d\d\d-\d\d-\d\d','match','once'));
+        tt = dnums_radm2 >= datenum(start_date) & dnums_radm2 <= datenum(end_date);
+        F_radm2(~tt) = []; dnums_radm2(~tt) = [];
+        
+        % Load each run's data
+        xlon_az = ncread(fullfile(dir_az,F_az(1).name),'XLONG');
+        xlon_az = xlon_az(:,:,1);
+        xlat_az = ncread(fullfile(dir_az,F_az(1).name),'XLAT');
+        xlat_az = xlat_az(:,:,1);
+        [no2_az, utc_az, pres_az] = read_wrf_vars(dir_az,F_az,{'no2','utchr','pres'},false,'visual');
+        % Select 1900 UTC and permute so that lat/lon dims at end - easiest
+        % way to select w/i 50 km
+        hh = find(utc_az(:,1) == 19,1);
+        no2_az = squeeze(no2_az(:,:,:,hh,:));
+        pres_az = squeeze(pres_az(:,:,:,hh,:)); % z is a staggered vertical coordinate
+        pvec = [3:ndims(no2_az),1,2];
+        no2_az = permute(no2_az,pvec); % put vertial dim first, then time, lon, lat
+        pres_az = permute(pres_az,pvec);
+        no2_az_surf = squeeze(no2_az(1,:,:,:));
+        
+        
+        xlon_me = ncread(fullfile(dir_me,F_me(1).name),'XLONG');
+        xlon_me = xlon_me(:,:,1);
+        xlat_me = ncread(fullfile(dir_me,F_me(1).name),'XLAT');
+        xlat_me = xlat_me(:,:,1);
+        [no2_me, utc_me, pres_me] = read_wrf_vars(dir_me,F_me,{'no2','utchr','pres'},false,'visual');
+        hh = find(utc_me(:,1) == 19,1);
+        no2_me = squeeze(no2_me(:,:,:,hh,:));
+        pres_me = squeeze(pres_me(:,:,:,hh,:)); 
+        pvec = [3:ndims(no2_me),1,2];
+        no2_me = permute(no2_me,pvec);
+        pres_me = permute(pres_me, pvec);
+        no2_me_surf = squeeze(no2_me(1,:,:,:));
+        
+        xlon_radm2 = ncread(fullfile(dir_radm2,F_radm2(1).name),'XLONG');
+        xlon_radm2 = xlon_radm2(:,:,1);
+        xlat_radm2 = ncread(fullfile(dir_radm2,F_radm2(1).name),'XLAT');
+        xlat_radm2 = xlat_radm2(:,:,1);
+        [no2_radm2, utc_radm2, pres_radm2] = read_wrf_vars(dir_radm2,F_radm2,{'no2','utchr','pres'},false,'visual');
+        hh = find(utc_radm2(:,1) == 19,1);
+        no2_radm2 = squeeze(no2_radm2(:,:,:,hh,:));
+        pres_radm2 = squeeze(pres_radm2(:,:,:,hh,:)); 
+        pvec = [3:ndims(no2_radm2),1,2];
+        no2_radm2 = permute(no2_radm2,pvec);
+        pres_radm2 = permute(pres_radm2, pvec);
+        no2_radm2_surf = squeeze(no2_radm2(1,:,:,:));
+        
+        
+        city_names = {'Atlanta','Birmingham','Montgomery'};
+        city_lon = nan(numel(city_names)+3,1);
+        city_lat = nan(numel(city_names)+3,1);
+        for a=1:numel(city_names)
+            [city_lon(a), city_lat(a)] = return_city_info(city_names{a});
+        end
+        % Add some background locations
+        city_lon(end-2) = -83; city_lat(end-2) = 35; city_names{end+1} = sprintf('Bkgnd: %.1f W %.1f N',  city_lon(end-2), city_lat(end-2));
+        city_lon(end-1) = -82; city_lat(end-1) = 32; city_names{end+1} = sprintf('Bkgnd: %.1f W %.1f N',  city_lon(end-1), city_lat(end-1));
+        city_lon(end) = -84.5; city_lat(end) = 36.5; city_names{end+1} = sprintf('Bkgnd: %.1f W %.1f N',  city_lon(end), city_lat(end));
+        
+        % Compute the timeseries and the mean profiles. The timeseries will
+        % use all data w/i 50 km, the profiles will be a specific grid cell
+        
+        timeser_mean_no2_az = nan(numel(city_names), numel(F_az));
+        timeser_med_no2_az = nan(numel(city_names), numel(F_az));
+        timeser_sd_no2_az = nan(numel(city_names), numel(F_az));
+        timeser_quart_no2_az = nan(numel(city_names), 2, numel(F_az));
+        timeser_mean_no2_me = nan(numel(city_names), numel(F_me));
+        timeser_med_no2_me = nan(numel(city_names), numel(F_me));
+        timeser_sd_no2_me = nan(numel(city_names), numel(F_me));
+        timeser_quart_no2_me = nan(numel(city_names), 2, numel(F_me));
+        timeser_mean_no2_radm2 = nan(numel(city_names), numel(F_radm2));
+        timeser_med_no2_radm2 = nan(numel(city_names), numel(F_radm2));
+        timeser_sd_no2_radm2 = nan(numel(city_names), numel(F_radm2));
+        timeser_quart_no2_radm2 = nan(numel(city_names), 2, numel(F_radm2));
+        profs_mean_az = nan(size(no2_az,1), numel(city_names));
+        profs_med_az = nan(size(no2_az,1), numel(city_names));
+        profs_sd_az = nan(size(no2_az,1), numel(city_names));
+        profs_quart_az = nan(size(no2_az,1), 2, numel(city_names));
+        profs_z_az = nan(size(pres_az,1), numel(city_names));
+        profs_mean_me = nan(size(no2_me,1), numel(city_names));
+        profs_med_me = nan(size(no2_me,1), numel(city_names));
+        profs_sd_me = nan(size(no2_me,1), numel(city_names));
+        profs_quart_me = nan(size(no2_me,1), 2, numel(city_names));
+        profs_z_me = nan(size(pres_me,1), numel(city_names));
+        profs_mean_radm2 = nan(size(no2_radm2,1), numel(city_names));
+        profs_med_radm2 = nan(size(no2_radm2,1), numel(city_names));
+        profs_sd_radm2 = nan(size(no2_radm2,1), numel(city_names));
+        profs_quart_radm2 = nan(size(no2_radm2,1), 2, numel(city_names));
+        profs_z_radm2 = nan(size(pres_radm2,1), numel(city_names));
+        
+        opts.quad_bool = false;
+        opts.dist_limit = 50;
+        
+        for a=1:numel(city_names)
+            % Surface concentrations first
+            opts.center_lon = city_lon(a);
+            opts.center_lat = city_lat(a);
+            in_az = subset_WRF_grid_cells(xlon_az,xlat_az,[-90,-80],[30 40],opts);
+            tmp = no2_az_surf(:,in_az)';
+            timeser_mean_no2_az(a,:) = nanmean(tmp,1);
+            timeser_med_no2_az(a,:) = nanmedian(tmp,1);
+            timeser_sd_no2_az(a,:) = nanstd(tmp,0,1);
+            timeser_quart_no2_az(a,:,:) = quantile(tmp,[0.25 0.75]);
+            
+            in_me = subset_WRF_grid_cells(xlon_me, xlat_me, [-90 -80], [30 40], opts);
+            tmp = no2_me_surf(:,in_me)';
+            timeser_mean_no2_me(a,:) = nanmean(tmp,1);
+            timeser_med_no2_me(a,:) = nanmedian(tmp,1);
+            timeser_sd_no2_me(a,:) = nanstd(tmp,0,1);
+            timeser_quart_no2_me(a,:,:) = quantile(tmp,[0.25 0.75]);
+            
+            in_radm2 = subset_WRF_grid_cells(xlon_radm2,xlat_radm2,[-90,-80],[30 40],opts);
+            tmp = no2_radm2_surf(:,in_radm2)';
+            timeser_mean_no2_radm2(a,:) = nanmean(tmp,1);
+            timeser_med_no2_radm2(a,:) = nanmedian(tmp,1);
+            timeser_sd_no2_radm2(a,:) = nanstd(tmp,0,1);
+            timeser_quart_no2_radm2(a,:,:) = quantile(tmp,[0.25 0.75]);
+            
+            % Now profiles
+            [~,I_az] = min((xlon_az(:) - city_lon(a)).^2 + (xlat_az(:) - city_lat(a)).^2);
+            tmp = no2_az(:,:,I_az);
+            profs_mean_az(:,a) = nanmean(tmp,2);
+            profs_med_az(:,a) = nanmedian(tmp,2);
+            profs_sd_az(:,a) = nanstd(tmp,0,2);
+            profs_quart_az(:,:,a) = quantile(tmp,[.25 .75],2);
+            tmp_z = pres_az(:,:,I_az);
+            profs_z_az(:,a) = nanmean(tmp_z,2);
+            
+            [~,I_me] = min((xlon_me(:) - city_lon(a)).^2 + (xlat_me(:) - city_lat(a)).^2);
+            tmp = no2_me(:,:,I_me);
+            profs_mean_me(:,a) = nanmean(tmp,2);
+            profs_med_me(:,a) = nanmedian(tmp,2);
+            profs_sd_me(:,a) = nanstd(tmp,0,2);
+            profs_quart_me(:,:,a) = quantile(tmp,[.25 .75],2);
+            tmp_z = pres_me(:,:,I_me);
+            profs_z_me(:,a) = nanmean(tmp_z,2);
+            
+            [~,I_radm2] = min((xlon_radm2(:) - city_lon(a)).^2 + (xlat_radm2(:) - city_lat(a)).^2);
+            tmp = no2_radm2(:,:,I_radm2);
+            profs_mean_radm2(:,a) = nanmean(tmp,2);
+            profs_med_radm2(:,a) = nanmedian(tmp,2);
+            profs_sd_radm2(:,a) = nanstd(tmp,0,2);
+            profs_quart_radm2(:,:,a) = quantile(tmp,[.25 .75],2);
+            tmp_z = pres_radm2(:,:,I_radm2);
+            profs_z_radm2(:,a) = nanmean(tmp_z,2);
+        end
+        
+        % Make plots
+        % Timeseries
+        for a=1:numel(city_names)
+            figure;
+            l=gobjects(3,1);
+            l(1) = line(dnums_az, timeser_mean_no2_az(a,:), 'color', 'b', 'marker', 'o', 'linewidth', 1);
+            l(2) = line(dnums_me, timeser_mean_no2_me(a,:), 'color', 'r', 'marker', '^', 'linewidth', 1);
+            l(3) = line(dnums_radm2, timeser_mean_no2_radm2(a,:), 'color', 'g', 'marker', 'x', 'linewidth', 1);
+            
+            if timeser_uncert_bool
+                scatter_errorbars(dnums_az, timeser_mean_no2_az(a,:), timeser_sd_no2_az(a,:), 'color', 'b');
+                scatter_errorbars(dnums_me, timeser_mean_no2_me(a,:), timeser_sd_no2_me(a,:), 'color', 'r');
+                scatter_errorbars(dnums_radm2, timeser_mean_no2_radm2(a,:), timeser_sd_no2_radm2(a,:), 'color', 'g');
+            end
+            datetick('x','mm/dd');
+            ylabel('Mean [NO_2] w/i 50 km (ppmv)');
+            legend(l,{'Azimeh','Me','Me-RADM2'});
+            set(gca,'ydir','reverse');
+            title(sprintf('Mean and SD for %s', city_names{a}));
+            
+            figure;
+            l=gobjects(3,1);
+            l(1) = line(dnums_az, timeser_med_no2_az(a,:), 'color', 'b', 'marker', 'o', 'linewidth', 1);
+            l(2) = line(dnums_me, timeser_med_no2_me(a,:), 'color', 'r', 'marker', '^', 'linewidth', 1);
+            l(3) = line(dnums_radm2, timeser_med_no2_radm2(a,:), 'color', 'g', 'marker', 'x', 'linewidth', 1);
+            
+            if timeser_uncert_bool
+                scatter_errorbars(dnums_az, timeser_med_no2_az(a,:), squeeze(timeser_quart_no2_az(a,1,:))', squeeze(timeser_quart_no2_az(a,2,:))', 'color', 'b');
+                scatter_errorbars(dnums_me, timeser_med_no2_me(a,:), squeeze(timeser_quart_no2_me(a,1,:))', squeeze(timeser_quart_no2_me(a,2,:))', 'color', 'r');
+                scatter_errorbars(dnums_radm2, timeser_med_no2_radm2(a,:), squeeze(timeser_quart_no2_radm2(a,1,:))', squeeze(timeser_quart_no2_radm2(a,2,:))', 'color', 'g');
+            end
+            datetick('x','mm/dd');
+            ylabel('Median [NO_2] w/i 50 km (ppmv)');
+            legend(l,{'Azimeh','Me','Me-RADM2'});
+            set(gca,'ydir','reverse');
+            title(sprintf('Median and quartiles for %s', city_names{a}));
+        end
+        
+        
+        % Profiles
+        for a=1:numel(city_names)
+            figure; 
+            l=gobjects(3,1);
+            l(1) = line(profs_mean_az(:,a), profs_z_az(:,a), 'color', 'b', 'marker', 'o', 'linewidth', 1);
+            l(2) = line(profs_mean_me(:,a), profs_z_me(:,a), 'color', 'r', 'marker', '^', 'linewidth', 1);
+            l(3) = line(profs_mean_radm2(:,a), profs_z_radm2(:,a), 'color', 'g', 'marker', 'x', 'linewidth', 1);
+            
+            if prof_uncert_bool
+                scatter_errorbars(profs_mean_az(:,a), profs_z_az(:,a), profs_sd_az(:,a), 'direction', 'x', 'color', 'b');
+                scatter_errorbars(profs_mean_me(:,a), profs_z_me(:,a), profs_sd_me(:,a), 'direction', 'x', 'color', 'r');
+                scatter_errorbars(profs_mean_radm2(:,a), profs_z_radm2(:,a), profs_sd_radm2(:,a), 'direction', 'x', 'color', 'g');
+            end
+            xlabel('Mean NO_2 profile (ppmv)');
+            ylabel('z (m)');
+            legend(l,{'Azimeh','Me','Me-RADM2'})
+            set(gca,'ydir','reverse');
+            title(sprintf('Mean and SD for %s', city_names{a}));
+            
+            figure; 
+            l=gobjects(3,1);
+            l(1) = line(profs_med_az(:,a), profs_z_az(:,a), 'color', 'b', 'marker', 'o', 'linewidth', 1);
+            l(2) = line(profs_med_me(:,a), profs_z_me(:,a), 'color', 'r', 'marker', '^', 'linewidth', 1);
+            l(3) = line(profs_med_radm2(:,a), profs_z_radm2(:,a), 'color', 'g', 'marker', 'x', 'linewidth', 1);
+            
+            if prof_uncert_bool
+                scatter_errorbars(profs_med_az(:,a), profs_z_az(:,a), profs_quart_az(:,1,a), profs_quart_az(:,1,a), 'direction', 'x', 'color', 'b');
+                scatter_errorbars(profs_med_me(:,a), profs_z_me(:,a), profs_quart_me(:,1,a), profs_quart_me(:,2,a), 'direction', 'x', 'color', 'r');
+                scatter_errorbars(profs_med_radm2(:,a), profs_z_radm2(:,a), profs_quart_radm2(:,1,a), profs_quart_radm2(:,1,a), 'direction', 'x', 'color', 'g');
+            end
+            xlabel('Median NO_2 profile (ppmv)');
+            ylabel('z (m)');
+            legend(l,{'Azimeh','Me','Me-RADM2'})
+            set(gca,'ydir','reverse');
+            title(sprintf('Median and quartiles for %s', city_names{a}));
+        end
+        
+        % Compute AMFs
+        amf_az = nan(1, numel(city_names));
+        amf_me = nan(1, numel(city_names));
+        amf_radm2 = nan(1, numel(city_names));
+        
+        ancil.month = 6;
+        ancil.cldfrac = 0;
+        ancil.cldradfrac = 0;
+        
+        for a=1:numel(city_names)
+            ancil.lon = city_lon(a);
+            ancil.lat = city_lat(a);
+            
+            [amf_az(a), ~, ancil_out] = compare_profile_AMFs(profs_mean_az(:,a), pres_az(:,a), profs_mean_az(:,a), pres_az(:,a), ancil);
+            amf_me(a) = compare_profile_AMFs(profs_mean_me(:,a), pres_me(:,a), profs_mean_me(:,a), pres_me(:,a), ancil);
+            amf_radm2(a) = compare_profile_AMFs(profs_mean_radm2(:,a), pres_radm2(:,a), profs_mean_radm2(:,a), pres_radm2(:,a), ancil);
+            
+            if a==1
+                fprintf('Clear sky AMF with: SZA = %.1f, VZA = %.1f, RAA = %.1f, ALB = %.3f, SurfP = %.0f\n',ancil_out.sza, ancil_out.vza, ancil_out.raa, ancil_out.alb, ancil_out.surfp);
+            end
+            fprintf('  %s: AMF_AZ = %.3f, AMF_ME = %.3f, AMF_RADM2 = %.3f\n', city_names{a}, amf_az(a), amf_me(a), amf_radm2(a));
+        end
+        
+        amfcld_az = nan(1, numel(city_names));
+        amfcld_me = nan(1, numel(city_names));
+        amfcld_radm2 = nan(1, numel(city_names));
+        
+        ancil.month = 6;
+        ancil.cldfrac = 0.2;
+        ancil.cldradfrac = 0.5;
+        
+        for a=1:numel(city_names)
+            ancil.lon = city_lon(a);
+            ancil.lat = city_lat(a);
+            
+            [amfcld_az(a), ~, ancil_out] = compare_profile_AMFs(profs_mean_az(:,a), pres_az(:,a), profs_mean_az(:,a), pres_az(:,a), ancil);
+            amfcld_me(a) = compare_profile_AMFs(profs_mean_me(:,a), pres_me(:,a), profs_mean_me(:,a), pres_me(:,a), ancil);
+            amfcld_radm2(a) = compare_profile_AMFs(profs_mean_radm2(:,a), pres_radm2(:,a), profs_mean_radm2(:,a), pres_radm2(:,a), ancil);
+            
+            if a==1
+                fprintf('Cloudy AMF with: SZA = %.1f, VZA = %.1f, RAA = %.1f, ALB = %.3f, SurfP = %.0f, CldFrac = %.2f, CldRadFrac = %.2f\n',ancil_out.sza, ancil_out.vza, ancil_out.raa, ancil_out.alb, ancil_out.surfp, ancil_out.cldfrac, ancil_out.cldradfrac);
+            end
+            fprintf('  %s: AMF_AZ = %.3f, AMF_ME = %.3f, AMF_RADM2 = %.3f\n', city_names{a}, amfcld_az(a), amfcld_me(a), amfcld_radm2(a));
+        end
+        
+        
+    end
     %%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%% DATA FUNCTIONS %%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1430,6 +1831,7 @@ end
                 continue % only want reactions with OH to produce this
             end
             voc_a = reacts{a}{~xx};
+            fprintf('%s\n',voc_a);
             if any(strcmp(wrf_varnames,voc_a))
                 voc_names{a} = voc_a;
             elseif any(strcmp(wrf_varnames,lower(voc_a))) %#ok<STCI>

@@ -8,7 +8,7 @@ function [  ] = check_new_fits(  )
 %   disagree by more than 0.1%. If so it gives the two values as new vs.
 %   old.
 always_print_params = false;
-always_print_cis = true;
+always_print_cis = false;
 
 new_dir = uigetdir('.','Choose the directory with the NEW simple fits');
 old_dir = uigetdir('.','Choose the directory with the OLD simple fits');
@@ -46,7 +46,12 @@ for f=1:numel(F)
             old = O.(fns{a}).ffit.(fitparams{b});
             del = (new - old) * 2 / (new + old); % percent diff vs average value
             if abs(del) > frac_diff_crit || always_print_params
-                fprintf('\t%s.%s disagree by >%g%%: new = %.3g vs old = %.3g\n', fns{a}, fitparams{b}, frac_diff_crit*100, new, old);
+                if abs(del) > frac_diff_crit
+                    agree_str = sprintf('disagree by >%g%%',frac_diff_crit*100);
+                else
+                    agree_str = sprintf('agree to within %g%%', frac_diff_crit*100);
+                end
+                fprintf('\t%s.%s %s: new = %.3g vs old = %.3g\n', fns{a}, fitparams{b}, agree_str, new, old);
             end
         end
         

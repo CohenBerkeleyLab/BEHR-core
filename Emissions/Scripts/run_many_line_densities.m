@@ -2,10 +2,10 @@ function run_many_line_densities
 % I'm not sitting around while these things run!
 
 %cities = {'Atlanta','Birmingham','Montgomery'};
-cities = {'Atlanta','Birmingham'};
+cities = {'Atlanta'};
 wind_crits = {3,4,5};%{'mean',3,5};
 box = [1.0 2.0 0.5 0.5];%[1.0 2.0 0.5 0.5];
-save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/50km-side-debug';
+save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/50km-side-earthrel-no0to-112';
 for a=1:numel(cities)
     for b=1:numel(wind_crits)
         if isnumeric(wind_crits{b})
@@ -57,8 +57,8 @@ elseif ischar(wind_crit)
     E.badinput('wind_crit must be a number or the string ''mean''');
 end
 
-gtcrit = windvel >= wind_crit;% & (theta < 0 | theta > 60);
-ltcrit = windvel < wind_crit;% & (theta < 0 | theta > 60);
+gtcrit = windvel >= wind_crit & (theta < -112.5 | theta > 0);
+ltcrit = windvel < wind_crit & (theta < -112.5 | theta > 0);
 
 F = dir(fullfile(behr_work_dir, hybrid_dir, 'OMI_BEHR_*.mat'));
 
@@ -104,7 +104,7 @@ end
 
 fns = fieldnames(S);
 for f=1:numel(fns)
-    eval(sprintf('%1$s = S.%1$s',fns{f}));
+    eval(sprintf('%1$s = S.%1$s;',fns{f}));
 end
 
 if ismean
@@ -113,7 +113,8 @@ else
     wind_crit_str = strrep(sprintf('%.1f',wind_crit),'.','pt');
 end
 
-save_name = sprintf('NoInterp-LineDensities-%s-%dkmFor-%dkmBack-%dkmSide-AllAngles-%s.mat',wind_crit_str,box(2)*100,box(1)*100,box(3)*100,city_name);
+%save_name = sprintf('NoInterp-LineDensities-%s-%dkmFor-%dkmBack-%dkmSide-AllAngles-%s.mat',wind_crit_str,box(2)*100,box(1)*100,box(3)*100,city_name);
+save_name = sprintf('NoInterp-LineDensities-%s-%dkmFor-%dkmBack-%dkmSide-No0to-112-%s.mat',wind_crit_str,box(2)*100,box(1)*100,box(3)*100,city_name);
 
 fprintf('\n\t Saving %s \n\n',fullfile(save_dir,save_name));
 save(fullfile(save_dir,save_name),fns{:},'wind_crit');

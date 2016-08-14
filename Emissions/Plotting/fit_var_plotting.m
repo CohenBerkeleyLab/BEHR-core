@@ -62,7 +62,7 @@ switch lower(plottype)
     case 'mchist'
         mchist(varargin{:});
     case 'stats'
-        stats_table();
+        stats_table(varargin{:});
     otherwise
         fprintf('Plot type not recognized\n')
 end
@@ -291,12 +291,12 @@ varargout = vout;
         latex_header2 = '& Wind speed bin & \parbox[t]{1.5cm}{Monthly\\108 km} & \parbox[t]{1.5cm}{Monthly\\12 km} & \parbox[t]{1.5cm}{Daily\\12 km} & \parbox[t]{1.5cm}{Monthly\\108 km} & \parbox[t]{1.5cm}{Monthly\\12 km} & \parbox[t]{1.5cm}{Daily\\12 km} \\ \middlehline';
         
         
-        emis_rownames = cell(6,1);
+        emis_rownames = cell(size(wind_labels));
         emis_rownames{1} = '\multirow{3}{*}{E (Mg \chem{NO_x} h$^{-1}$)}';
         emis_rownames(2:end) = {''};
         emis_rownames = cat(2, emis_rownames, wind_labels);
         
-        tau_rownames = cell(6,1);
+        tau_rownames = cell(size(wind_labels));
         tau_rownames{1} = '\multirow{3}{*}{$\tau$ (h)}';
         tau_rownames(2:end) = {''};
         tau_rownames = cat(2, tau_rownames, wind_labels);
@@ -458,7 +458,7 @@ varargout = vout;
         apriori = {'f_mn108fast','f_mnfast','f_hyfast'};
         apri_names = {'Coarse monthly','Fine monthly','Fine daily'}; % for use in legend. should be same size as apriori
         
-        xwind_subfolders = {'25km-side','50km-side','75km-side','100km-side','120km-side'}; % should have the number of km/degrees in there somewhere
+        xwind_subfolders = {'25km-side-earthrel','50km-side-earthrel','75km-side-earthrel','100km-side-earthrel','120km-side-earthrel'}; % should have the number of km/degrees in there somewhere
         xwind_root = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs';
         
         emis_tables = cell(size(xwind_subfolders));
@@ -499,7 +499,7 @@ varargout = vout;
         % Marker and color will differentiate a priori.  Match a priori
         % color to the EMG fit plots.
         markers = {'o','^','x'};
-        colors = {[0 0.5 0],'r','b'};
+        colors = {'k','r','b'};
         
         % Now plot, one per wind bin. Stagger in the x-direction slightly
         % to make it easier to tell the error bars apart.
@@ -821,10 +821,14 @@ varargout = vout;
         end
     end
 
-    function stats_table
+    function stats_table(dir_in)
         % Will load all the simple fit files in the selected directory and
         % print out tables of the requested statistic.
-        fit_dir = uigetdir('.','Choose the directory with the simple fit files to query');
+        if ~exist('dir_in','var')
+            fit_dir = uigetdir('.','Choose the directory with the simple fit files to query');
+        else
+            fit_dir = dir_in;
+        end
         F_ss = dir(fullfile(fit_dir,'*SimpleFits-ssresid*'));
         F_unex = dir(fullfile(fit_dir,'*SimpleFits-unexvar*'));
         
