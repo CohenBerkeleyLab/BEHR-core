@@ -47,6 +47,8 @@ switch lower(plottype)
         [vout{:}] = pairwise_t(nargout, varargin{:});
     case 'xwind'
         xwind_emis_tau();
+    case 'sectors'
+        plot_sectors();
     case 'residuals'
         residuals(varargin{:})
     case 'residuals-onepar'
@@ -566,6 +568,32 @@ varargout = vout;
             
         end
         
+    end
+
+    function plot_sectors
+        % Very kludgy function to plot the 8 wind sectors for one city,
+        % wind speed, a priori at once.
+        
+        [fname, pname] = uigetfile('*LineDensities*.mat','Choose a line density file', 'MultiSelect', 'off');
+        if isnumeric(fname) && fname == 0
+            fprintf('Cancelled\n')
+            return
+        end
+        
+        F = load(fullfile(pname, fname));
+        apri_opts = {'hyfast','hyslow','mnfast','mnslow','mn108fast','mn108slow'};
+        apri_ind = listdlg('liststring',apri_opts,'SelectionMode','single');
+        apri = apri_opts{apri_ind};
+        
+        no2_x = F.(sprintf('no2x_%s',apri));
+        no2_ld = F.(sprintf('no2ld_%s',apri));
+        
+        fns = fieldnames(no2_x);
+        for f=1:numel(fns)
+            figure;
+            plot(no2_x.(fns{f}), no2_ld.(fns{f}), 'k');
+            title(fns{f});
+        end
     end
 
     function residuals(resid_type) 
