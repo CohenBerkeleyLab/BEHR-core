@@ -512,7 +512,35 @@ exit $MATLAB_EXIT
 	\label{tab:website2fileserver-paths}
 	\end{table}
 	
-	To update the publicly available produce, simply replace the files in these directories with the proper output files from \lstinline$BEHR_publishing_v2.m$.  No other action is necessary.
+	The files publicly available on the website are produced by \lstinline$BEHR_publishing_v2.m$ in the \path{HDF tools} folder in the BEHR repo. Note that starting with version 2.1Arev1, we include the version number in the file names (both for the published data and our internal .mat files) and as an attribute for each swath in the HDF files.  This version string is defined in the \lstinline$BEHR_version.m$ function in \path{Utils/Constants} in the BEHR repo. Make sure to update this version string before reproducing the full data record so that it is stored in all the proper places.
+	
+	If you add any new variables to the output files, you'll need to modify \lstinline$BEHR_publishing_v2.m$:
+	\begin{enumerate}
+	\item Any new variables should be added to the \lstinline$vars$ variable, defined in the \lstinline$set_variables$ subfunction.
+	\item If it should also be added to the gridded products, also add it to the \lstinline$gridded_vars$ variable in the \lstinline$remove_ungridded_variables$ subfunction.
+	\item Also within \lstinline$BEHR_publishing_v2.m$ is a table of attributes in the cleverly named \lstinline$add_attributes$ subfunction. Any new variables should have a line added here.
+	\end{enumerate}	 
+	
+	Once you're ready to update the publicly available produce, you'll need to:
+	
+	\begin{enumerate}
+	\item replace the files in the directories listed in Table \ref{tab:website2fileserver-paths} with the proper output files from \lstinline$BEHR_publishing_v2.m$
+	\item Upload the new changelog.txt to the website using the file manager (under the Admin button when logged in to the website)
+	\item Update any references to the version on the ``The BEHR Product'' and ``Download BEHR Data'' pages. This includes changing the blurb on the ``Download BEHR Data'' pages to describe the changes pertaining to the current version.
+	\item Check that the table of variables on ``The BEHR Product'' page is still accurate.
+	\end{enumerate}
+	
+	You should also ensure that the download computer (at \path{128.32.208.11}) has the updated version of the BEHR algorithm. That way it will keep BEHR up to date automatically. As long as you're using Git (and you \emph{are} using Git, right? Right?) this is fairly simple. First check two things:
+	
+	\begin{enumerate}
+	\item The scripts \lstinline$run_read_omno2.sh$, \lstinline$run_behr_main.sh$, and \lstinline$run_publishing.sh$ are still creating runscripts with the proper arguments for their respective functions (especially if you've changes the inputs or global variables in the BEHR Matlab functions).
+	
+	\item Double check that you updated the version string in \lstinline$BEHR_version.m$.
+	\end{enumerate}		
+	
+	Then it's a simple matter of making sure the new version has been merged into the \lstinline$master$ branch, then going into \path{/home/josh/Documents/MATLAB/BEHR} on the download computer and executing \lstinline$git pull$. 
+	
+	There is one additional file on the file server that must be updated.  It will be updated automatically the next time \lstinline$run_publishing.sh$ runs on the download computer. That is the \lstinline$behr_version.txt$ file under \path{/volume1/share-sat/SAT/BEHR/WEBSITE/webData}. It just contains the version string with no newline at the end.  This is used in the utility \lstinline$get_BEHR.sh$ for users to download BEHR in batch.
 	
 \section{Additional utilities}
 	\subsection{Verification}
@@ -620,7 +648,7 @@ exit $MATLAB_EXIT
 		
 		\lstinline$calc_fit_param_uncert.m$ then takes the 5-element vectors of the fit parameters and their fitting uncertainties, along with some other optional inputs, and computes the total, absolute uncertainty in each parameter. This is based of the uncertainty calculations in \citet{beirle11} and \citet{lu15}, but I have adjusted the assumptions slightly, as detailed in the comments in that function.
 		
-		\lstinline$comptue_emg_emis_tau.m$ takes the values of $a$, $x_0$, their uncertainties, and the subset of wind speeds considered to compute the values of emissions and lifetime and their uncertainties.
+		\lstinline$compute_emg_emis_tau.m$ takes the values of $a$, $x_0$, their uncertainties, and the subset of wind speeds considered to compute the values of emissions and lifetime and their uncertainties.
 		
 		There are some other functions that may be useful. In descending order of usefulness:
 		\begin{itemize}
