@@ -179,7 +179,9 @@ end
 
 
 %Go ahead and load the terrain pressure data - only need to do this once
-[terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
+%Add a little buffer around the edges to make sure we have terrain data
+%everywhere that we have NO2 profiles.
+[terpres, refvec] = globedem(globe_dir,1,[latmin-10, latmax+10],[lonmin-10, lonmax+10]);
     %refvec will contain (1) number of cells per degree, (2)
     %northwest corner latitude, (3) NW corner longitude.
     %(2) & (3) might differ from the input latmin & lonmin
@@ -195,7 +197,7 @@ globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_
 globe_lon_matrix = globe_lonmin + 1/(2*cell_count):(1/cell_count):globe_lonmax;
 globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1); 
 
-terpres(isnan(terpres)) = -500;
+terpres(isnan(terpres)) = 0;
 
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the

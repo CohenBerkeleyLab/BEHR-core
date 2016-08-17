@@ -202,8 +202,8 @@ parfor j=1:length(datenums)
                 if DEBUG_LEVEL>0; fprintf('  Swath %u of %s \n',d,datestr(datenums(j))); end
                 c=numel(Data(d).Longitude);
                 
-                Data(d).MODISAlbedo(isnan(Data(d).MODISAlbedo)==1)=0; %JLL 17 Mar 2014: replace NaNs with fill values
-                Data(d).GLOBETerpres(isnan(Data(d).GLOBETerpres)==1)=1013.0000;
+                %Data(d).MODISAlbedo(isnan(Data(d).MODISAlbedo)==1)=0; %JLL 17 Mar 2014: replace NaNs with fill values
+                %Data(d).GLOBETerpres(isnan(Data(d).GLOBETerpres)==1)=1013.0000;
                 
                 %JLL 17 Mar 2014: Load some of the variables from 'Data' to
                 %make referencing them less cumbersome. Also convert some

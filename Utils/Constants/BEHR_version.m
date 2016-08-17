@@ -30,7 +30,7 @@ function [ ver_str ] = BEHR_version( )
 %
 %   Reference: http://disc.sci.gsfc.nasa.gov/Aura/additional/documentation/OMI_processing_info_issue1_3.pdf
 
-ver_str = 'v2-1Arev1';
+ver_str = 'v2-1B';
 
 
 end
