@@ -54,7 +54,7 @@ if DEBUG_LEVEL > 1; fprintf('Adding folders\n'); end
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
 mpath = fileparts(mfilename('fullpath'));
-addpath(genpath(fullfile(mpath,'..')));
+addpath(genpath(fullfile(mpath,'..','Utils')));
 
 
 % Add the paths needed to run on the cluster
