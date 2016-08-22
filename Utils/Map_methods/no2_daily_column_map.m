@@ -72,7 +72,7 @@ for d=1:numel(Data)
         caxis(cbrange);
     end
     m_grid('linestyle','none')
-    title(sprintf('Swath %d',d));
+    title(sprintf('Swath %d %s',d,date_in));
 end
 
 end
