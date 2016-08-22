@@ -38,7 +38,18 @@ else
     else %Otherwise, assume the input was a dataset index and find the corresponding name
         dset = info.SDS(tmp).Name;
     end
-    dsetname = [info.Name, '/', dset]; %Format the full dataset path + name in the style needed for h5read.
+    try
+        dsetname = [info.Name, '/', dset]; %Format the full dataset path + name in the style needed for h5read.
+    catch err
+        % If the SDSs are not in a Vgroup and are in the top level, there
+        % will be no Name field to read, so format the SDS name to indicate
+        % it is in the top level.
+        if strcmp(err.identifier,'MATLAB:nonExistentField')
+            dsetname = ['/',dset];
+        else 
+            rethrow(err)
+        end
+    end
         
 end
 

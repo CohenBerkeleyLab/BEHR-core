@@ -7,7 +7,10 @@ function [  ] = draw_pixel_corners( loncorn, latcorn, varargin )
 if size(loncorn,1)~=4 || size(latcorn,1)~=4;
     error('draw_corners:input','First dimension of input matrices must have length 4');
 end
-    
+
+% Create a group to hold the corners
+cgroup = hggroup('Tag','Corners');
+
 % Reorder the corners to draw a polygon without lines crossing inside
 % (credit to http://stackoverflow.com/questions/13935324/sorting-clockwise-polygon-points-in-matlab)
 
@@ -22,7 +25,7 @@ s = size(loncorn);
 loncorn2 = [loncorn; loncorn(1,:); nan(1,s(2:end))];
 latcorn2 = [latcorn; latcorn(1,:); nan(1,s(2:end))];
 
-line(loncorn2, latcorn2, varargin{:});
+line(loncorn2, latcorn2, 'parent',cgroup, varargin{:});
 
 end
 

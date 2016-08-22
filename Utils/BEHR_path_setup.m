@@ -47,7 +47,7 @@ paths.globe_dir = get_path('GLOBE directory',sprintf('Please find the GLOBE data
 paths.behr_mat_dir = get_path('BEHR .mat directory',sprintf('Please find the directory on the file server at %s containing OMI_BEHR_yyyymmdd.mat files. The file server should be mounted on your computer.',file_server_ip));
 paths.amf_tools_dir = get_path('AMF tools directory','Please find the AMF_tools directory in the BEHR repository on your computer. It should contain the files damf.txt and nmcTmpYr.txt');
 paths.no2_profile_path = get_path('NO2 profile directory',sprintf('Please find the directory on the file server at %s containing WRF-Chem output profiles. The file server should be mounted on your computer.',file_server_ip));
-
+paths.website_staging_dir = get_path('Website staging directory',sprintf('Please find the directory on the file server at %s where published files are staged (WEBSITE/staging). The file server should be mounted on your computer.',file_server_ip));
 fns = fieldnames(paths);
 
 % Write the paths to a .m function

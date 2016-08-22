@@ -26,11 +26,10 @@
 %function [presSave, szaSave, vzaSave, phiSave, albedoSave, surfPresSave, dAmfSave, dAmf] = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres)
 function dAmf = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres)
 
-np = numel(pressure);
-dp = circshift(pressure,[1,1])-pressure;
+E=JLLErrors;
 
-if min(dp(1:np)) >= 0;
-    disp('Invalid pressure for rDamf!');
+if any(diff(pressure) > 0);
+    E.badinput('pressure must be a monotonically decreasing vector of pressures');
 else
     if exist('dAmfSave','var')==0;
 

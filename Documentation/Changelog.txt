@@ -22,19 +22,80 @@ does not change the core algorithm), a revision number will be appended to the
 version number. For example, v2.1A and v2.1Arev0 will be the same, but v2.1Arev1
 would indicate this sort of minor change.
 
+The version number may also be formatted as, e.g. v2-1A. This is used as the version
+string in file names to prevent any issue with file systems unable to handle a . in
+a filename that is not separating the file extension. This form is completely
+equivalent to the one with the period and is used interchangeably.
+
 ============
 2) Changelog
 ============
 
-**** 2.0A ****
+**** 2.1B ****
+-- Slight change to VCDs along coasts or over oceans
+-- Previous versions used a fill value of -500 m when calculating surface pressure over
+   oceans from GLOBE elevation data; hence ocean pixels had a GLOBETerpres value of 
+   ~1080 hPa. This has been corrected and ocean pixel will now correctly report a surface
+   pressure value of ~1013 hPa.
+-- Changes to VCDs in BEHRColumnAmountNO2Trop are generally < 1x10^15 molec. cm^-2, and
+   primarily limited to coastlines and regions outside the domain of 25-50 N, 125-65 W.
+   These changes occur for two reasons:
+    1) Coastline changes occur where the average pixel surface pressure derived from the
+       GLOBE elevation data was < 1013 hPa, but greater than it should have been as ocean
+       fill values mentioned above were averaged in.  Pure ocean pixels are unaffected 
+       because surface pressures are clamped to <= 1013 hPa before AMF computation.
+    2) Changes outside 25-50 N, 125-65 W occur where NO2 a priori profiles are available
+       but GLOBE data was not imported before. This version imports GLOBE data from 15-60 N
+       and 135-55 W, which should cover all pixels with NO2 a priori profiles available.
+       Previously, pixels outside the 25-50 N, 125-65 W domain assumed a surface pressure of
+       1013 hPa.
+-- Any pixels outside the new 15-50 N, 135-55 W GLOBE import region have their GLOBETerpres
+   field given a fill value, instead of the previous value of 1013.
+-- Pixels without valid MODISAlbedo data would previously have a value of 0 instead of the 
+   proper fill value. This has been corrected; it should only affect totally invalid pixels
+   (pixels with latitude/longitude unspecified or given as fill values).
 
--- Final version produced by Ashley Russell
--- Albedo: MODIS MCD43C3 16-day average (every 8 days)
--- Terrain pressure: Global Land One-kilometer Base Elevation (GLOBE) topography
-used to calculate surface pressure using scale height relationship. GLOBE data
-pre-averaged to 4-km.
--- NO2 profiles calculated for continental US using WRF-Chem at 12 km resolution
-using NEI 2005 emissions.
+
+**** 2.1Arev1 ****
+-- Revision only: no substantial changes to the data product itself.
+-- File names will now contain the version number for easier tracability.
+-- Corrected issue where fill values for cloud fraction fields are divided by 1000. The
+   fields CloudFraction and CloudRadianceFraction will now have fill values of -32767
+   instead of -32.767.
+-- Terrain reflectivity has now been scaled to actually lie between 0 and 1. 
+-- All BEHR fields will now use a fill value of -3.402e38 (-realmax('single') in Matlab).
+-- Updated some metadata in the HDF files.
+-- The .txt files now replace NaNs with fill values for fields that have fill values defined.
+-- In the computation of the BEHR AMF, it has always been clamped to a minimum value of 1e-6.
+   This is still true; however, the way Matlab treats NaNs meant that a NaN AMF was changed to
+   1e-6, when really we would prefer that it remain a NaN as this usually indicates that either
+   the scattering weights or a priori profile were all NaNs as well, due to either the inputs
+   to the scattering weight lookup table being outside the ranges defined in that table or 
+   the a priori profile being undefined (usually because we are outside the BEHR-US domain).
+   Many cases where the AMF should have remained a NaN were returned to NaNs by a later check
+   in the code, however now pixels where the AMF is a NaN are never converted to 1e-6 in the 
+   first place. *Note: as long as you have been following the recommendation to remove all VCDs
+   >1e17 (as an extra guarentee against including row anomaly pixels), you will notice no change,
+   as AMFs of 1e-6 lead to VCDs of about 1e20 or greater. 
+-- Rarely, cloud pressure may be >1013 hPa. This causes the scattering weight lookup to fail, 
+   because the algorithm treats cloud pressure as surface pressure for the cloudy AMF, and the
+   lookup table is only defined for surface pressure <= 1013 hPa. Therefore, cloud pressures are
+   now clamped to <= 1013 hPa before input to the lookup table.
+-- Any pixel with a fill value for ColumnAmountNO2Trop (the standard product tropospheric column)
+   now explicitly has BEHRColumnAmountNO2Trop set to NaN in the algorithm (and so a fill value in
+   the data here). Because we only grid pixels with a non-NaN value for BEHRColumnAmountNO2Trop,
+   this means that the following days have been removed from the gridded product, as they had no
+   valid values for ColumnAmountNO2Trop:
+    > 2005-07-13
+    > 2005-11-02
+    > 2006-02-22
+    > 2006-07-10
+    > 2006-11-03
+    > 2007-03-01
+    > 2007-07-13
+    > 2007-11-06
+    > 2008-03-03
+    > 2010-01-29
 
 
 **** 2.1A ****
@@ -47,7 +108,7 @@ using NEI 2005 emissions.
 -- 400 is no longer a fill value for the GLOBETerpres field. There should be no
 fill values in this field - grid points in the GLOBE database that do not have a
 value are over ocean, and so are assigned a pressure of 1013 hPa.
--- Corrected bug in which the cloud fractions were scaled by 1000 twice before
+-- Corrected bug in which the cloud fractions were scaled twice before
 inclusion in AMF calculation. (This had only a minor effect on NO2 columns.)
 -- Flag fields (vcdQualityFlags, XTrackQualityFlags) will now represent the most
 cautious flag in the gridded product (the flags from all pixels averaged
@@ -56,13 +117,26 @@ together for a particular grid cell will be combined using a bitwise OR)
 ColumnAmountNO2Initial from OMNO2 (sorry!). Dataset names should be the same.
 -- Added scattering weights, averaging kernels, and the pressure levels for
 those quantities.  These are calculated as the average of the clear and cloudy
-scatter weights weighted by the radiance cloud fraction.  Both include the OMI
+scattering weights weighted by the radiance cloud fraction.  Both include the OMI
 temperature correction for the NO2 cross section.
+-- Added the a priori NO2 profiles used for each pixel.  This allows advanced users
+to compare the effect of a priori choice with a model of their own choosing.
 -- Attributes have been added to the HDF files' variables, including unit, 
 range, fill value, product (standard (SP) or BEHR), and a description. Each
 swath also has an attribute indicating if it is organized by native pixel or
 0.05 x 0.05 deg grid.
--- HDF files will now end in ".h5" instead of ".hdf" to accurately reflect that
-they are HDF v. 5 files. I believe this has always been the case (I open them
-with HDFv5 tools in Matlab) but the .hdf extension (at least in the case of
-MODIS files) implies v. 4.
+-- The quantity represented by BEHRColumnAmountNO2Trop will represent only the
+visible NO2 column, and will not include any contribution from the ghost column.
+The field BEHRGhostFraction will provide a multiplicative factor to add back in
+the ghost column (based on WRF-Chem model runs) if desired.
+
+
+**** 2.0A ****
+
+-- Final version produced by Ashley Russell
+-- Albedo: MODIS MCD43C3 16-day average (every 8 days)
+-- Terrain pressure: Global Land One-kilometer Base Elevation (GLOBE) topography
+used to calculate surface pressure using scale height relationship. GLOBE data
+pre-averaged to 4-km.
+-- NO2 profiles calculated for continental US using WRF-Chem at 12 km resolution
+using NEI 2005 emissions.

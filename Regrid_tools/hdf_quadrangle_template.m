@@ -167,7 +167,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                 % there, average the new and existing measurements,
                 % weighted by the number of measurments that went into the
                 % existing average
-                %# if $keyfield(x_quad, y_quad) ~= 0 && ~isnan(Data.$keyfield(x,y));
+               %# if $keyfield(x_quad, y_quad) ~= fill_val && ~isnan($keyfield_val);
                 % Count, area, and areaweight require special handling
                 Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                 Area(x_quad,y_quad)=nansum([Area(x_quad,y_quad)*(Count(x_quad,y_quad)-1), pixelarea])/(Count(x_quad, y_quad));
@@ -182,7 +182,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                 %$c $cellfield(x_quad, y_quad) = {[$cellfield{x_quad, y_quad}, $cellfield_val]};
                 
                 % If there is no existing field
-                %# elseif ~isnan(Data.$keyfield(x,y)) %JLL 19 Mar 2014: I added the logical test here, before this was just an 'else' statement, but it would make sense not to add a value if there was no valid NO2 column.
+               %# elseif ~isnan($keyfield_val) %JLL 19 Mar 2014: I added the logical test here, before this was just an 'else' statement, but it would make sense not to add a value if there was no valid NO2 column.
                     % Count, area, and areaweight require special handling
                     Count(x_quad,y_quad)=Count(x_quad,y_quad)+1;
                     Area(x_quad,y_quad)=pixelarea;
@@ -194,9 +194,9 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
                     %$c $cellfield(x_quad, y_quad) = {$cellfield_val};
-                %# end
+               %# end
             end
-    	end
+        end
     end
 end
 

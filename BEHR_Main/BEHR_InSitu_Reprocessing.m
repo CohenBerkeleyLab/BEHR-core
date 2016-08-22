@@ -19,10 +19,18 @@ function BEHR_InSitu_Reprocessing
 
 E = JLLErrors;
 
-campaign_name = 'discover-tx';
+campaign_name = 'discover-co';
 
-[Names, merge_dates, merge_dir] = merge_field_names(campaign_name);
+[Names, merge_dates, merge_dir, range_file] = merge_field_names(campaign_name);
 
+if ~isempty(range_file)
+    load(range_file); % Adds the variable "Ranges" into the workspace
+    range_avail_dates = {Ranges(:).Date};
+    profnum_bool = false;
+else
+    profnum_bool = true;
+end
+    
 start_date = merge_dates{1};
 end_date = merge_dates{2};
 
@@ -39,8 +47,8 @@ cld_field = 'CloudFraction';
 no2field = Names.no2_lif;
 
 %The directory where the original BEHR files are located
-behr_prefix = 'OMI_BEHR_omi*';
-behr_dir = '/Volumes/share-sat/SAT/BEHR/DISCOVER_BEHR/';
+behr_prefix = 'OMI_BEHR_*';
+behr_dir = '/Volumes/share-sat/SAT/BEHR/BEHR_Files_2014/';
 
 
 %The file prefix and directory to save the resulting files under
@@ -121,39 +129,94 @@ for d=1:numel(dates)
         if DEBUG_LEVEL > 1; fprintf('NO2 %.2f NaNs, PRESSURE %.2f NaNs, setting warning flag\n', percent_no2_nans, percent_pres_nans); end
     end
     
-    % Load the profile numbers 
-    profnum = remove_merge_fills(Merge, Names.profile_numbers);
-    
-    % Calculate the UTC offset to match flight times to satellite overpass
-    tz = round(nanmean(lon)/15);
-    
-    % Get all unique profile numbers and their start times
-    unique_profnums = unique(profnum(profnum~=0));
-    start_times = zeros(numel(unique_profnums),1);
-    for a=1:numel(unique_profnums)
-        xx = profnum == unique_profnums(a);
-        start_times(a) = min(utc(xx));
-    end
-    
-    % Remove from consideration any profiles with a start time before 10:45
-    % am or after 4:45 pm local standard time
-    yy = start_times >= local2utc(starttime,tz) & start_times <= local2utc(endtime,tz);
-    unique_profnums = unique_profnums(yy); start_times = start_times(yy);
-    
-    % Save each profile's NO2, altitude, radar altitude, latitude, and
-    % longitude as an entry in a cell array
-    s = size(unique_profnums);
-    no2_array = cell(s); utc_array = cell(s);
-    lat_array = cell(s); lon_array = cell(s); 
-    pres_array = cell(s); profnum_array = cell(s);
-    for a=1:numel(unique_profnums)
-        xx = profnum == unique_profnums(a);
-        no2_array{a} = no2(xx);
-        lat_array{a} = lat(xx);
-        lon_array{a} = lon(xx);
-        pres_array{a} = pres(xx);
-        utc_array{a} = utc(xx);
-        profnum_array{a} = unique_profnums(a);
+    % Handle both identifying profiles by number and by UTC range
+    if profnum_bool
+        % Load the profile numbers 
+        profnum = remove_merge_fills(Merge, Names.profile_numbers);
+
+        % Calculate the UTC offset to match flight times to satellite overpass
+        tz = round(nanmean(lon)/15);
+
+        % Get all unique profile numbers and their start times
+        unique_profnums = unique(profnum(profnum~=0));
+        start_times = zeros(numel(unique_profnums),1);
+        for a=1:numel(unique_profnums)
+            xx = profnum == unique_profnums(a);
+            start_times(a) = min(utc(xx));
+        end
+
+        % Remove from consideration any profiles with a start time before 10:45
+        % am or after 4:45 pm local standard time
+        yy = start_times >= local2utc(starttime,tz) & start_times <= local2utc(endtime,tz);
+        unique_profnums = unique_profnums(yy); start_times = start_times(yy);
+
+        % Save each profile's NO2, altitude, radar altitude, latitude, and
+        % longitude as an entry in a cell array
+        s = size(unique_profnums);
+        no2_array = cell(s); utc_array = cell(s);
+        lat_array = cell(s); lon_array = cell(s); 
+        pres_array = cell(s); profnum_array = cell(s);
+        for a=1:numel(unique_profnums)
+            xx = profnum == unique_profnums(a);
+            no2_array{a} = no2(xx);
+            lat_array{a} = lat(xx);
+            lon_array{a} = lon(xx);
+            pres_array{a} = pres(xx);
+            utc_array{a} = utc(xx);
+            profnum_array{a} = unique_profnums(a);
+        end
+    else
+        % Case where a Ranges structure is available. Figure out if any
+        % ranges are defined for this day. If not it'll have to be skipped
+        range_date = datestr(dates(d),'mm/dd/yyyy');
+        rr = ~iscellcontents(regexp(range_avail_dates, range_date),'isempty');
+        if sum(rr) > 1
+            E.callError('non_unique_range','More than one range with the date %s was found',range_date);
+        elseif sum(rr) < 1 || isempty(Ranges(rr).Ranges)
+            if DEBUG_LEVEL > 0; fprintf('No ranges found for %s, skipping\n',range_date); end
+            continue
+        end
+        
+        % Calculate the UTC offset to match flight times to satellite overpass
+        tz = round(lon/15);
+        
+        % Find all the utc start times that are between within the
+        % specified range of local times.  Go through each range, find the
+        % data points that correspond to it, get the most common timezone,
+        % use that to set whether to include that range or not. Also, check
+        % the "user_profnums" variable which will have specific UTC ranges
+        % to allow
+        yy = false(size(Ranges(rr).Ranges,1),1);
+        for a=1:size(Ranges(rr).Ranges,1)
+            tz_ind = utc >= Ranges(rr).Ranges(a,1) & utc <= Ranges(rr).Ranges(a,2);
+            mct = mode(tz(tz_ind));
+            range_start_local = utc2local_sec(Ranges(rr).Ranges(a,1),mct);
+            yy(a) = range_start_local >= local2utc(starttime,0) && range_start_local <= local2utc(endtime,0);
+        end
+        
+        if sum(yy) < 1
+            if DEBUG_LEVEL > 0; fprintf('No ranges fall within the specified window around OMI overpass, skipping\n'); end
+            continue
+        end
+        
+        ranges_in_time = Ranges(rr).Ranges(yy,:);
+        s = [1,sum(yy)];
+        no2_array = cell(s); 
+        lat_array = cell(s); 
+        lon_array = cell(s); 
+        pres_array = cell(s);
+        utc_array = cell(s);
+        profnum_array = cell(s);
+        
+        for a=1:s(2)
+            xx = utc >= ranges_in_time(a,1) & utc <= ranges_in_time(a,2);
+            no2_array{a} = no2(xx);
+            lat_array{a} = lat(xx);
+            lon_array{a} = lon(xx);
+            pres_array{a} = pres(xx);
+            utc_array{a} = utc(xx);
+            profnum_array{a} = ranges_in_time(a,:);
+        end
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -187,6 +250,9 @@ for d=1:numel(dates)
         % This will be where the amfs due to each profile go to be averaged
         % together to find the average amf for the pixel
         tmp_amfs = nan(numel(behr_no2),numel(no2_array));
+        tmp_pres = nan(30,numel(behr_no2),numel(no2_array));
+        tmp_prof = nan(30,numel(behr_no2),numel(no2_array));
+        tmp_ghost = nan(numel(behr_no2),numel(no2_array));
         tmp_count = zeros(size(behr_no2));
         for p=1:numel(no2_array)
             
@@ -246,16 +312,20 @@ for d=1:numel(dates)
             surfPres_p = surfPres(pix_indices); cloudPres_p = cloudPres(pix_indices);
             cldFrac_p = cldFrac(pix_indices); cldRadFrac_p = cldRadFrac(pix_indices);
             amfs_p = nan(size(omi_lon_p));
+            new_prof_p = nan(30, size(omi_lon_p,1), size(omi_lon_p,2));
+            new_pres_p = nan(30, size(omi_lon_p,1), size(omi_lon_p,2));
+            new_ghost_p = nan(size(omi_lon_p));
             
             if DEBUG_LEVEL > 1; fprintf('\t\tRecalculating AMFs\n'); end
             for pix=1:numel(omi_lon_p)
                 % Extrapolate and bin the profile using median extrapolation on
                 % the bottom and by inserting a scaled WRF profile on the top,
                 % if needed.  Only the surface pressure changes for each
-                % pixel.
-                [insitu_profile, insitu_pressures] = extrapolate_profile(no2_array{p}, pres_array{p}, 'surfacePressure', surfPres_p(pix),'top', 'wrf-scaled', 'bottom', 'median',...
-                    'utc',nanmean(utc_array{p}),'sitenum',profnum_array{p}, 'month',month,'lat',lat_array{p},'lon',lon_array{p},'date',curr_date,'shape','exp');
-                
+                % pixel.                 
+
+                [insitu_profile, insitu_pressures] = extrapolate_profile(no2_array{p}, pres_array{p}, 'surfacePressure', surfPres_p(pix),'top', 'wrf', 'bottom', 'median',...
+                    'utc',nanmean(utc_array{p}), 'month',month,'lat',lat_array{p},'lon',lon_array{p},'date',curr_date,'shape','exp');
+
                 % The profiles and pressure must be columns for the AMF calculation to
                 % function correctly
                 if ~iscolumn(insitu_pressures); insitu_pressures = insitu_pressures'; end
@@ -276,11 +346,28 @@ for d=1:numel(dates)
                 cloudalbedo=0.8;
                 dAmfCld2 = rDamf2(fileDamf, insitu_pressures, sza_p(pix), vza_p(pix), phi_p(pix), cloudalbedo, cloudPres_p(pix));
                 
-                noGhost = 1; ak = 0;
-                amfs_p(pix) = omiAmfAK2(this_surfPres, cloudPres_p(pix), cldFrac_p(pix), cldRadFrac_p(pix), insitu_pressures, dAmfClr2, dAmfCld2, temperature, insitu_profile, insitu_profile, noGhost, ak);
+                noGhost = 0; ak = 1;
+                [amfs_p(pix), ~, ~, ~, ~, new_prof_pix, new_pres_pix, new_ghost_pix] = omiAmfAK2(this_surfPres, cloudPres_p(pix), cldFrac_p(pix), cldRadFrac_p(pix), insitu_pressures, dAmfClr2, dAmfCld2, temperature, insitu_profile, insitu_profile, noGhost, ak);
+                
+                % Since each in situ profile will be a different length,
+                % force them all to be 30 elements long.
+                if length(new_prof_pix) > 30
+                    E.unknownError('Somehow one of the profile vectors has > 30 elements');
+                end
+                profile_length = 30;
+                nan_pad = nan(profile_length-length(new_prof_pix),1);
+                new_pres_pix = cat(1, new_pres_pix, nan_pad);
+                new_prof_pix = cat(1, new_prof_pix, nan_pad);
+                
+                new_prof_p(:,pix) = new_prof_pix;
+                new_pres_p(:,pix) = new_pres_pix;
+                new_ghost_p(pix) = new_ghost_pix;
             end
             
             tmp_amfs(pix_indices,p) = amfs_p;
+            tmp_prof(:,pix_indices,p) = new_prof_p;
+            tmp_pres(:,pix_indices,p) = new_pres_p;
+            tmp_ghost(pix_indices,p) = new_ghost_p;
             tmp_count(pix_indices) = tmp_count(pix_indices) + 1;
         end
         
@@ -288,8 +375,18 @@ for d=1:numel(dates)
         new_amfs = reshape(new_amfs,size(omi_lat));
         new_columns = Data(s).BEHRColumnAmountNO2Trop .* Data(s).BEHRAMFTrop ./ new_amfs;
         
+        new_profs = nanmean(tmp_prof,3);
+        new_profs = reshape(new_profs, 30, size(omi_lat,1), size(omi_lat,2));
+        new_pres = nanmean(tmp_pres,3);
+        new_pres = reshape(new_pres, 30, size(omi_lat,1), size(omi_lat,2));
+        new_ghost = nanmean(tmp_ghost,2);
+        new_ghost = reshape(new_ghost, size(omi_lat));
+        
         Data(s).InSituAMF = new_amfs;
         Data(s).BEHR_R_ColumnAmountNO2Trop = new_columns;
+        Data(s).InSituProfile = new_profs;
+        Data(s).InSituPressureLevels = new_pres;
+        Data(s).InSituGhostFraction = new_ghost;
         Data(s).ProfileCount = tmp_count;
         Data(s).InSituFlags = flags;
     end

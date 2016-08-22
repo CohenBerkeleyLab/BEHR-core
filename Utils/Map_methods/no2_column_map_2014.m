@@ -1,4 +1,4 @@
-function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( start_date_in, end_date_in, lon_bdy, lat_bdy, varargin )
+function [cbhandle, GriddedColumn, longrid, latgrid, GriddedCount] = no2_column_map_2014( start_date_in, end_date_in, lon_bdy, lat_bdy, varargin )
 %NO2 Map Function - Uses the m_map package to draw maps of NO2 column density over the US (primarily). Returns the colorbar handle. Arguments:
 % Returns: colorbar handle, no2 grid, lon grid, lat grid.
 % REQUIRED:
@@ -29,8 +29,9 @@ function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( star
 %       default, this will be set by MATLAB.
 %   states = Set to 0 to avoid plotting US state boundaries.
 %   behrdir = The directory where BEHR files can be found.
-%   fileprefix = 'OMI_BEHR_' by default. The part of the .mat filenames
-%       before the date.
+%   fileprefix = 'OMI_BEHR_VSTR_', where VSTR is replaced with the current
+%       version string defined by BEHR_version  by default. In general, this is
+%       the part of the .mat filenames before the date.
 %   flags = a cell array of flags that change the behavior of the function:
 %         'weekend'/'weekday' --> only average over weekend or weekdays respectively
 %         'r_weekend'/'r_weekday' --> average over Su only or Tu-F only
@@ -43,11 +44,18 @@ function [cbhandle, GriddedColumn, longrid, latgrid] = no2_column_map_2014( star
 %   rowanomaly = Parse mode for row anomaly (see function
 %       "omi_rowanomaly"). Default value is 'XTrackFlags', other options
 %       are 'AlwaysByRow', 'RowsByTime', and 'XTrackFlagsLight'.
+%   rows = restrict the averaging to using certain rows. This is useful to
+%       duplicate Luke's check where he averaged a month's worth of data
+%       from each side of the detector and found a significant difference
+%       in the average, indicating that there was a bias in the viewing
+%       angle dependence. Input should be a 1x2 vector that gives the min
+%       and max row. Remember row indicies are 0 based, and go from 0 to
+%       59.
 %   makefig = true or false; whether to make a figure or not. Defaults to
 %       true. Errors if set to false but only 1 output requested, as this
 %       means that the NO2 column data would not be saved.
 %
-%Josh Laughner <joshlaugh5@gmail.com> 25 Apr 2014
+%   Josh Laughner <joshlaugh5@gmail.com> 25 Apr 2014
 
 p = inputParser;
 p.addParameter('mapfield','BEHRColumnAmountNO2Trop',@isstr)
@@ -58,11 +66,12 @@ p.addParameter('coast','default',@(x) any(strcmpi(x,{'default','high','intermedi
 p.addParameter('color','w');
 p.addParameter('cbrange',[],@(x) length(x) == 2);
 p.addParameter('states',1,@isscalar);
-p.addParameter('fileprefix','OMI_BEHR_',@isstr);
+p.addParameter('fileprefix',sprintf('OMI_BEHR_%s_',BEHR_version),@isstr);
 p.addParameter('flags',{},@iscell);
 p.addParameter('clouds','omi',@isstr);
 p.addParameter('cloudfraccrit',-1,@isscalar)
 p.addParameter('rowanomaly','XTrackFlags',@(x) any(strcmpi(x,{'AlwaysByRow','RowsByTime','XTrackFlags','XTrackFlagsLight'}))) %Ensure that the rowanomaly value is one of the allowed 4
+p.addParameter('rows',[],@(x) (isnumeric(x) && (numel(x) == 0 || numel(x) == 2)));
 p.addParameter('makefig', true, @(x) (isscalar(x) && (isnumeric(x) || islogical(x))));
 
 p.parse(varargin{:});
@@ -191,8 +200,9 @@ for period = 1:per %Loop over each temporal period you wish to average
             
             if first_time_through %The first time through, generate the Sum matrices that will hold the total areaweight and weighted column density
                 if DEBUG_LEVEL > 0; fprintf('Initializing SumWeightedColumn and SumWeight matrices\n'); end
-                SumWeightedColumn = zeros(size(eval(sprintf('OMI(1).%s',mapfield))));
-                SumWeight = zeros(size(eval(sprintf('OMI(1).%s',mapfield))));
+                SumWeightedColumn = zeros(size(OMI(1).(mapfield)));
+                SumWeight = zeros(size(OMI(1).(mapfield)));
+                Count = zeros(size(OMI(1).(mapfield)));
                 omilats = OMI(1).Latitude;
                 omilons = OMI(1).Longitude;
                 
@@ -209,9 +219,10 @@ for period = 1:per %Loop over each temporal period you wish to average
                 end
             end
             
-            [this_WeightedColumn, this_Weight] = BEHR_day_no2(OMI,'mapfield', mapfield, 'cloud_prod', cloud_type, 'cloud_frac_max', cloud_frac, 'row_anomaly', parsed_vars.rowanomaly);
+            [this_WeightedColumn, this_Weight, this_Count] = BEHR_day_no2(OMI,'mapfield', mapfield, 'cloud_prod', cloud_type, 'cloud_frac_max', cloud_frac, 'row_anomaly', parsed_vars.rowanomaly, 'rows', parsed_vars.rows);
             SumWeightedColumn = SumWeightedColumn + this_WeightedColumn;
             SumWeight = SumWeight + this_Weight;
+            Count = Count + this_Count;
                
         end %End if statement checking if the BEHR file for the current day exists
     end %End the loop over all days in this time period
@@ -222,8 +233,9 @@ ColumnData = SumWeightedColumn ./ SumWeight;
 
 % Grid the data. 
 nans = find(isnan(ColumnData));
-ColumnData(nans) = []; omilats(nans) = []; omilons(nans) = [];
+ColumnData(nans) = []; omilats(nans) = []; omilons(nans) = []; Count(nans) = [];
 GriddedColumn = griddata(omilons,omilats,ColumnData,longrid,latgrid);
+GriddedCount = griddata(omilons,omilats,Count,longrid,latgrid);
 
 if parsed_vars.makefig
     % Open a new figure.

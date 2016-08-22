@@ -86,13 +86,12 @@ amfCld=zeros(size(pTerr));
 % both of the pressures to interpolate to is already in the pressure
 % vector). We add two to the first dimension of these matrices to make room
 % for the two interpolated pressures.
-pad_vec = zeros(size(size(no2Profile1)));
-pad_vec(1) = 2;
-
-swPlev=zeros(size(no2Profile1)+pad_vec);
-swClr=zeros(size(no2Profile1)+pad_vec);
-swCld=zeros(size(no2Profile1)+pad_vec);
-no2Profile3=zeros(size(no2Profile1)+pad_vec);
+padvec = zeros(1,ndims(no2Profile1));
+padvec(1) = 2;
+swPlev=zeros(size(no2Profile1)+padvec);
+swClr=zeros(size(no2Profile1)+padvec);
+swCld=zeros(size(no2Profile1)+padvec);
+no2Profile3=zeros(size(no2Profile1)+padvec);
 nP = size(swPlev,1);
 %..........................................................................
 
@@ -167,7 +166,7 @@ if numel(noGhost) == 1;
     end
 end
 
-amf = max(amf,1.e-6);   % clamp at min value (2008-06-20)
+amf(~isnan(amf)) = max(amf(~isnan(amf)),1.e-6);   % clamp at min value (2008-06-20), but don't replace NaNs with the min value (2016-05-12)
 
 if numel(ak) == 1;
    if ak > 0;

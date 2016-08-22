@@ -1,4 +1,4 @@
-function [ OMI ] = rotate_plume( Data, center_lon, center_lat, theta, rel_box_corners )
+function [ OMI ] = rotate_plume( Data, center_lon, center_lat, theta, varargin )
 %ROTATE_PLUME Code to rotate NO2 plumes to align them by wind direction
 %   Required inputs:
 %       Data - should be the Data structure created by read_omno2 or
@@ -86,6 +86,14 @@ function [ OMI ] = rotate_plume( Data, center_lon, center_lat, theta, rel_box_co
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
+p = inputParser;
+p.addOptional('rel_box_corners',[]);
+p.addParameter('vza_crit',60);
+p.parse(varargin{:});
+pout = p.Results;
+rel_box_corners = pout.rel_box_corners;
+vza_crit = pout.vza_crit;
+
 E = JLLErrors;
 
 if ~isstruct(Data) || ~isscalar(Data) || any(~ismember({'Longitude','Latitude','Loncorn','Latcorn'}, fieldnames(Data)))
@@ -99,7 +107,7 @@ elseif ~isscalar(theta) || ~isnumeric(theta) || theta > 180 || theta < -180
     E.badinput('theta must be a scalar numeric value between -180 and +180')
 end
 
-if exist('rel_box_corners','var')
+if ~isempty(rel_box_corners)
     if numel(rel_box_corners) ~= 4 || ~isnumeric(rel_box_corners) || ~isvector(rel_box_corners)
         E.badinput('rel_box_corners (if given) must be a 4 element numeric vector')
     end
@@ -108,6 +116,10 @@ if exist('rel_box_corners','var')
 else
     x_box = [-2 4 4 -2];
     y_box = [-2 -2 2 2];
+end
+
+if ~isscalar(vza_crit) || ~isnumeric(vza_crit)
+    E.badinput('vza_crit must be a numeric scalar')
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -125,10 +137,17 @@ for corner=1:4
     y_box_rot(corner) = out(2) + center_lat;
 end
 
-xx = false(size(Data.Longitude));
+% Remove pixels with VZA greater than the specified criteria
+% which defaults to 60 degrees.
+vv = Data.ViewingZenithAngle <= vza_crit;
+
+% Remove pixels outside the box
+pp = false(size(Data.Longitude));
 for a=1:numel(Data.Longitude)
-    xx(a) = test_box_overlap(Data.Loncorn(:,a), Data.Latcorn(:,a), x_box_rot, y_box_rot);
+    pp(a) = test_box_overlap(Data.Loncorn(:,a), Data.Latcorn(:,a), x_box_rot, y_box_rot);
 end
+
+xx = pp & vv;
 
 fns = fieldnames(Data);
 fns(ismember(fns,{'Longitude','Latitude','Loncorn','Latcorn'})) = []; % we handle this fields separately, so don't include them in the fieldnames loops
