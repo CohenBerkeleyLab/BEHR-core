@@ -48,34 +48,35 @@ end
 
 F = dir(fullfile(wrf_path,'*.nc'));
 dnums = nan(numel(F),1);
-for a=1:numel(F)
-    [s,e] = regexp(F(a).name, '\d\d\d\d-\d\d-\d\d');
-    dnums(a) = datenum(F(a).name(s:e),'yyyy-mm-dd');
+for b=1:numel(F)
+    [s,e] = regexp(F(b).name, '\d\d\d\d-\d\d-\d\d');
+    dnums(b) = datenum(F(b).name(s:e),'yyyy-mm-dd');
 end
 % Remove any days before June 1st - allow WRF spinup
 F = F(dnums >= datenum(start_date) & dnums <= datenum(end_date));
 dnums = dnums(dnums >= datenum(start_date) & dnums <= datenum(end_date));
-[XLON, XLAT, U, V, COSALPHA, SINALPHA, zlev, utchr] = read_wrf_vars(wrf_path, F, {'XLONG', 'XLAT', 'U', 'V', 'COSALPHA', 'SINALPHA', 'zlev','utchr'},false,0);
+[XLON, XLAT, COSALPHA, SINALPHA, zlev, utchr] = read_wrf_vars(wrf_path, F(1), {'XLONG', 'XLAT', 'COSALPHA', 'SINALPHA', 'zlev','utchr'},false,0);
 
 utchr = double(utchr); % imported as int
 n_hrs = numel(unique(utchr(:,1)));
 unique_hrs = unique(utchr(:,1));
 
 winds = cities;
+n_cities = numel(cities);
 windvec = nan(numel(dnums), n_hrs);
 
-for a=1:numel(winds)
-    winds(a).dnums = dnums;
-    winds(a).utchr = unique_hrs'; % transpose so that the dimensions of dnums and utchrs match the corresponding dims of windvel and winddir
-    winds(a).windvel = windvec;
-    winds(a).winddir = windvec;
+for b=1:numel(winds)
+    winds(b).dnums = dnums;
+    winds(b).utchr = unique_hrs'; % transpose so that the dimensions of dnums and utchrs match the corresponding dims of windvel and winddir
+    winds(b).windvel = windvec;
+    winds(b).winddir = windvec;
 end
 
 % We can take just one 2D slice of lon, lat, cos, and sin because these do
 % not change in time. U and V we will average for each hour; which hour to
 % use can be decided later based on the OMI overpass times.
-for a=1:size(utchr,1)
-    if any(utchr(a,:) ~= utchr(a,1))
+for b=1:size(utchr,1)
+    if any(utchr(b,:) ~= utchr(b,1))
         E.badvar('utchr','Not all files have the same set of utc hours')
     end
 end
@@ -83,43 +84,66 @@ XLON = XLON(:,:,1,1);
 XLAT = XLAT(:,:,1,1);
 COSALPHA = COSALPHA(:,:,1,1);
 SINALPHA = SINALPHA(:,:,1,1);
-[Ue, Ve] = wrf_winds_transform(U, V, COSALPHA, SINALPHA);
+
 
 % Now calculate the height above ground level for the top of each box, and
 % use only Ue and Ve for boxes below 500 m.
 zlev = cumsum(zlev,3);
 too_high = zlev > 500;
-Ue(too_high) = nan;
-Ve(too_high) = nan;
 
-% Remove any levels entirely too high, this will cut down on overhead in
-% the parallel loop
-keep_level = true(size(too_high,3),1);
-for a=1:size(too_high,3)
-    this_slice = squeeze(too_high(:,:,a,:,:));
-    if all(this_slice(:))
-        keep_level(a) = false;
-    end
-end
-Ue = Ue(:,:,keep_level,:,:);
-Ve = Ve(:,:,keep_level,:,:);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN FUNCTION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
+local_wrf_path = wrf_path;
+city_lons = [winds.Longitude];
+city_lats = [winds.Latitude];
+windvels = nan(numel(dnums), n_hrs, n_cities);
+winddirs = nan(numel(dnums), n_hrs, n_cities);
+
+if numel(F) ~= numel(dnums)
+    E.sizeMismatch('F','dnums')
+end
+
 % Do not run in parallel if not on the cluster, if numThreads is 0, it will
 % run in serial.
-parfor(a=1:numel(cities), numThreads)
-%for a=1:numel(cities)
-    city_lon = winds(a).Longitude;
-    city_lat = winds(a).Latitude;
-    for h=1:n_hrs
-        [windvel, winddir] = calc_avg_wind(XLON, XLAT, Ue(:,:,:,h,:), Ve(:,:,:,h,:), city_lon, city_lat);
-        winds(a).windvel(:,h) = windvel;
-        winds(a).winddir(:,h) = winddir;
+%parfor(a=1:numel(F), numThreads)
+for a=1:numel(F)
+    
+    [Ue, Ve] = read_wrf_vars(local_wrf_path, F(a), {'U','V'});
+    [Ue, Ve] = wrf_winds_transform(Ue, Ve, COSALPHA, SINALPHA);
+    
+    % Remove any levels entirely too high, this will cut down on memory
+    % usage somewhat, though peak memory usage may not decrease that much.
+    Ue(too_high) = nan;
+    Ve(too_high) = nan;
+    keep_level = true(size(too_high,3),1);
+    for i=1:size(too_high,3)
+        this_slice = squeeze(too_high(:,:,i,:,:));
+        if all(this_slice(:))
+            keep_level(i) = false;
+        end
+    end
+    Ue = Ue(:,:,keep_level,:);
+    Ve = Ve(:,:,keep_level,:);
+    
+    for b=1:n_cities
+        city_lon = city_lons(b); %#ok<PFBNS>
+        city_lat = city_lats(b); %#ok<PFBNS>
+        
+        
+        for h=1:n_hrs
+            [this_windvel, this_winddir] = calc_avg_wind(XLON, XLAT, Ue(:,:,:,h), Ve(:,:,:,h), city_lon, city_lat, 'timedim', 4);
+            windvels(b,h,a) = this_windvel;
+            winddirs(b,h,a) = this_winddir;
+        end
     end
 end
 
+for b=1:n_cities
+    winds(b).windvel = windvels(:,:,b);
+    winds(b).winddir = winddirs(:,:,b);
+end
 end
 

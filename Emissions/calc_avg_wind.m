@@ -1,4 +1,4 @@
-function [windspd, winddir] = calc_avg_wind(xlon, xlat, U, V, clon, clat, radius)
+function [windspd, winddir] = calc_avg_wind(xlon, xlat, U, V, clon, clat, varargin)
 % CALC_AVG_WIND Computes avg wind about a point
 %   [WINDSPD, WINDDIR] = CALC_AVG_WIND( XLON, XLAT, U, V, CLON, CLAT )
 %   returns vectors WINDSPD and WINDDIR that contain the average wind speed
@@ -10,31 +10,49 @@ function [windspd, winddir] = calc_avg_wind(xlon, xlat, U, V, clon, clat, radius
 %       U and V should be arrays of wind vectors (x and y respectively).
 %       The first two dimensions should correspond to longitude and
 %       latitude, and have the same lengths as the two dimensions of XLON
-%       and XLAT. U and V may have an arbitrary number of dimensions, so
-%       long as the last one is the time dimension, that is, if U and V are
-%       4D, then U(:,:,:,1) and V(:,:,:,1) are the slices for the first
-%       day, U(:,:,:,2) and V(:,:,:,2) the second day and so on. U and V
-%       may be input staggered in the WRF coordinate sense, they will be
-%       unstaggered internally.
+%       and XLAT. U and V may have an arbitrary number of dimensions, but
+%       it is assumed that the last one the the time dimension, that is, if
+%       U and V are 4D, then U(:,:,:,1) and V(:,:,:,1) are the slices for
+%       the first day, U(:,:,:,2) and V(:,:,:,2) the second day and so on,
+%       unless this is overridden with the parameter 'timedim'. NOTE: if
+%       only one day is given, then the last dimension will be a singletone
+%       and so cannot be counted (uses ndims internally), so you must
+%       specify the time dimension. U and V may be input staggered in the
+%       WRF coordinate sense, they will be unstaggered internally.
 %
 %       CLON and CLAT should be scalar numbers giving the center point
 %       around which to average wind speed and direction. By default, a 3x3
 %       square of grid points around this point is averaged.
 %
-%   [WINDSPD, WINDDIR] = CALC_AVG_WIND( ____, RADIUS ) allows you to modify
-%   how far from CLON and CLAT the wind field is averaged. If not given, it
-%   defaults to 1, giving a 3x3 box of grid points.
+%   There are a few parameters available:
+%
+%   'radius' allows you to modify how far from CLON and CLAT the wind field
+%   is averaged. If not given, it defaults to 1, giving a 3x3 box of grid
+%   points.
+%
+%   'timedim' lets you specify which dimension should be considered the
+%   time dimension. Useful especially if doing one day at a time, in which
+%   case the time dimension may be a singleton and not captured as the last
+%   dimension.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
 E = JLLErrors;
+p = inputParser;
+p.addParameter('radius', 1)
+p.addParameter('timedim', 0)
+p.parse(varargin{:});
+pout = p.Results;
+radius = pout.radius;
+timedim = pout.timedim;
 
-if ~exist('radius', 'var')
-    radius = 1;
-elseif ~isnumeric(radius) || ~isscalar(radius) || mod(radius,1) ~= 0
+if ~isnumeric(radius) || ~isscalar(radius) || mod(radius,1) ~= 0
     E.badinput('RADIUS must be a scalar integer number')
+end
+if ~isnumeric(timedim) || ~isscalar(timedim) || mod(timedim,1) ~= 0 || timedim < 0
+    E.badinput('TIMEDIM must be a scalar, positive, integer number')
 end
 
 if ~isequal(size(xlon), size(xlat))
@@ -74,14 +92,16 @@ end
 %%%%% MAIN FUNCTION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
-timedim = ndims(U);
+if timedim == 0
+    timedim = ndims(U);
+end
 n_times = size(U,timedim);
 windspd = nan(1, size(U,timedim));
 winddir = nan(1, size(U,timedim));
 
 % Put the time dimension first so that U and V can have an arbitrary number
 % of dimensions.
-permvec = 1:ndims(U);
+permvec = 1:max(ndims(U),timedim);
 permvec(timedim) = [];
 permvec = [timedim, permvec];
 
