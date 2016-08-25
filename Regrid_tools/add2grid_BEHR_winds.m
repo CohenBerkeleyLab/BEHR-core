@@ -82,9 +82,7 @@ OMI.MapData.LatRes = reslat;
 OMI.MapData.LonBdy = lonbdy;
 OMI.MapData.LonRes = reslon;
 
-Latitude=(min(latbdy)+reslat/2):reslat:(max(latbdy)-0.025); Latitude=Latitude'; nlat = numel(Latitude);
-Longitude=(min(lonbdy)+reslon/2):reslon:(max(lonbdy)-reslon/2); nlon = numel(Longitude);
-Latitude=repmat(Latitude,1,nlon); Longitude=repmat(Longitude,nlat,1);
+[Longitude, Latitude] = latlon_for_add2grid(lonbdy, latbdy, reslon, reslat);
 
 OMI.Latitude = Latitude;
 OMI.Longitude = Longitude;

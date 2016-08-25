@@ -1,5 +1,5 @@
-function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, num_valid_obs, nox, debug_cell ] = calc_line_density( fpath, fnames, center_lon, center_lat, theta, varargin )
-%[ NO2_X, NO2_LINEDENS, NO2_LINEDENS_STD, LON, LAT, NO2_MEAN, NO2_STD, NUM_VALID_OBS] = CALC_LINE_DENSITY( FPATH, FNAMES, CENTER_LON, CENTER_LAT, THETA )
+function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, num_valid_obs, nox, debug_cell ] = calc_line_density( fpath, fnames, center_lon, center_lat, theta, theta_hr, varargin )
+%[ NO2_X, NO2_LINEDENS, NO2_LINEDENS_STD, LON, LAT, NO2_MEAN, NO2_STD, NUM_VALID_OBS] = CALC_LINE_DENSITY( FPATH, FNAMES, CENTER_LON, CENTER_LAT, THETA, THETA_HR )
 %   Calculate a wind-aligned line density for a given time period.
 %
 %   Calculates a line density of NO2 up and downwind of a city by aligning
@@ -27,8 +27,15 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, nu
 %       the domain, usually the coordinate of a city or other point
 %       emission source.
 %
-%       theta - a vector of wind directions given as degrees CCW from east
-%       between -180 and 180. Must match the number of files to be loaded.
+%       theta - a matrix of wind directions given as degrees CCW from east
+%       between -180 and 180. The size in the first dimension must match
+%       the number of files to be loaded and the size in the second
+%       dimension must match the number of elements in THETA_HR.
+%
+%       theta_hr - a vector representing the UTC times of the theta values
+%       given; the first element is the UTC time corresponding to the first
+%       column of theta, etc. This is used to match the wind speed for a
+%       given day to the time of OMI overpass.
 %
 %   Outputs:
 %
@@ -69,10 +76,12 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, nu
 %       (as is default) an empty vector which will use all the swaths present
 %       in each file.
 %
-%       'windvel' - a vector of wind velocities to be used in filtering out
+%       'windvel' - a matrix of wind velocities to be used in filtering out
 %       days that do not meet desired criteria. If not given, all days that
 %       have sufficient coverage (pixels not removed for clouds or row
-%       anomaly) are used.
+%       anomaly) are used. Must have same shape as theta, i.e. the first
+%       dimension corresponds to the day and the second to the UTC hour
+%       given by theta_hr.
 %
 %       'windcrit' - the number to compare windvel values to, if given, the
 %       parameter 'windop' must also be specified.
@@ -84,7 +93,7 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, nu
 %
 %       'crit_logical' - an alternative to the wind inputs, this should be a 
 %       logical vector that is true for days that shold be included. Must
-%       have the same number of elements as the number of files to use.
+%       have the same shape as theta.
 %
 %       'rel_box_corners' - a four element vector to be passed to rotate
 %       plume describing how large a box to use to circumscribe the plumes.
@@ -107,6 +116,20 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, nu
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 5 Feb 2016
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% GLOBAL VARIABLE DEFINITIONS %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+global onCluster;
+global numThreads;
+
+if isempty(onCluster)
+    onCluster = false;
+end
+if isempty(numThreads) || ~onCluster
+    numThreads = 0; % this will make the parfor loop run in serial mode
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT PARSING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -120,7 +143,7 @@ p.addParameter('windvel',[]);
 p.addParameter('windcrit',[]);
 p.addParameter('windop','');
 p.addParameter('crit_logical',[]);
-p.addParameter('rel_box_corners',[]);
+p.addParameter('rel_box_corners',[2 4 2 2]); % must set default here to generate lat/lon arrays outside of parfor loop
 p.addParameter('force_calc',false);
 p.addParameter('interp',true);
 p.addParameter('DEBUG_LEVEL',1);
@@ -171,12 +194,18 @@ if ~isscalar(center_lat) || ~isnumeric(center_lat)
     E.badinput('center_lat must be a scalar number')
 end
 
+if size(theta,1) ~= numel(fnames)
+    E.badinput('SIZE(THETA,1) must equal NUMEL(FNAMES)')
+elseif size(theta,2) ~= numel(theta_hr)
+    E.badinput('SIZE(THETA,2) must equal NUMEL(THETA_HR)')
+end
+
 if ~isnumeric(theta) || any(theta < -180 | theta > 180) || numel(theta) ~= numel(fnames_struct)
     E.badinput('theta must be a numeric vector with values between -180 and +180 that has the same number of elements as the number of files to be loaded')
 end
 
-if ~isempty(crit_logical) && (numel(crit_logical) ~= numel(fnames_struct) || ~islogical(crit_logical))
-    E.badinput('crit_logical must be a logical vector with the same number of elements as the number of files to be loaded');
+if ~isempty(crit_logical) && (~isequal(size(crit_logical), size(theta)) || ~islogical(crit_logical))
+    E.badinput('crit_logical must be a logical vector with the same shape as THETA');
 end
 
 % Check that if any one of windvel, windop, or windcrit are passed,
@@ -186,8 +215,8 @@ E.addCustomError('windvelcrit','If any of windvel, windop, or windcrit are given
 E.addCustomError('crit_conflict','crit_logical and the windvel/windop/windcrit parameters are mutually exclusive. You may only set one of them.');
 windvel_set = false;
 if ~isempty(windvel)
-    if ~isnumeric(windvel) || any(windvel < 0) || numel(windvel) ~= numel(fnames_struct)
-        E.badinput('windvel (if given) must be a numeric vector with values >= 0 that has the same number of elements as the number of files to be loaded')
+    if ~isnumeric(windvel) || any(windvel < 0) || ~isequal(size(windvel), size(theta))
+        E.badinput('windvel (if given) must be a numeric matrix with values >= 0 that has the same shape as THETA')
     end
     windvel_set = true;
     if ~isempty(crit_logical)
@@ -250,12 +279,22 @@ if isempty(crit_logical) && windvel_set
     crit_logical = eval(sprintf('windvel %s windcrit',windop));
 end
 
-fid = fopen('index_date_and_swath.txt','w');
+% Create the lat/lon arrays here. In order to play nice with parfor, we
+% need to put each day's swaths into a single cell, and then concatenate at
+% the end (parfor loop indices cannot be used to define a range of indices
+% in a sliced array).
+[~, ~, lonlim, latlim] = convert_rel_box_corners(rel_box_corners, center_lon, center_lat);
+[lon, lat] = latlon_for_add2grid(lonlim,latlim,0.05,0.05);
+grid_size = size(lon);
+%nox = nan(size(lon,1), size(lon,2), numel(fnames_struct)*max_swaths_per_day);
+nox_cell = cell(numel(fnames_struct), 1);
+%aw = nan(size(lon,1), size(lon,2), numel(fnames_struct)*max_swaths_per_day);
+aw_cell = cell(numel(fnames_struct), 1);
+debug_cell = cell(numel(fnames_struct),1);
 
-create_array = true;
-i = 0;
-for d=1:numel(fnames_struct)
+parfor(d=1:numel(fnames_struct), numThreads)
     D = load(fullfile(fpath,fnames_struct(d).name),'Data');
+    theta_today = theta(d,:);
     
     if ~crit_logical(d)
         if DEBUG_LEVEL > 0; fprintf('Condition criteria not met, skipping %s\n',fnames_struct(d).name); end
@@ -268,19 +307,28 @@ for d=1:numel(fnames_struct)
         n_swath = numel(data_ind);
     end
 
+    sub_debug_cell = cell(n_swath,1);
+    sub_nox = nan([grid_size, n_swath]);
+    sub_aw = nan([grid_size, n_swath]);
+    
     for s=1:n_swath
-        i = i+1;
-        fprintf(fid,'** %d: %s swath %d\n', i, fnames_struct(d).name, s);
+        % Switch depending if the user has specified which swaths to use
         if ~use_data_ind
             e = s;
         else
             e = data_ind(s);
         end
+        
+        % For this swath, determine the time to the nearest hour
+        omi_datetime = omi_time_conv(nanmean(D.Data(e).Time(:)));
+        omi_hr = hour(omi_datetime) + minute(omi_datetime)/60 + second(omi_datetime)/3600;
+        [~,h] = min(abs(theta_hr - omi_hr)); 
+        
         if DEBUG_LEVEL > 0; disp('Rotating plume'); end
         if ~isempty(rel_box_corners)
-            OMI = rotate_plume(D.Data(e), center_lon, center_lat, theta(d), rel_box_corners);
+            OMI = rotate_plume(D.Data(e), center_lon, center_lat, theta_today(h), rel_box_corners);
         else
-            OMI = rotate_plume(D.Data(e), center_lon, center_lat, theta(d));
+            OMI = rotate_plume(D.Data(e), center_lon, center_lat, theta_today(h));
         end
         if isempty(OMI.Longitude)
             if DEBUG_LEVEL > 0; fprintf('No grid cells in %s\n',fnames_struct(d).name); end 
@@ -288,17 +336,9 @@ for d=1:numel(fnames_struct)
         end
         OMI = omi_pixel_reject(OMI,'omi',0.2,'XTrackFlags');
         xx = OMI.Areaweight > 0;
-        if create_array
-            nox = nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct)*n_swath);
-            aw = nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct)*n_swath);
-            lon = OMI.Longitude;
-            lat = OMI.Latitude;
-            debug_cell = cell(numel(fnames_struct)*n_swath,1);
-            create_array = false;
-        end
         
-        debug_cell{i} = sprintf('%s: swath %d', fnames_struct(d).name, e);
-
+        sub_debug_cell{s} = sprintf('%s: swath %d', fnames_struct(d).name, e);
+        
         if interp_bool
             % This criterion accounts for how many neighbors are empty, giving more
             % weight to large clumps of NaNs (due to row anomaly or clouds) and
@@ -316,18 +356,24 @@ for d=1:numel(fnames_struct)
             if DEBUG_LEVEL > 0; disp('Interpolating to fill in gaps in NO2 matrix'); end
             F = scatteredInterpolant(OMI.Longitude(xx), OMI.Latitude(xx), OMI.BEHRColumnAmountNO2Trop(xx));
             Faw = scatteredInterpolant(OMI.Longitude(xx), OMI.Latitude(xx), OMI.Areaweight(xx));
-            nox(:,:,i) = F(OMI.Longitude, OMI.Latitude)*nox_no2_scale;
-            aw(:,:,i) = Faw(OMI.Longitude, OMI.Latitude);
+            sub_nox(:,:,s) = F(OMI.Longitude, OMI.Latitude)*nox_no2_scale;
+            sub_aw(:,:,s) = Faw(OMI.Longitude, OMI.Latitude);
         else
             
             OMI.BEHRColumnAmountNO2Trop(~xx) = nan;
             OMI.Areaweight(~xx) = nan;
-            nox(:,:,i) = OMI.BEHRColumnAmountNO2Trop*nox_no2_scale;
-            aw(:,:,i) = OMI.Areaweight;
+            sub_nox(:,:,s) = OMI.BEHRColumnAmountNO2Trop*nox_no2_scale;
+            sub_aw(:,:,s) = OMI.Areaweight;
         end
     end
+    debug_cell{d} = sub_debug_cell;
+    nox_cell{d} = sub_nox;
+    aw_cell{d} = sub_aw;
 end
-fclose(fid);
+
+debug_cell = cat(1, debug_cell{:});
+nox = cat(3, nox_cell{:});
+aw = cat(3, aw_cell{:});
 
 %no2_mean = nanmean(nox,3);
 no2_mean = nansum2(nox .* aw, 3) ./ nansum2(aw, 3);

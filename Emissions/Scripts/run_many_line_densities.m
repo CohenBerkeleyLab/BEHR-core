@@ -2,10 +2,10 @@ function run_many_line_densities
 % I'm not sitting around while these things run!
 
 %cities = {'Atlanta','Birmingham','Montgomery'};
-cities = {'Atlanta'};
+cities = {'Birmingham'};
 wind_crits = {3,4,5};%{'mean',3,5};
 box = [1.0 2.0 0.5 0.5];%[1.0 2.0 0.5 0.5];
-save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/50km-side-earthrel-no0to-112';
+%save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/50km-side-earthrel-no0to-112';
 for a=1:numel(cities)
     for b=1:numel(wind_crits)
         if isnumeric(wind_crits{b})
@@ -15,6 +15,8 @@ for a=1:numel(cities)
         end
         fprintf('%s: wind crit = %s\n',cities{a}, wind_crit_str);
         [S, wind_crit] = gen_line_densities( cities{a}, wind_crits{b}, box );
+        putvar S
+        return
         save_line_densities(S, wind_crit, save_dir, cities{a}, box);
     end
 end
@@ -57,8 +59,8 @@ elseif ischar(wind_crit)
     E.badinput('wind_crit must be a number or the string ''mean''');
 end
 
-gtcrit = windvel >= wind_crit & (theta < -112.5 | theta > 0);
-ltcrit = windvel < wind_crit & (theta < -112.5 | theta > 0);
+gtcrit = windvel >= wind_crit; %& (theta < -112.5 | theta > 0);
+ltcrit = windvel < wind_crit; %& (theta < -112.5 | theta > 0);
 
 F = dir(fullfile(behr_work_dir, hybrid_dir, 'OMI_BEHR_*.mat'));
 
@@ -70,29 +72,29 @@ end
 F = F(fdnums >= datenum('2013-06-01'));
 
 fprintf('\tFast hybrid\n')
-[S.no2x_hyfast, S.no2ld_hyfast, S.no2ldstd_hyfast, S.lon_hyfast, S.lat_hyfast, S.no2cd_hyfast, ~, S.num_obs_hyfast, S.indiv_swaths_hyfast, S.debug_cell_hyfast] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
-fprintf('\tSlow hybrid\n')
-[S.no2x_hyslow, S.no2ld_hyslow, S.no2ldstd_hyslow, S.lon_hyslow, S.lat_hyslow, S.no2cd_hyslow, ~, S.num_obs_hyslow, S.indiv_swaths_hyslow, S.debug_cell_hyslow] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
-fprintf('\tFast monthly\n')
-[S.no2x_mnfast, S.no2ld_mnfast, S.no2ldstd_mnfast, S.lon_mnfast, S.lat_mnfast, S.no2cd_mnfast, ~, S.num_obs_mnfast, S.indiv_swaths_mnfast, S.debug_cell_mnfast] = calc_line_density(fullfile(behr_work_dir, monthly_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
-fprintf('\tSlow monthly\n')
-[S.no2x_mnslow, S.no2ld_mnslow, S.no2ldstd_mnslow, S.lon_mnslow, S.lat_mnslow, S.no2cd_mnslow, ~, S.num_obs_mnslow, S.indiv_swaths_mnslow, S.debug_cell_mnslow] = calc_line_density(fullfile(behr_work_dir, monthly_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
-fprintf('\tFast coarse monthly\n')
-[S.no2x_mn108fast, S.no2ld_mn108fast, S.no2ldstd_mn108fast, S.lon_mn108fast, S.lat_mn108fast, S.no2cd_mn108fast, ~, S.num_obs_mn108fast, S.indiv_swaths_mn108fast, S.debug_cell_mn108fast] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
-fprintf('\tSlow coarse monthly\n')
-[S.no2x_mn108slow, S.no2ld_mn108slow, S.no2ldstd_mn108slow, S.lon_mn108slow, S.lat_mn180slow, S.no2cd_mn108slow, ~, S.num_obs_mn108slow, S.indiv_swaths_mn108slow, S.debug_cell_mn108fast] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+[S.no2x_hyfast, S.no2ld_hyfast, S.no2ldstd_hyfast, S.lon_hyfast, S.lat_hyfast, S.no2cd_hyfast, ~, S.num_obs_hyfast, S.indiv_swaths_hyfast, S.debug_cell_hyfast] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta',19,'crit_logical',gtcrit','rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+% fprintf('\tSlow hybrid\n')
+% [S.no2x_hyslow, S.no2ld_hyslow, S.no2ldstd_hyslow, S.lon_hyslow, S.lat_hyslow, S.no2cd_hyslow, ~, S.num_obs_hyslow, S.indiv_swaths_hyslow, S.debug_cell_hyslow] = calc_line_density(fullfile(behr_work_dir, hybrid_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+% fprintf('\tFast monthly\n')
+% [S.no2x_mnfast, S.no2ld_mnfast, S.no2ldstd_mnfast, S.lon_mnfast, S.lat_mnfast, S.no2cd_mnfast, ~, S.num_obs_mnfast, S.indiv_swaths_mnfast, S.debug_cell_mnfast] = calc_line_density(fullfile(behr_work_dir, monthly_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+% fprintf('\tSlow monthly\n')
+% [S.no2x_mnslow, S.no2ld_mnslow, S.no2ldstd_mnslow, S.lon_mnslow, S.lat_mnslow, S.no2cd_mnslow, ~, S.num_obs_mnslow, S.indiv_swaths_mnslow, S.debug_cell_mnslow] = calc_line_density(fullfile(behr_work_dir, monthly_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+% fprintf('\tFast coarse monthly\n')
+% [S.no2x_mn108fast, S.no2ld_mn108fast, S.no2ldstd_mn108fast, S.lon_mn108fast, S.lat_mn108fast, S.no2cd_mn108fast, ~, S.num_obs_mn108fast, S.indiv_swaths_mn108fast, S.debug_cell_mn108fast] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+% fprintf('\tSlow coarse monthly\n')
+% [S.no2x_mn108slow, S.no2ld_mn108slow, S.no2ldstd_mn108slow, S.lon_mn108slow, S.lat_mn180slow, S.no2cd_mn108slow, ~, S.num_obs_mn108slow, S.indiv_swaths_mn108slow, S.debug_cell_mn108fast] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
 
-F = dir(fullfile(behr_work_dir, wrf_dir, '*.mat'));
-fdnums = nan(size(F));
-for a=1:numel(fdnums)
-    [s,e] = regexp(F(a).name,'\d\d\d\d\d\d\d\d');
-    fdnums(a) = datenum(F(a).name(s:e), 'yyyymmdd');
-end
-F = F(fdnums >= datenum('2013-06-01'));
-fprintf('\tFast WRF\n')
-[S.no2x_wrffast, S.no2ld_wrffast, S.no2ldstd_wrffast, S.lon_wrffast, S.lat_wrffast, S.no2cd_wrffast, S.num_obs_wrffast] = calc_line_density(fullfile(behr_work_dir, wrf_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
-fprintf('\tSlow WRF\n')
-[S.no2x_wrfslow, S.no2ld_wrfslow, S.no2ldstd_wrfslow, S.lon_wrfslow, S.lat_wrfslow, S.no2cd_wrfslow, S.num_obs_wrfslow] = calc_line_density(fullfile(behr_work_dir, wrf_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+% F = dir(fullfile(behr_work_dir, wrf_dir, '*.mat'));
+% fdnums = nan(size(F));
+% for a=1:numel(fdnums)
+%     [s,e] = regexp(F(a).name,'\d\d\d\d\d\d\d\d');
+%     fdnums(a) = datenum(F(a).name(s:e), 'yyyymmdd');
+% end
+% F = F(fdnums >= datenum('2013-06-01'));
+% fprintf('\tFast WRF\n')
+% [S.no2x_wrffast, S.no2ld_wrffast, S.no2ldstd_wrffast, S.lon_wrffast, S.lat_wrffast, S.no2cd_wrffast, S.num_obs_wrffast] = calc_line_density(fullfile(behr_work_dir, wrf_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+% fprintf('\tSlow WRF\n')
+% [S.no2x_wrfslow, S.no2ld_wrfslow, S.no2ldstd_wrfslow, S.lon_wrfslow, S.lat_wrfslow, S.no2cd_wrfslow, S.num_obs_wrfslow] = calc_line_density(fullfile(behr_work_dir, wrf_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
 end
 
 function save_line_densities(S, wind_crit, save_dir, city_name, box, ismean)

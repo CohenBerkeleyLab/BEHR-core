@@ -87,7 +87,7 @@ function [ OMI ] = rotate_plume( Data, center_lon, center_lat, theta, varargin )
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
 p = inputParser;
-p.addOptional('rel_box_corners',[]);
+p.addOptional('rel_box_corners',[2 4 2 2]);
 p.addParameter('vza_crit',60);
 p.parse(varargin{:});
 pout = p.Results;
@@ -107,16 +107,12 @@ elseif ~isscalar(theta) || ~isnumeric(theta) || theta > 180 || theta < -180
     E.badinput('theta must be a scalar numeric value between -180 and +180')
 end
 
-if ~isempty(rel_box_corners)
-    if numel(rel_box_corners) ~= 4 || ~isnumeric(rel_box_corners) || ~isvector(rel_box_corners)
-        E.badinput('rel_box_corners (if given) must be a 4 element numeric vector')
-    end
-    x_box = [-rel_box_corners(1), rel_box_corners(2), rel_box_corners(2), -rel_box_corners(1)];
-    y_box = [-rel_box_corners(3), -rel_box_corners(3), rel_box_corners(4), rel_box_corners(4)];
-else
-    x_box = [-2 4 4 -2];
-    y_box = [-2 -2 2 2];
+
+if numel(rel_box_corners) ~= 4 || ~isnumeric(rel_box_corners) || ~isvector(rel_box_corners)
+    E.badinput('rel_box_corners (if given) must be a 4 element numeric vector')
 end
+[x_box, y_box, lonlim, latlim] = convert_rel_box_corners(rel_box_corners, center_lon, center_lat);
+
 
 if ~isscalar(vza_crit) || ~isnumeric(vza_crit)
     E.badinput('vza_crit must be a numeric scalar')
@@ -184,8 +180,7 @@ end
 
 
 % Finally grid the data to a 0.05 x 0.05 degree grid.
-lonmin = center_lon + x_box(1);  lonmax = center_lon + x_box(3);
-latmin = center_lat + y_box(1);  latmax = center_lat + y_box(3);
+
 resolution = 0.05; resolution2 = 0.05;
 % This will be passed to the gridding function to keep the field order
 % correct.
@@ -198,7 +193,7 @@ hh=0;
 if all(Data.ViewingZenithAngle(:) == 0) || numel(Data.ViewingZenithAngle) == 1
     return
 else
-    OMI = add2grid_BEHR_winds(Data,OMI,resolution,resolution2,[lonmin, lonmax],[latmin, latmax]);
+    OMI = add2grid_BEHR_winds(Data,OMI,resolution,resolution2,lonlim,latlim);
 end
 
 
