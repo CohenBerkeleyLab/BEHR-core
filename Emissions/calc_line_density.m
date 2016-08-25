@@ -145,7 +145,7 @@ p.addParameter('windop','');
 p.addParameter('crit_logical',[]);
 p.addParameter('rel_box_corners',[2 4 2 2]); % must set default here to generate lat/lon arrays outside of parfor loop
 p.addParameter('force_calc',false);
-p.addParameter('interp',true);
+p.addParameter('interp',false);
 p.addParameter('DEBUG_LEVEL',1);
 
 p.parse(varargin{:});
@@ -286,9 +286,7 @@ end
 [~, ~, lonlim, latlim] = convert_rel_box_corners(rel_box_corners, center_lon, center_lat);
 [lon, lat] = latlon_for_add2grid(lonlim,latlim,0.05,0.05);
 grid_size = size(lon);
-%nox = nan(size(lon,1), size(lon,2), numel(fnames_struct)*max_swaths_per_day);
 nox_cell = cell(numel(fnames_struct), 1);
-%aw = nan(size(lon,1), size(lon,2), numel(fnames_struct)*max_swaths_per_day);
 aw_cell = cell(numel(fnames_struct), 1);
 debug_cell = cell(numel(fnames_struct),1);
 
