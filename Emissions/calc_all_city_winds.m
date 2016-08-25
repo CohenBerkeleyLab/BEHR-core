@@ -135,8 +135,8 @@ for a=1:numel(F)
         
         for h=1:n_hrs
             [this_windvel, this_winddir] = calc_avg_wind(XLON, XLAT, Ue(:,:,:,h), Ve(:,:,:,h), city_lon, city_lat, 'timedim', 4);
-            windvels(b,h,a) = this_windvel;
-            winddirs(b,h,a) = this_winddir;
+            windvels(a,h,b) = this_windvel;
+            winddirs(a,h,b) = this_winddir;
         end
     end
 end
