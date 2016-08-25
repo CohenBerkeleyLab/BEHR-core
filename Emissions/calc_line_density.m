@@ -200,8 +200,8 @@ elseif size(theta,2) ~= numel(theta_hr)
     E.badinput('SIZE(THETA,2) must equal NUMEL(THETA_HR)')
 end
 
-if ~isnumeric(theta) || any(theta < -180 | theta > 180) || numel(theta) ~= numel(fnames_struct)
-    E.badinput('theta must be a numeric vector with values between -180 and +180 that has the same number of elements as the number of files to be loaded')
+if ~isnumeric(theta) || any(theta(:) < -180 | theta(:) > 180) || size(theta,1) ~= numel(fnames_struct) || size(theta,2) ~= numel(theta_hr)
+    E.badinput('theta must be a numeric vector with values between -180 and +180 with SIZE(THETA,1) == NUMEL(FNAMES) and SIZE(THETA,2) == NUMEL(THETA_HR)')
 end
 
 if ~isempty(crit_logical) && (~isequal(size(crit_logical), size(theta)) || ~islogical(crit_logical))
@@ -215,7 +215,7 @@ E.addCustomError('windvelcrit','If any of windvel, windop, or windcrit are given
 E.addCustomError('crit_conflict','crit_logical and the windvel/windop/windcrit parameters are mutually exclusive. You may only set one of them.');
 windvel_set = false;
 if ~isempty(windvel)
-    if ~isnumeric(windvel) || any(windvel < 0) || ~isequal(size(windvel), size(theta))
+    if ~isnumeric(windvel) || any(windvel(:) < 0) || ~isequal(size(windvel), size(theta))
         E.badinput('windvel (if given) must be a numeric matrix with values >= 0 that has the same shape as THETA')
     end
     windvel_set = true;
@@ -290,7 +290,8 @@ nox_cell = cell(numel(fnames_struct), 1);
 aw_cell = cell(numel(fnames_struct), 1);
 debug_cell = cell(numel(fnames_struct),1);
 
-parfor(d=1:numel(fnames_struct), numThreads)
+%parfor(d=1:numel(fnames_struct), numThreads)
+for d=1:numel(fnames_struct)
     D = load(fullfile(fpath,fnames_struct(d).name),'Data');
     theta_today = theta(d,:);
     
