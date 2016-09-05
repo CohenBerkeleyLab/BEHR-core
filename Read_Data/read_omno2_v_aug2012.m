@@ -164,13 +164,13 @@ if onCluster
     
 else
     %This is the directory where the final .mat file will be saved.
-    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Production tests';%BEHR_paths('sp_mat_dir');
+    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/PSA-Fields/SP Files';%BEHR_paths('sp_mat_dir');
     
     %This is the directory where the he5 files are saved.
     omi_he5_dir = BEHR_paths('omno2_dir');
     
     % This is the directory where the OMI PIXCOR he5 files are saved
-    omi_pixcor_dir = '';
+    omi_pixcor_dir = '/Volumes/share-sat/SAT/OMI/OMPIXCOR';
     
     %This is the directory where the MODIS myd06_L2*.hdf files are saved. It should include subfolders organized by year.
     modis_myd06_dir = BEHR_paths('myd06_dir');
@@ -257,7 +257,7 @@ onCluster_local = onCluster;
 
 datenums = datenum(date_start):datenum(date_end);
 
-parfor j=1:length(datenums)
+for j=1:length(datenums)
     %Read the desired year, month, and day
     R=datenums(j);
     date=datestr(R,26);
@@ -278,7 +278,7 @@ parfor j=1:length(datenums)
     % variable on each worker for parallelization, and this line will reset
     % its value within each loop. Thus we shouldn't need to worry about
     % cross-communication between workers.
-    Data=struct('Date',0,'Longitude',0,'Latitude',0,'LatBdy',[],'LonBdy',[],'Loncorn',0,'Latcorn',0,'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'MODISCloud',0,'MODIS_Cloud_File','','MODISAlbedo',0,'MODIS_Albedo_File','','GLOBETerpres',0,'XTrackQualityFlags',0);
+    Data=struct('Date',0,'Longitude',0,'Latitude',0,'LatBdy',[],'LonBdy',[],'Loncorn',0,'Latcorn',0, 'FoV75CornerLongitude', 0, 'FoV75CornerLatitude', 0, 'TiledCornerLongitude', 0, 'TiledCornerLatitude', 0, 'FoV75Area', 0, 'TiledArea', 0, 'SpacecraftAltitude', 0, 'SpacecraftLongitude', 0, 'SpacecraftLatitude', 0, 'Time',0,'ViewingZenithAngle',0,'SolarZenithAngle',0,'ViewingAzimuthAngle',0,'SolarAzimuthAngle',0,'AMFStrat',0,'AMFTrop',0,'CloudFraction',0,'CloudRadianceFraction',0,'TerrainHeight',0,'TerrainPressure',0,'TerrainReflectivity',0,'vcdQualityFlags',0,'CloudPressure',0,'ColumnAmountNO2',0,'SlantColumnAmountNO2',0,'ColumnAmountNO2Trop',0,'RootMeanSquareErrorOfFit',0,'MODISCloud',0,'MODIS_Cloud_File','','MODISAlbedo',0,'MODIS_Albedo_File','','GLOBETerpres',0,'XTrackQualityFlags',0);
     
     %Set the file path and name, assuming that the file structure is
     %<he5_directory>/<year>/<month>/...files...  Then figure out how many
@@ -289,9 +289,7 @@ parfor j=1:length(datenums)
     sp_files = dir(file);
     sp_files = remove_duplicate_orbits(sp_files);
     
-    pixcor_files = dir(fullfile(omi_pixcor_dir, year, month,'*.he5'));
     pixcor_file_dir = fullfile(omi_pixcor_dir, year, month);
-    pixcor_files = remove_duplicate_orbits(pixcor_files);
     
     n = length(sp_files);
     E=0;
@@ -308,16 +306,18 @@ parfor j=1:length(datenums)
             
             % Figure out the corresponding pixcor data set
             orbit_str = regexp(filename, 'o\d\d\d\d\d', 'match', 'once');
-            pixcor_pattern = sprintf('OMI-Aura_L2-OMPIXCOR_%sm%s%s-%s*.he5', year, month, day, orbit_str);
-            pixcor_files = dir(fullfile(omi_pixcor_dir, pixcor_pattern));
-            if numel(pixcor_files > 1)
+            time_str = regexp(filename, 't\d\d\d\d', 'match', 'once');
+            pixcor_pattern = sprintf('OMI-Aura_L2-OMPIXCOR_%sm%s%s%s-%s*.he5', year, month, day, time_str, orbit_str);
+            pixcor_files = dir(fullfile(pixcor_file_dir, pixcor_pattern));
+            if numel(pixcor_files) > 1
                 error('omi_pixcor:multiple_files', 'Multiple pixcor files found for orbit %s', orbit_str)
-            elseif numel(pixcor_files < 1)
-                error('omi_pixcor:multiple_files', 'No pixcor files found for orbit %s', orbit_str)
+            elseif numel(pixcor_files) < 1
+                error('omi_pixcor:no_files', 'No pixcor files found for orbit %s', orbit_str)
             else
                 pixcor_filename = pixcor_files(1).name;
             end
-            
+            pinfo = h5info(fullfile(pixcor_file_dir, pixcor_filename));           
+ 
             %Read in the full latitude data set; this will be used to determine
             %which pixels to read in later.
             Latitude = h5read(fullfile(file_dir,filename), h5dsetname(hinfo,1,2,1,2,'Latitude')); %h5dsetname takes 1) the object returned by h5info, 2) The indicies of the group tree 3) The last argument may be the index or name of the dataset of interest
@@ -353,7 +353,7 @@ parfor j=1:length(datenums)
             slabsize = [length(cut_y),60];
             memspaceID = H5S.create_simple(length(slabsize), slabsize, slabsize);
             fileID = H5F.open(fullfile(file_dir,filename), 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
-            pixcorFID = H5F.open(fullfile(file_dir,pixcor_filename), 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
+            pixcorFID = H5F.open(fullfile(pixcor_file_dir,pixcor_filename), 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
             
             %This will handle each of the variables that are 60x(number of
             %lines of pixels along track).  It also converts all data from
@@ -387,8 +387,7 @@ parfor j=1:length(datenums)
             %SpacecraftLongitude
             datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'SpacecraftLongitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); SpacecraftLongitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); SpacecraftLongitude=double(SpacecraftLongitude); SpacecraftLongitude=SpacecraftLongitude';
             %Time
-            datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'Time')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); Time = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); Time=double(Time); Time=Time';
-            Time=repmat(Time',1,60);
+            datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,2,'Time')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); Time = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); Time=double(Time);
             
             
             
@@ -457,15 +456,15 @@ parfor j=1:length(datenums)
                 slabsize = [4,length(cut_y),60];
                 memspaceID = H5S.create_simple(length(slabsize),slabsize,slabsize);
                 offset = [0,(min(i_i)-1),0];
-                datasetID = H5D.open(pixcorFID, h5dsetname(hinfo,1,2,3,1,'TiledCornerLongitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TiledCornerLongitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TiledCornerLongitude = double(TiledCornerLongitude); %TiledCornerLongitude = permute(TiledCornerLongitude, [1 3 2]);
-                datasetID = H5D.open(pixcorFID, h5dsetname(hinfo,1,2,3,1,'TiledCornerLatitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TiledCornerLatitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TiledCornerLatitude = double(TiledCornerLatitude); %TiledCornerLatitude = permute(TiledCornerLatitude, [1 3 2]);
+                datasetID = H5D.open(pixcorFID, h5dsetname(pinfo,1,2,3,1,'TiledCornerLongitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TiledCornerLongitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TiledCornerLongitude = double(TiledCornerLongitude); TiledCornerLongitude = permute(TiledCornerLongitude, [3 2 1]);
+                datasetID = H5D.open(pixcorFID, h5dsetname(pinfo,1,2,3,1,'TiledCornerLatitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TiledCornerLatitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TiledCornerLatitude = double(TiledCornerLatitude); TiledCornerLatitude = permute(TiledCornerLatitude, [3 2 1]);
                 % Now the areas, which are given only in one dimension
                 % (across track)
                 slabsize = 60;
                 memspaceID = H5S.create_simple(length(slabsize),slabsize,slabsize);
                 offset = 0;
-                datasetID = H5D.open(pixcorFID, h5dsetname(hinfo,1,2,3,1,'FoV75Area')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75Area = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75Area = double(FoV75Area); 
-                datasetID = H5D.open(pixcorFID, h5dsetname(hinfo,1,2,3,1,'TiledArea')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TiledArea = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TiledArea = double(TiledArea);
+                datasetID = H5D.open(pixcorFID, h5dsetname(pinfo,1,2,3,1,'FoV75Area')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75Area = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75Area = double(FoV75Area); 
+                datasetID = H5D.open(pixcorFID, h5dsetname(pinfo,1,2,3,1,'TiledArea')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TiledArea = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TiledArea = double(TiledArea);
                 
                 %Import all remaining pieces of information from the standard
                 %product.
@@ -581,8 +580,8 @@ parfor j=1:length(datenums)
                 Data(E).Swath = Swath;                                   Data(E).Date=date;
                 Data(E).TropopausePressure = TropopausePressure;         Data(E).Pixel=Pixel;
                 Data(E).RootMeanSquareErrorOfFit = RootMeanSquareErrorOfFit;
-                Data(E).SpacecraftAltitude = SpacecraftAltitude;
-                Data(E).SpacecraftLongitude = SpacecraftLongitude;       Data(E).SpacecraftLatitude = SpacecraftLatitude;
+                Data(E).SpacecraftAltitude = SpacecraftAltitude';
+                Data(E).SpacecraftLongitude = SpacecraftLongitude';       Data(E).SpacecraftLatitude = SpacecraftLatitude';
                 Data(E).TiledCornerLongitude = TiledCornerLongitude;     Data(E).TiledCornerLatitude = TiledCornerLatitude;
                 Data(E).TiledArea = TiledArea;                           Data(E).FoV75Area = FoV75Area;
                 %Add MODIS cloud info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -591,7 +590,6 @@ parfor j=1:length(datenums)
                 %Convert the OMI date to a Julian calendar day
                 d2=1+datenum(str2double(year),str2double(month),str2double(day))-datenum(str2double(year),1,1);
                 julian_day = sprintf('%03d',d2);
-                
                 
                 %Find all MODIS files that occur after the current OMI file
                 %but before the next OMI file.
