@@ -128,6 +128,7 @@ if onCluster
 
     global sp_mat_dir;
     global omi_he5_dir;
+    global omi_pixcor_dir;
     global modis_myd06_dir;
     global modis_mcd43_dir;
     global globe_dir;
@@ -139,6 +140,9 @@ if onCluster
         nonexistant{end+1} = 'sp_mat_dir';
     end
     if ~exist(omi_he5_dir,'dir')
+        nonexistant{end+1} = 'he5_dir';
+    end
+    if ~exist(omi_pixcor_dir,'dir')
         nonexistant{end+1} = 'he5_dir';
     end
     if ~exist(modis_myd06_dir,'dir')
@@ -164,6 +168,9 @@ else
     
     %This is the directory where the he5 files are saved.
     omi_he5_dir = BEHR_paths('omno2_dir');
+    
+    % This is the directory where the OMI PIXCOR he5 files are saved
+    omi_pixcor_dir = '';
     
     %This is the directory where the MODIS myd06_L2*.hdf files are saved. It should include subfolders organized by year.
     modis_myd06_dir = BEHR_paths('myd06_dir');
@@ -281,6 +288,11 @@ parfor j=1:length(datenums)
     file=fullfile(file_dir,short_filename);
     sp_files = dir(file);
     sp_files = remove_duplicate_orbits(sp_files);
+    
+    pixcor_files = dir(fullfile(omi_pixcor_dir, year, month,'*.he5'));
+    pixcor_file_dir = fullfile(omi_pixcor_dir, year, month);
+    pixcor_files = remove_duplicate_orbits(pixcor_files);
+    
     n = length(sp_files);
     E=0;
     if isempty(sp_files);
@@ -293,6 +305,18 @@ parfor j=1:length(datenums)
             %Read in each file, saving the hierarchy as 'hinfo'
             filename= sp_files(e).name;         
             hinfo = h5info(fullfile(file_dir,filename));
+            
+            % Figure out the corresponding pixcor data set
+            orbit_str = regexp(filename, 'o\d\d\d\d\d', 'match', 'once');
+            pixcor_pattern = sprintf('OMI-Aura_L2-OMPIXCOR_%sm%s%s-%s*.he5', year, month, day, orbit_str);
+            pixcor_files = dir(fullfile(omi_pixcor_dir, pixcor_pattern));
+            if numel(pixcor_files > 1)
+                error('omi_pixcor:multiple_files', 'Multiple pixcor files found for orbit %s', orbit_str)
+            elseif numel(pixcor_files < 1)
+                error('omi_pixcor:multiple_files', 'No pixcor files found for orbit %s', orbit_str)
+            else
+                pixcor_filename = pixcor_files(1).name;
+            end
             
             %Read in the full latitude data set; this will be used to determine
             %which pixels to read in later.
@@ -329,6 +353,7 @@ parfor j=1:length(datenums)
             slabsize = [length(cut_y),60];
             memspaceID = H5S.create_simple(length(slabsize), slabsize, slabsize);
             fileID = H5F.open(fullfile(file_dir,filename), 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
+            pixcorFID = H5F.open(fullfile(file_dir,pixcor_filename), 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
             
             %This will handle each of the variables that are 60x(number of
             %lines of pixels along track).  It also converts all data from
@@ -426,6 +451,22 @@ parfor j=1:length(datenums)
                     end
                 end
                 
+                % Import the tiled corner coordinates from the PIXCOR files
+                % The order of the dimensions is different than in the
+                % OMNO2 product (of course)
+                slabsize = [4,length(cut_y),60];
+                memspaceID = H5S.create_simple(length(slabsize),slabsize,slabsize);
+                offset = [0,(min(i_i)-1),0];
+                datasetID = H5D.open(pixcorFID, h5dsetname(hinfo,1,2,3,1,'TiledCornerLongitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TiledCornerLongitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TiledCornerLongitude = double(TiledCornerLongitude); %TiledCornerLongitude = permute(TiledCornerLongitude, [1 3 2]);
+                datasetID = H5D.open(pixcorFID, h5dsetname(hinfo,1,2,3,1,'TiledCornerLatitude')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TiledCornerLatitude = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TiledCornerLatitude = double(TiledCornerLatitude); %TiledCornerLatitude = permute(TiledCornerLatitude, [1 3 2]);
+                % Now the areas, which are given only in one dimension
+                % (across track)
+                slabsize = 60;
+                memspaceID = H5S.create_simple(length(slabsize),slabsize,slabsize);
+                offset = 0;
+                datasetID = H5D.open(pixcorFID, h5dsetname(hinfo,1,2,3,1,'FoV75Area')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); FoV75Area = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); FoV75Area = double(FoV75Area); 
+                datasetID = H5D.open(pixcorFID, h5dsetname(hinfo,1,2,3,1,'TiledArea')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TiledArea = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TiledArea = double(TiledArea);
+                
                 %Import all remaining pieces of information from the standard
                 %product.
                 offset = [(min(i_i)-1),0];
@@ -468,6 +509,9 @@ parfor j=1:length(datenums)
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'VcdQualityFlags')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); vcdQualityFlags = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); vcdQualityFlags=double(vcdQualityFlags); vcdQualityFlags=vcdQualityFlags';
                 %XTrackQualityFlags
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'XTrackQualityFlags')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); XTrackQualityFlags = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); XTrackQualityFlags=double(XTrackQualityFlags); XTrackQualityFlags=XTrackQualityFlags';
+                %XTrackQualityFlags
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'RootMeanSquareErrorOfFit')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); RootMeanSquareErrorOfFit = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); RootMeanSquareErrorOfFit=double(RootMeanSquareErrorOfFit); RootMeanSquareErrorOfFit=RootMeanSquareErrorOfFit';
+                
                 
                 H5F.close(fileID); %close omi file to free up space
                 
@@ -507,6 +551,12 @@ parfor j=1:length(datenums)
                 Row(~rows_to_keep,:)=[];                         
                 Pixel(~rows_to_keep,:)=[];
                 Swath(~rows_to_keep,:)=[];
+                RootMeanSquareErrorOfFit(~rows_to_keep,:)=[];
+                SpacecraftAltitude(~rows_to_keep)=[];
+                SpacecraftLatitude(~rows_to_keep)=[];
+                SpacecraftLongitude(~rows_to_keep)=[];
+                TiledCornerLongitude(:,~rows_to_keep,:)=[];
+                TiledCornerLatitude(:,~rows_to_keep,:)=[];
 
                 
                 if DEBUG_LEVEL > 0; disp(' Saving imported OMI fields to "Data"'); end
@@ -530,6 +580,11 @@ parfor j=1:length(datenums)
                 Data(E).Row = Row;                                       Data(E).XTrackQualityFlags = XTrackQualityFlags;
                 Data(E).Swath = Swath;                                   Data(E).Date=date;
                 Data(E).TropopausePressure = TropopausePressure;         Data(E).Pixel=Pixel;
+                Data(E).RootMeanSquareErrorOfFit = RootMeanSquareErrorOfFit;
+                Data(E).SpacecraftAltitude = SpacecraftAltitude;
+                Data(E).SpacecraftLongitude = SpacecraftLongitude;       Data(E).SpacecraftLatitude = SpacecraftLatitude;
+                Data(E).TiledCornerLongitude = TiledCornerLongitude;     Data(E).TiledCornerLatitude = TiledCornerLatitude;
+                Data(E).TiledArea = TiledArea;                           Data(E).FoV75Area = FoV75Area;
                 %Add MODIS cloud info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
                 
