@@ -1,4 +1,4 @@
-function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_mode, rows )
+function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_mode, rows, szalim )
 %omi_pixel_reject: Set areaweight to 0 for any pixels that will adversely
 %affect the accuracy of the BEHR NO2 map.
 %   There are a number of criteria that need to be evaluated for an OMI
@@ -48,6 +48,9 @@ omi = omi_in;
 if ~exist('rows','var')
     rows = [];
 end
+if ~exist('szalim', 'var')
+    szalim = 180;
+end
 
 omi.Areaweight(omi.BEHRColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
 
@@ -90,6 +93,10 @@ if ~isempty(rows)
     omi.Areaweight(rr) = 0;
 end
 
+% Remove elements with a solar zenith angle greater than specified by the input.
+% Mainly for comparison with the PSA gridding algorithm used by Mark Wenig
+ss = omi.SolarZenithAngle > szalim;
+omi.Areaweight(ss) = 0;
 
 end
 
