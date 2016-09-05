@@ -14,6 +14,7 @@ p.addParameter('cloud_frac_max',0.2,@(x) (isnumeric(x) && isscalar(x)));
 p.addParameter('row_anomaly','XTrackFlags', @(x) ismember(x, {'AlwaysByRow', 'RowsByTime', 'XTrackFlags', 'XTrackFlagsLight'}));
 p.addParameter('rows',[],@(x) (isnumeric(x) && (numel(x) == 0 || numel(x) == 2)));
 p.addParameter('sza', 180, @(x) (isnumeric(x) && isscalar(x) && x >= 0))
+p.addParameter('rmserror', Inf, @(x) (isnumeric(x) && isscalar(x) && x >= 0));
 
 p.parse(varargin{:});
 pout = p.Results;
