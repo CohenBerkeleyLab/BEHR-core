@@ -63,6 +63,8 @@ switch lower(plottype)
         mchist(varargin{:});
     case 'stats'
         stats_table(varargin{:});
+    case 'autocorr'
+        autocorrelation_test(varargin{:});
     otherwise
         fprintf('Plot type not recognized\n')
 end
@@ -442,6 +444,69 @@ varargout = vout;
             varargout{2} = emis_dof_table;
             varargout{3} = tau_table;
             varargout{4} = tau_dof_table;
+        end
+        
+    end
+
+    function autocorrelation_test(filename)
+        if ~exist('filename','var')
+            [data_file, data_path] = uigetfile('*SimpleFits*.mat','Select the fits file for the conditions to plot');
+            if data_file == 0
+                fprintf('Cancelled\n')
+                return
+            end
+        else
+            [data_path, data_file, ext] = fileparts(filename);
+            data_file = [data_file, ext];
+        end
+        SF = load(fullfile(data_path,data_file));
+        ldfile = regexprep(data_file,'SimpleFits(-ssresid|-unexvar)*','LineDensities');
+        if ~exist(fullfile(data_path,ldfile),'file')
+            E.filenotfound('line density file');
+        else
+            LD = load(fullfile(data_path,ldfile));
+        end
+        
+        % For each fast wind series, calculate the residuals.
+        suffixes = {'hyfast','mnfast','mn108fast'};
+        resids = cell(size(suffixes));
+        for a = 1:numel(suffixes)
+            line_dens = LD.(sprintf('no2ld_%s',suffixes{a}));
+            fit_line = SF.(sprintf('f_%s',suffixes{a})).emgfit;
+            resids{a} = fit_line - line_dens;
+        end
+        
+        % Durbin-Watson statistic (d). Critical values are given in tables
+        % A6 and A7 of Chatterjee and Hadi (Regression Analysis by Example,
+        % 5th ed.) or A1 and A2 of
+        % http://www.dm.unibo.it/~simoncin/Durbin_Watson_tables.pdf 
+        %
+        % If d < d_L, there is autocorrelation
+        % If d_L < d < d_U, the test is inconclusive
+        % If d > d_U, there is no autocorrelation
+        % 
+        % Also make residual plots, should see no long runs of positive and
+        % negative residuals.
+        
+        for a=1:numel(resids)
+            d = nansum2((resids{a}(2:end) - resids{a}(1:end-1)).^2)./nansum2(resids{a}.^2);
+            rho = nansum2(resids{a}(2:end) .* resids{a}(1:end-1)) ./ nansum2(resids{a}.^2);
+            pm = repmat('+',1,numel(resids{a}));
+            pm(resids{a}<0) = '-';
+            nruns = sum(resids{a}(2:end) .* resids{a}(1:end-1) < 0)+1;
+            npos = sum(resids{a}>0);
+            nneg = sum(resids{a}<0);
+            mu = 2*npos*nneg ./ (npos+nneg) + 1;
+            sigma2 = 2 * npos * nneg * (2*npos*nneg - npos - nneg) ./ ((npos + nneg).^2 * (npos + nneg - 1));
+            fprintf('%s d = %.4f; rho = %.4f\n', suffixes{a}, d, rho);
+            fprintf('Runs: %s\n', pm);
+            fprintf('\t %d runs; expected %.2f +/- %.2f\n', nruns, mu, sigma2);
+            figure;
+            plot(resids{a}, 'ko-');
+            xlabel('Index');
+            ylabel('Residual');
+            title(suffixes{a});
+            line([0 numel(resids{a})], [0 0], 'color', 'r', 'linestyle', '--');
         end
         
     end
