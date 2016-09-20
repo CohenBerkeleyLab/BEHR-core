@@ -14,7 +14,7 @@ if strcmp(behr_dir, out_dir)
 end
 
 
-SP = dir(fullfile(sp_dir, '.mat'));
+SP = dir(fullfile(sp_dir, '*.mat'));
 
 for a=1:numel(SP)
     S = load(fullfile(sp_dir, SP(a).name));
@@ -31,7 +31,7 @@ for a=1:numel(SP)
     new_fields = fns(xx);
     for b=1:numel(S.Data)
         for c=1:numel(new_fields)
-            B.Data.(new_fields{c}) = S.Data.(new_fields{c});
+            B.Data(b).(new_fields{c}) = S.Data(b).(new_fields{c});
         end
     end
     
