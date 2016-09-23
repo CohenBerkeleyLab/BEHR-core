@@ -39,6 +39,7 @@ end
 % Get each path via the directory UI
 paths.classes = get_path('Classes repository','Please find the directory of the Matlab classes repository; it should contain at least the class JLLErrors. See the BEHR readme for information on how to clone that repo if necessary.');
 paths.utils = get_path('Utils repository','Please find the directory of the general Matlab Utils repository (not the one inside the BEHR repo). See the BEHR readme for information on how to clone that repo if necessary.');
+paths.psm = get_path('PSM repository','Please find the directory of the PSM Python utilities, it should contain the file "BEHRDaily_Map.py.');
 paths.sp_mat_dir = get_path('OMI SP .mat directory',sprintf('Please find the directory on the file server at %s containing OMI_SP_yyyymmdd.mat files. The file server should be mounted on your computer.',file_server_ip));
 paths.omno2_dir = get_path('OMNO2 .he5 directory',sprintf('Please find the OMNO2 directory on the file server at %s. It should contain folders for each year. The file server should be mounted on your computer.',file_server_ip));
 paths.myd06_dir = get_path('MYD06_L2 .hdf directory',sprintf('Please find the MYD06_L2 directory on the file server at %s. It should contain folders for each year. The file server should be mounted on your computer.',file_server_ip));
