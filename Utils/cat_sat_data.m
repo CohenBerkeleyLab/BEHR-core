@@ -156,7 +156,13 @@ for a=1:numel(F)
             continue
         end
         
-        load(fullfile(filepath, F(a).name),'Data'); % brings the variable Data into the workspace
+        D = load(fullfile(filepath, F(a).name),'Data');
+        if ~isfield(D, 'Data')
+            fprintf('%s does not contain the variable "Data", skipping\n', F(a).name);
+            continue
+        else
+            Data = D.Data;
+        end
     
         if DEBUG_LEVEL > 0
             fprintf('Loading file %s...\n',F(a).name);
