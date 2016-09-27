@@ -785,7 +785,7 @@ end
             if strcmpi(source,'pseudo-behr')
                 allowed_apriori = {'hourly','hybrid','hybrid-avg','monthly'};
             else
-                allowed_apriori = {'hourly','hybrid','monthly','monthly-converg','monthly-sqrt-converg'};
+                allowed_apriori = {'hourly','hybrid','monthly','monthly-lonwt13.5','monthly-converg','monthly-sqrt-converg'};
             end
             if any(~isfield(options,{'apriori_base','apriori_new'}))
                 apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly','list',true);
@@ -3562,6 +3562,7 @@ switch source
                 daily_path = fullfile(workdir,sprintf('%s US BEHR Hourly - No ghost',behr_coast));
                 hybrid_path = fullfile(workdir,sprintf('%s US BEHR Hybrid - No ghost',behr_coast));
                 monthly_path = fullfile(workdir,sprintf('%s US BEHR Monthly - No ghost',behr_coast));
+                monthly_path_lonwt13 = fullfile(workdir,sprintf('%s US BEHR Monthly - No ghost - lonweight 13.5 overpass',behr_coast));
                 monthly_converg_path = fullfile(workdir,sprintf('%s US BEHR Monthly - Convergence',behr_coast));
                 monthly_sqrt_converg_path = fullfile(workdir,sprintf('%s US BEHR Monthly - Sqrt Convergence',behr_coast));
             case 'c'
@@ -3613,6 +3614,8 @@ switch apriori
         file_out = fullfile(hybrid_avg_path, daily_file_name);
     case 'hourly'
         file_out = fullfile(daily_path, daily_file_name);
+    case 'monthly-lonwt13.5'
+        file_out = fullfile(monthly_path_lonwt13, monthly_file_name);
     case 'monthly-converg'
         file_out = fullfile(monthly_converg_path, monthly_file_name);
     case 'monthly-sqrt-converg'
