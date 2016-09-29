@@ -780,16 +780,50 @@ end
         end
         
         % Follow up if using BEHR: should we compare hybrid or hour-wise
-        % data to the monthly average?
+        % data to the monthly average? Allow the user to manually choose
+        % two directories to compare if the a priori they want is not
+        % listed. This will remove the need for some later questions as
+        % well.
         if ~strcmpi(source,'wrf')
+            manual_dir = false;
             if strcmpi(source,'pseudo-behr')
                 allowed_apriori = {'hourly','hybrid','hybrid-avg','monthly'};
             else
-                allowed_apriori = {'hourly','hybrid','monthly','monthly-lonwt13.5','monthly-converg','monthly-sqrt-converg'};
+                allowed_apriori = {'hourly','hybrid','monthly','monthly-converg','monthly-sqrt-converg'};
             end
             if any(~isfield(options,{'apriori_base','apriori_new'}))
-                apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly','list',true);
-                apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori, 'list', true);
+                apriori_base = ask_multichoice('Which a priori will be the base case?', [allowed_apriori, {'Choose directory manually'}], 'default', 'monthly','list',true);
+                if ~strcmpi(apriori_base,'Choose directory manually') || ~isDisplay
+                    if strcmpi(apriori_base,'Choose directory manually') && ~isDisplay
+                        fprintf('Not using a display, cannot open UIGETDIR dialogue. Please choose an a priori.\n')
+                        apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly','list',true);
+                    end
+                    apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori, 'list', true);
+                else
+                    base_dir = uigetdir('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed', 'Choose the base a priori folder');
+                    new_dir = uigetdir('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed', 'Choose the new a priori folder');
+                    if isnumeric(base_dir) && base_dir == 0 || isnumeric(new_dir) && new_dir == 0
+                        E.userCancel;
+                    end
+                    manual_dir = true;
+                    
+                    % Check that the directory name includes "Atlanta" if
+                    % doing pseudo retrieval or "SE US"/"W US" for full
+                    % BEHR. This is just how I named the folders.
+                    if strcmpi(source,'pseudo-behr')
+                        teststr = 'Atlanta';
+                    else
+                        teststr = '(SE US|W US)';
+                    end
+                    btest = isempty(regexp(base_dir, teststr, 'once'));
+                    ntest = isempty(regexp(new_dir, teststr, 'once'));
+                    if btest || ntest
+                        fprintf('One of the directories does not appear to be a %s directory (did not pass the regexp test "%s"\n', source, teststr);
+                        if strcmpi(ask_multichoice('Continue?', {'y','n'}, 'default', 'n'),'n')
+                            E.userCancel;
+                        end
+                    end
+                end
             else
                 if any(~ismember({options.apriori_base, options.apriori_new}, allowed_apriori))
                     E.badinput('options.apriori_base and options.apriori_new must be one of %s',strjoin(allowed_apriori,', '))
@@ -804,7 +838,9 @@ end
         
         % Do we want to use the fine or coarse WRF simulation?
         allowed_res = {'f','c'};
-        if ~isfield(options,'res_base') || ~isfield(options,'res_new')
+        if manual_dir
+            %do nothing
+        elseif ~isfield(options,'res_base') || ~isfield(options,'res_new')
             res_base = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF for the base a priori', allowed_res);
             res_new = ask_multichoice('And for the new a priori?', allowed_res, 'default', res_base);
         else
@@ -816,7 +852,9 @@ end
         end
         
         % Use the hour-average or instantaneous profiles?
-        if strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'}) & strcmpi({res_base, res_new},'f'))
+        if manual_dir
+            %do nothing
+        elseif strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'}) & strcmpi({res_base, res_new},'f'))
             allowed_timemode = {'avg','instant'};
             if ~isfield(options,'timemode')
                 timemode = ask_multichoice('Use profiles averaged over an hour or instantaneous at the top of the hour?', allowed_timemode);
@@ -963,8 +1001,17 @@ end
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% LOAD DATA, CALCULATE QUANTITIES, AND PLOT %%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        base_file = return_data_file_info(source, city, timemode, res_base, apriori_base, date_in);
-        new_file = return_data_file_info(source, city, timemode, res_new, apriori_new, date_in);
+        if ~manual_dir
+            base_file = return_data_file_info(source, city, timemode, res_base, apriori_base, date_in);
+            new_file = return_data_file_info(source, city, timemode, res_new, apriori_new, date_in);
+        else
+            if strcmpi(source,'wrf')
+                E.notimplemented('Manual WRF directory - monthly names are different')
+            end
+            fname = sprintf('OMI_BEHR_%s.mat', datestr(date_in, 'yyyymmdd'));
+            base_file = fullfile(base_dir, fname);
+            new_file = fullfile(new_dir, fname);
+        end
         
         if strcmp(source,'wrf')
             
