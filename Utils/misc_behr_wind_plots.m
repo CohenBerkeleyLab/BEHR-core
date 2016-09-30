@@ -800,6 +800,8 @@ end
                     end
                     apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori, 'list', true);
                 else
+                    fprintf('Choose the base apriori first, then the new apriori\n');
+                    input('Press ENTER to continue','s');
                     base_dir = uigetdir('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed', 'Choose the base a priori folder');
                     new_dir = uigetdir('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed', 'Choose the new a priori folder');
                     if isnumeric(base_dir) && base_dir == 0 || isnumeric(new_dir) && new_dir == 0
@@ -1296,8 +1298,8 @@ end
     end
 
     function plot_pseudo_diff_timeser()
-        allowed_diffs = {'hr-hy','hy-mn','hr-mn','hy-avg','avg-mn','all'};
-        diff_mode = ask_multichoice('Which difference to consider; hourly vs hybrid or hybrid vs monthly?', allowed_diffs);
+        allowed_diffs = {'hr-hy','hy-mn','hr-mn','hy-avg','avg-mn','all','Pick directories manually'};
+        diff_mode = ask_multichoice('Which difference to consider; hourly vs hybrid or hybrid vs monthly?', allowed_diffs,'list',true);
         if ~strcmpi(diff_mode,'all')
             allowed_modes = {'box','dist','scatter-dist','scatter-dist-wbox','scatter-angle','scatter-angle-wbox','pcolor','pcolor-med','pcolor-apri','pcolor-apri-stdp','combo'};
             plot_mode = ask_multichoice(sprintf('Which type of plot do you want:\n'), allowed_modes);
@@ -1309,40 +1311,60 @@ end
         city_lon = -84.39;
         city_lat = 33.775;
         
-        switch diff_mode
+        workdir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/';
+        switch lower(diff_mode)
             case 'hr-hy'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hourly - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hy-mn'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hy-avg'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hr-mn'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hourly - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'avg-mn'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'all'
-                hr_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                hr_dir = fullfile(workdir,'Atlanta BEHR Hourly - No clouds - No ghost');
                 F_hr = dir(fullfile(hr_dir,'OMI*.mat'));
-                hy_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                hy_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost');
                 F_hy = dir(fullfile(hy_dir,'OMI*.mat'));
-                mn_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                mn_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost');
                 F_mn = dir(fullfile(mn_dir,'OMI*.mat'));
+            case 'pick directories manually'
+                if ~isDisplay
+                    E.notdisplay('Picking directories manually requires a display.')
+                end
+                fprintf('Two dialogue boxes will now open. Pick the new a priori first, the base a priori second.\n');
+                input('Press ENTER to continue', 's');
+                new_dir = uigetdir(workdir, 'Pick the new a priori');
+                old_dir = uigetdir(workdir, 'Pick the base a priori');
                 
+                if isnumeric(new_dir) || isnumeric(old_dir)
+                    E.userCancel;
+                elseif isempty(regexp(new_dir,'Atlanta','once')) || isempty(regexp(old_dir, 'Atlanta', 'once'))
+                    fprintf('One of the directories does not appear to be a pseudo-retrieval directory (does not contain "Atlanta" in the name)\n');
+                    if strcmpi(ask_multichoice('Continue?', {'y','n'}, 'default', 'n'),'n')
+                        E.userCancel;
+                    end
+                end
+                
+                F_new = dir(fullfile(new_dir,'OMI*.mat'));
+                F_old = dir(fullfile(old_dir,'OMI*.mat'));
         end
         if ~strcmpi(diff_mode,'all') && numel(F_new) ~= numel(F_old)
             E.callError('unequal_num_files','There are not equal numbers of hourly and hybrid files');
