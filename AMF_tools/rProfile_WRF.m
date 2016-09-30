@@ -369,7 +369,7 @@ end
             omi_hh = str2double(datestr(omi_utc_mean,'HH')) + str2double(datestr(omi_utc_mean,'MM'))/60;
             min_dt = min(abs(utchr - omi_hh));
             uu = abs(abs(utchr - omi_hh) - min_dt) < 0.01;
-            uu = find(uu,1,'first');
+            %uu = find(uu,1,'first');
             % These two variables should have dimensions west_east, south_north,
             % bottom_top, Time
             wrf_no2 = wrf_no2(:,:,:,uu);
