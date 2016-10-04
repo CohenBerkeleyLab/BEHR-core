@@ -96,7 +96,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost - UTC 1800-2200';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -110,7 +110,7 @@ else
     %This is the directory where the NO2 profiles are stored. This will
     %need to be changed to match your machine and the files' location.
     %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
-    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR_14lonwt_1822UTC';
+    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/E_US_BEHR_13lonwt_1822UTC';
 end
 
 %Store paths to relevant files
