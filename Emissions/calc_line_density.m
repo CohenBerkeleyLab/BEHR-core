@@ -332,6 +332,8 @@ for d=1:numel(fnames_struct)
         if isempty(OMI.Longitude)
             if DEBUG_LEVEL > 0; fprintf('No grid cells in %s\n',fnames_struct(d).name); end 
             continue
+        elseif abs(theta_hr(h) - omi_hr) > 0.5;
+            warning('Rotating plume with winds > 0.5 h distant in time.')
         end
         OMI = omi_pixel_reject(OMI,'omi',0.2,'XTrackFlags');
         xx = OMI.Areaweight > 0;
