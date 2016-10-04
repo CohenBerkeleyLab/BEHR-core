@@ -96,7 +96,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost - UTC 1800-2200';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost - UTC 1800-2200';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -142,7 +142,7 @@ if exist('prof_mode','var')
     end
     wrf_avg_mode = prof_mode;
 else
-    wrf_avg_mode = 'hourly';
+    wrf_avg_mode = 'hybrid';
     fprintf('BEHR_main: Used hard-coded wrf_avg_mode = %s\n',wrf_avg_mode);
 end
 %****************************%
