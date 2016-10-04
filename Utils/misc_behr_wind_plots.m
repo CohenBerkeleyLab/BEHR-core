@@ -21,9 +21,10 @@ switch lower(plttype)
     case 'getnearprof'
         varargout{1} = get_nearest_profiles(varargin{:});
     case 'calcwind'
-        E.fxnremoved('The subfunction "calcwind" no longer works; the subfunctions it relies on have been moved into the separate function CALC_AVG_WIND');
+        varargout{1} = calc_wind_mag(varargin{1}, varargin{2});
+        varargout{2} = calc_wind_dir(varargin{1}, varargin{2});
     case 'calcavgwind'
-        E.fxnremoved('The subfunction "calcavgwind" no longer works; it has been split out to a separate file CALC_AVG_WINDS');
+        [varargout{1}, varargout{2}] = calc_avg_wind(varargin{:});
     case 'perdiffvstheta'
         plot_delamf_vs_delangle(varargin{:});
     case 'perrec'
@@ -779,16 +780,52 @@ end
         end
         
         % Follow up if using BEHR: should we compare hybrid or hour-wise
-        % data to the monthly average?
+        % data to the monthly average? Allow the user to manually choose
+        % two directories to compare if the a priori they want is not
+        % listed. This will remove the need for some later questions as
+        % well.
         if ~strcmpi(source,'wrf')
+            manual_dir = false;
             if strcmpi(source,'pseudo-behr')
                 allowed_apriori = {'hourly','hybrid','hybrid-avg','monthly'};
             else
                 allowed_apriori = {'hourly','hybrid','monthly','monthly-converg','monthly-sqrt-converg'};
             end
             if any(~isfield(options,{'apriori_base','apriori_new'}))
-                apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly','list',true);
-                apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori, 'list', true);
+                apriori_base = ask_multichoice('Which a priori will be the base case?', [allowed_apriori, {'Choose directory manually'}], 'default', 'monthly','list',true);
+                if ~strcmpi(apriori_base,'Choose directory manually') || ~isDisplay
+                    if strcmpi(apriori_base,'Choose directory manually') && ~isDisplay
+                        fprintf('Not using a display, cannot open UIGETDIR dialogue. Please choose an a priori.\n')
+                        apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly','list',true);
+                    end
+                    apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori, 'list', true);
+                else
+                    fprintf('Choose the base apriori first, then the new apriori\n');
+                    input('Press ENTER to continue','s');
+                    base_dir = uigetdir('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed', 'Choose the base a priori folder');
+                    new_dir = uigetdir('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed', 'Choose the new a priori folder');
+                    if isnumeric(base_dir) && base_dir == 0 || isnumeric(new_dir) && new_dir == 0
+                        E.userCancel;
+                    end
+                    manual_dir = true;
+                    
+                    % Check that the directory name includes "Atlanta" if
+                    % doing pseudo retrieval or "SE US"/"W US" for full
+                    % BEHR. This is just how I named the folders.
+                    if strcmpi(source,'pseudo-behr')
+                        teststr = 'Atlanta';
+                    else
+                        teststr = '(SE US|W US)';
+                    end
+                    btest = isempty(regexp(base_dir, teststr, 'once'));
+                    ntest = isempty(regexp(new_dir, teststr, 'once'));
+                    if btest || ntest
+                        fprintf('One of the directories does not appear to be a %s directory (did not pass the regexp test "%s"\n', source, teststr);
+                        if strcmpi(ask_multichoice('Continue?', {'y','n'}, 'default', 'n'),'n')
+                            E.userCancel;
+                        end
+                    end
+                end
             else
                 if any(~ismember({options.apriori_base, options.apriori_new}, allowed_apriori))
                     E.badinput('options.apriori_base and options.apriori_new must be one of %s',strjoin(allowed_apriori,', '))
@@ -803,7 +840,9 @@ end
         
         % Do we want to use the fine or coarse WRF simulation?
         allowed_res = {'f','c'};
-        if ~isfield(options,'res_base') || ~isfield(options,'res_new')
+        if manual_dir
+            %do nothing
+        elseif ~isfield(options,'res_base') || ~isfield(options,'res_new')
             res_base = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF for the base a priori', allowed_res);
             res_new = ask_multichoice('And for the new a priori?', allowed_res, 'default', res_base);
         else
@@ -815,7 +854,9 @@ end
         end
         
         % Use the hour-average or instantaneous profiles?
-        if strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'}) & strcmpi({res_base, res_new},'f'))
+        if manual_dir
+            %do nothing
+        elseif strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'}) & strcmpi({res_base, res_new},'f'))
             allowed_timemode = {'avg','instant'};
             if ~isfield(options,'timemode')
                 timemode = ask_multichoice('Use profiles averaged over an hour or instantaneous at the top of the hour?', allowed_timemode);
@@ -962,8 +1003,17 @@ end
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% LOAD DATA, CALCULATE QUANTITIES, AND PLOT %%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        base_file = return_data_file_info(source, city, timemode, res_base, apriori_base, date_in);
-        new_file = return_data_file_info(source, city, timemode, res_new, apriori_new, date_in);
+        if ~manual_dir
+            base_file = return_data_file_info(source, city, timemode, res_base, apriori_base, date_in);
+            new_file = return_data_file_info(source, city, timemode, res_new, apriori_new, date_in);
+        else
+            if strcmpi(source,'wrf')
+                E.notimplemented('Manual WRF directory - monthly names are different')
+            end
+            fname = sprintf('OMI_BEHR_%s.mat', datestr(date_in, 'yyyymmdd'));
+            base_file = fullfile(base_dir, fname);
+            new_file = fullfile(new_dir, fname);
+        end
         
         if strcmp(source,'wrf')
             
@@ -1248,8 +1298,8 @@ end
     end
 
     function plot_pseudo_diff_timeser()
-        allowed_diffs = {'hr-hy','hy-mn','hr-mn','hy-avg','avg-mn','all'};
-        diff_mode = ask_multichoice('Which difference to consider; hourly vs hybrid or hybrid vs monthly?', allowed_diffs);
+        allowed_diffs = {'hr-hy','hy-mn','hr-mn','hy-avg','avg-mn','all','Pick directories manually'};
+        diff_mode = ask_multichoice('Which difference to consider; hourly vs hybrid or hybrid vs monthly?', allowed_diffs,'list',true);
         if ~strcmpi(diff_mode,'all')
             allowed_modes = {'box','dist','scatter-dist','scatter-dist-wbox','scatter-angle','scatter-angle-wbox','pcolor','pcolor-med','pcolor-apri','pcolor-apri-stdp','combo'};
             plot_mode = ask_multichoice(sprintf('Which type of plot do you want:\n'), allowed_modes);
@@ -1261,40 +1311,60 @@ end
         city_lon = -84.39;
         city_lat = 33.775;
         
-        switch diff_mode
+        workdir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/';
+        switch lower(diff_mode)
             case 'hr-hy'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hourly - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hy-mn'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hy-avg'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hr-mn'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hourly - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'avg-mn'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'all'
-                hr_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                hr_dir = fullfile(workdir,'Atlanta BEHR Hourly - No clouds - No ghost');
                 F_hr = dir(fullfile(hr_dir,'OMI*.mat'));
-                hy_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                hy_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost');
                 F_hy = dir(fullfile(hy_dir,'OMI*.mat'));
-                mn_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                mn_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost');
                 F_mn = dir(fullfile(mn_dir,'OMI*.mat'));
+            case 'pick directories manually'
+                if ~isDisplay
+                    E.notdisplay('Picking directories manually requires a display.')
+                end
+                fprintf('Two dialogue boxes will now open. Pick the new a priori first, the base a priori second.\n');
+                input('Press ENTER to continue', 's');
+                new_dir = uigetdir(workdir, 'Pick the new a priori');
+                old_dir = uigetdir(workdir, 'Pick the base a priori');
                 
+                if isnumeric(new_dir) || isnumeric(old_dir)
+                    E.userCancel;
+                elseif isempty(regexp(new_dir,'Atlanta','once')) || isempty(regexp(old_dir, 'Atlanta', 'once'))
+                    fprintf('One of the directories does not appear to be a pseudo-retrieval directory (does not contain "Atlanta" in the name)\n');
+                    if strcmpi(ask_multichoice('Continue?', {'y','n'}, 'default', 'n'),'n')
+                        E.userCancel;
+                    end
+                end
+                
+                F_new = dir(fullfile(new_dir,'OMI*.mat'));
+                F_old = dir(fullfile(old_dir,'OMI*.mat'));
         end
         if ~strcmpi(diff_mode,'all') && numel(F_new) ~= numel(F_old)
             E.callError('unequal_num_files','There are not equal numbers of hourly and hybrid files');
@@ -3195,6 +3265,33 @@ end
 %%%%% OTHER FUNCTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+    function [xx, yy] = find_square_around(lon, lat, center_lon, center_lat, radius)
+        % Finds indicies for a square of points centered on center_lon and
+        % center_lat. The square will have sides of length 2*radius + 1.
+        % Slicing lon/lat as lon(xx,yy), lat(xx,yy) will give the points.
+        
+        % Check input
+        if ~ismatrix(lon)
+            E.badinput('lon must be a 2-D array')
+        elseif ~ismatrix(lat)
+            E.badinput('lat must be a 2-D array')
+        elseif ~all(size(lon) == size(lat))
+            E.badinput('lon and lat must be the same size')
+        elseif ~isscalar(center_lat) || ~isnumeric(center_lat)
+            E.badinput('center_lat must be a numeric scalar')
+        elseif ~isscalar(center_lon) || ~isnumeric(center_lon)
+            E.badinput('center_lon must be a numeric scalar')
+        elseif ~isscalar(radius) || ~isnumeric(radius) || radius < 0 || mod(radius,1) ~= 0
+            E.badinput('radius must be a positive scalar integer')
+        end
+        
+        del = abs(lon - center_lon) + abs(lat - center_lat);
+        [~,I] = min(del(:));
+        [x,y] = ind2sub(size(del),I);
+        xx = (x-radius):(x+radius);
+        yy = (y-radius):(y+radius);
+    end
+
     function M = unstagger(M, dim)
         permvec = 1:ndims(M);
         permvec(1) = dim;
@@ -3242,6 +3339,29 @@ end
         for a=1:size(profiles,4)
             [x,y] = find_square_around(lon(:,:,a), lat(:,:,a), target_lon, target_lat, 0);
             profs(:,a) = squeeze(profiles(x,y,:,a));
+        end
+    end
+
+    function [windspd, winddir] = calc_avg_wind(xlon, xlat, U, V, clon, clat)
+        [xx1,yy1] = find_square_around(xlon, xlat, clon, clat, 1);
+        windspd = nan(1, size(U,3));
+        winddir = nan(1, size(U,3));
+        for a=1:size(U,3)
+            Ubar = nanmean(reshape(U(xx1, yy1, a),[],1));
+            Vbar = nanmean(reshape(V(xx1, yy1, a),[],1));
+            windspd(a) = calc_wind_mag(Ubar, Vbar);
+            winddir(a) = calc_wind_dir(Ubar, Vbar);
+        end
+    end
+
+    function mag = calc_wind_mag(U,V)
+        mag = (U.^2 + V.^2).^0.5;
+    end
+
+    function theta = calc_wind_dir(U,V)
+        theta = nan(size(U));
+        for b=1:numel(U)
+            theta(b) = atan2d(V(b),U(b));
         end
     end
 
@@ -3511,6 +3631,7 @@ switch source
                 daily_path = fullfile(workdir,sprintf('%s US BEHR Hourly - No ghost',behr_coast));
                 hybrid_path = fullfile(workdir,sprintf('%s US BEHR Hybrid - No ghost',behr_coast));
                 monthly_path = fullfile(workdir,sprintf('%s US BEHR Monthly - No ghost',behr_coast));
+                monthly_path_lonwt13 = fullfile(workdir,sprintf('%s US BEHR Monthly - No ghost - lonweight 13.5 overpass',behr_coast));
                 monthly_converg_path = fullfile(workdir,sprintf('%s US BEHR Monthly - Convergence',behr_coast));
                 monthly_sqrt_converg_path = fullfile(workdir,sprintf('%s US BEHR Monthly - Sqrt Convergence',behr_coast));
             case 'c'
@@ -3562,6 +3683,8 @@ switch apriori
         file_out = fullfile(hybrid_avg_path, daily_file_name);
     case 'hourly'
         file_out = fullfile(daily_path, daily_file_name);
+    case 'monthly-lonwt13.5'
+        file_out = fullfile(monthly_path_lonwt13, monthly_file_name);
     case 'monthly-converg'
         file_out = fullfile(monthly_converg_path, monthly_file_name);
     case 'monthly-sqrt-converg'
