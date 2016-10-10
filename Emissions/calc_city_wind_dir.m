@@ -1,4 +1,4 @@
-function [ windvel, theta, dnums, city_lon, city_lat ] = calc_city_wind_dir( city )
+function [ windvel, theta, dnums, city_lon, city_lat, u_utc ] = calc_city_wind_dir( city )
 %UNTITLED Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -21,7 +21,7 @@ switch city
         error('emg:city','City %s not recognized',city);
 end
 
-fpath = fullfile('/Volumes','share2','USERS','LaughnerJ','WRF',coast,'hourly');
+fpath = fullfile('/Volumes','share2','USERS','LaughnerJ','WRF',coast,'hourly-14.0-lonwt-1822UTC-test');
 F = dir(fullfile(fpath,'*.nc'));
 dnums = [];
 for a=1:numel(F)
@@ -41,23 +41,44 @@ for a=1:size(utchr,1)
         error('do_all_emg:utchr', 'Not all files have the same set of utc hours')
     end
 end
-if strcmpi(timemode,'instant')
-    tt = find(utchr(:,1) == 19,1,'first');
-elseif strcmpi(timemode,'hour')
-    tt = utchr(:,1) == 19;
-else
-    tt = utchr(:,1) >= 19 & utchr(:,1) < 21;
-end
+
 XLON = XLON(:,:,1,1);
 XLAT = XLAT(:,:,1,1);
 COSALPHA = COSALPHA(:,:,1,1);
 SINALPHA = SINALPHA(:,:,1,1);
-% Lu 2015 used winds across the bottom 500 m or so
-Ubar = squeeze(nanmean(nanmean(U(:,:,1:5,tt,:),3),4));
-Vbar = squeeze(nanmean(nanmean(V(:,:,1:5,tt,:),3),4));
-[Ue, Ve] = wrf_winds_transform(Ubar, Vbar, COSALPHA, SINALPHA);
 
-[windvel, theta] = misc_behr_wind_plots('calcavgwind', XLON, XLAT, Ue, Ve, city_lon, city_lat);
+u_utc = unique(utchr(:,1));
+windvel = nan(numel(u_utc), numel(F));
+theta = nan(numel(u_utc), numel(F));
+
+for a=1:numel(u_utc)
+
+    doloop = true;
+    if strcmpi(timemode,'instant')
+        tt = find(utchr(:,1) == u_utc(a),1,'first');
+    elseif strcmpi(timemode,'hour')
+        tt = utchr(:,1) == u_utc(a);
+    elseif strcmpi(timemode,'avg')
+        tt = utchr(:,1) >= 18 & utchr(:,1) < 21;
+        doloop = false;
+    else
+        E.notimplemented(sprintf('timemode = %s',timemode));
+    end
+    
+    % Lu 2015 used winds across the bottom 500 m or so
+    Ubar = squeeze(nanmean(nanmean(U(:,:,1:5,tt,:),3),4));
+    Vbar = squeeze(nanmean(nanmean(V(:,:,1:5,tt,:),3),4));
+    [Ue, Ve] = wrf_winds_transform(Ubar, Vbar, COSALPHA, SINALPHA);
+    
+    [windvel(a,:), theta(a,:)] = misc_behr_wind_plots('calcavgwind', XLON, XLAT, Ue, Ve, city_lon, city_lat);
+
+    if ~doloop
+        windvel = windvel(1,:);
+        theta = theta(1,:);
+        break
+    end
+    
+end
 
 end
 
