@@ -43,8 +43,8 @@ switch lower(plottype)
         plot_fit_envelopes()
     case 'e-tau'
         emis_tau_table();
-    case 't-pairs'
-        [vout{:}] = pairwise_t(nargout, varargin{:});
+    case 't-tests'
+        [vout{:}] = t_tests(nargout, varargin{:});
     case 'xwind'
         xwind_emis_tau();
     case 'sectors'
@@ -336,7 +336,10 @@ varargout = vout;
         
     end
 
-    function varargout = pairwise_t(nout, fnames)
+    function varargout = t_tests(nout, fnames)
+        
+        t_type = ask_multichoice('Which t-test to use?', {'Two sample','Paired'}, 'list', true);
+        
         if ~exist('fnames','var')
             [fnames, pname] = uigetfile('*SimpleFits*.mat','Choose all files to use','multiselect','on');
         else
@@ -358,7 +361,7 @@ varargout = vout;
         
         % Prep the array that the t-values will go into
         nsets = numel(cities)*numel(wind_speeds)*numel(apri);
-        sets = cell(1,nsets);
+        S = repmat(struct('city','','wind_speed','','apri',''), numel(cities)*numel(wind_speeds)*numel(apri), 1);
         set_names = cell(1,nsets);
         emis_tarray = -inf(nsets, nsets); % using inf rather than nan so that I can tell the difference between unfilled value and t = nan
         tau_tarray = -inf(nsets, nsets);
@@ -375,11 +378,10 @@ varargout = vout;
         for a=1:numel(cities)
             for b=1:numel(wind_speeds)
                 for c=1:numel(apri)
-                    S.city = cities{a};
-                    S.wind_speed = wind_speeds{b};
-                    S.apri = apri{c};
-                    sets{i} = S;
-                    set_names{i} = sprintf('%s_%s_%s', S.city, S.wind_speed, S.apri(3:end));
+                    S(i).city = cities{a};
+                    S(i).wind_speed = wind_speeds{b};
+                    S(i).apri = apri{c};
+                    set_names{i} = sprintf('%s_%s_%s', S(i).city, S(i).wind_speed, S(i).apri(3:end));
                     
                     % Need to translate indicies to get the values from the
                     % emis and tau arrays which alternate value, SD, and
@@ -401,49 +403,113 @@ varargout = vout;
             end
         end
         
-        % Now the painful bit, loop over every set and compare with every
-        % other set. Not duplicating calculations. Yay loops. I will use
-        % the method from section 4-3 case 2 of Harris "Quantitative
-        % Chemical Analysis" 8th edition.
-        
-        emis_dof_tablecell = cell(size(emis_tarray));
-        tau_dof_tablecell = cell(size(tau_tarray));
-        
-        for a=1:nsets
-            for b=a:nsets
-                % Emissions first
-                s_pooled = sqrt( (emis_uncert(a)^2 * emis_dofs(a) + emis_uncert(b)^2 * emis_dofs(b)) / (emis_dofs(a) + emis_dofs(b)) );
-                % Since this is the number of measurements, not degrees of
-                % freedom, put back in the 5 that were "taken up" by
-                % fitting 5 parameters.
-                n_pooled = sqrt( (emis_dofs(a)+5) * (emis_dofs(b)+5) / (emis_dofs(a) + 5 + emis_dofs(b) + 5) );
-                emis_tarray(a,b) = abs(emis_vals(a) - emis_vals(b))/s_pooled * n_pooled;
-                emis_dof_tablecell{a,b} = sprintf('%d (t_crit95 = %g)', emis_dofs(a) + emis_dofs(b), tinv(0.975, emis_dofs(a) + emis_dofs(b)));
-                
-                % Lifetimes second
-                s_pooled = sqrt( (tau_uncert(a)^2 * tau_dofs(a) + tau_uncert(b)^2 * tau_dofs(b)) / (tau_dofs(a) + tau_dofs(b)) );
-                n_pooled = sqrt( (tau_dofs(a)+5) * (tau_dofs(b)+5) / (tau_dofs(a) + 5 + tau_dofs(b) + 5) );
-                tau_tarray(a,b) = abs(tau_vals(a) - tau_vals(b))/s_pooled * n_pooled;
-                tau_dof_tablecell{a,b} = sprintf('%d (t_crit95 = %g)', tau_dofs(a) + tau_dofs(b), tinv(0.975, tau_dofs(a) + tau_dofs(b)));
+        if strcmpi(t_type, 'Two sample')
+            % Now the painful bit, loop over every set and compare with every
+            % other set. Not duplicating calculations. Yay loops. I will use
+            % the method from section 4-3 case 2 of Harris "Quantitative
+            % Chemical Analysis" 8th edition.
+            
+            emis_dof_tablecell = cell(size(emis_tarray));
+            tau_dof_tablecell = cell(size(tau_tarray));
+            
+            for a=1:nsets
+                for b=a:nsets
+                    % Emissions first
+                    s_pooled = sqrt( (emis_uncert(a)^2 * emis_dofs(a) + emis_uncert(b)^2 * emis_dofs(b)) / (emis_dofs(a) + emis_dofs(b)) );
+                    % Since this is the number of measurements, not degrees of
+                    % freedom, put back in the 5 that were "taken up" by
+                    % fitting 5 parameters.
+                    n_pooled = sqrt( (emis_dofs(a)+5) * (emis_dofs(b)+5) / (emis_dofs(a) + 5 + emis_dofs(b) + 5) );
+                    emis_tarray(a,b) = abs(emis_vals(a) - emis_vals(b))/s_pooled * n_pooled;
+                    emis_dof_tablecell{a,b} = sprintf('%d (t_crit95 = %g)', emis_dofs(a) + emis_dofs(b), tinv(0.975, emis_dofs(a) + emis_dofs(b)));
+                    
+                    % Lifetimes second
+                    s_pooled = sqrt( (tau_uncert(a)^2 * tau_dofs(a) + tau_uncert(b)^2 * tau_dofs(b)) / (tau_dofs(a) + tau_dofs(b)) );
+                    n_pooled = sqrt( (tau_dofs(a)+5) * (tau_dofs(b)+5) / (tau_dofs(a) + 5 + tau_dofs(b) + 5) );
+                    tau_tarray(a,b) = abs(tau_vals(a) - tau_vals(b))/s_pooled * n_pooled;
+                    tau_dof_tablecell{a,b} = sprintf('%d (t_crit95 = %g)', tau_dofs(a) + tau_dofs(b), tinv(0.975, tau_dofs(a) + tau_dofs(b)));
+                end
             end
-        end
-        
-        % Make up the tables, print them to screen if no output requested
-        emis_table = array2table(emis_tarray, 'VariableNames', set_names, 'RowNames', set_names);
-        emis_dof_table = cell2table(emis_dof_tablecell, 'VariableNames', set_names, 'RowNames', set_names);
-        tau_table = array2table(tau_tarray, 'VariableNames', set_names, 'RowNames', set_names);
-        tau_dof_table = cell2table(tau_dof_tablecell, 'VariableNames', set_names, 'RowNames', set_names);
-        
-        if nout < 1
-            emis_table %#ok<*NOPRT>
-            emis_dof_table
-            tau_table
-            tau_dof_table
+            
+            % Make up the tables, print them to screen if no output requested
+            emis_table = array2table(emis_tarray, 'VariableNames', set_names, 'RowNames', set_names);
+            emis_dof_table = cell2table(emis_dof_tablecell, 'VariableNames', set_names, 'RowNames', set_names);
+            tau_table = array2table(tau_tarray, 'VariableNames', set_names, 'RowNames', set_names);
+            tau_dof_table = cell2table(tau_dof_tablecell, 'VariableNames', set_names, 'RowNames', set_names);
+            
+            if nout < 1
+                emis_table %#ok<*NOPRT>
+                emis_dof_table
+                tau_table
+                tau_dof_table
+            else
+                varargout{1} = emis_table;
+                varargout{2} = emis_dof_table;
+                varargout{3} = tau_table;
+                varargout{4} = tau_dof_table;
+            end
+        elseif strcmpi(t_type, 'Paired')
+            % Since the choice of a priori is the testing parameter, we
+            % will look at all possible combinations of two a priori,
+            % taking each city/wind division pair as a separate test. While
+            % not truly independent, it is a sort of bootstrapping in a
+            % sense, where we choose a subset of the data and see if we get
+            % the same answer.
+            %
+            % The tabulation returns 0s if the particular city/wind
+            % division wasn't included. This happens if you pick a
+            % different number of wind divisions for one of the cities, or
+            % something similar. Do not include these results.
+            
+            zz = emis_dofs == 0 & tau_dofs == 0;
+            S(zz) = [];
+            emis_vals(zz) = [];
+            tau_vals(zz) = [];
+            
+            apri_combos = nchoosek(apri, 2);
+            set_cities = {S.city};
+            set_winds = {S.wind_speed};
+            set_apri = {S.apri};
+            
+            t_calc_emis = nan(size(apri_combos,1), 1);
+            t_crit_emis = nan(size(apri_combos,1), 1);
+            t_calc_tau = nan(size(apri_combos,1), 1);
+            t_crit_tau = nan(size(apri_combos,1), 1);
+            
+            varnames = {'E t_calc', 'E t_crit', 'tau t_calc', 'tau t_crit'};
+            rownames = cell(1, size(apri_combos,1));
+            
+            for a=1:size(apri_combos,1)
+                rownames{a} = sprintf('%s v. %s', apri_combos{a,1}, apri_combos{a,2});
+                
+                emis_dels = nan(1,numel(S) / numel(apri));
+                tau_dels = nan(1,numel(S) / numel(apri));
+                i = 1;
+                % Find each city/wind combo that for the first a priori
+                for b=1:numel(S)
+                    if strcmp(S(b).apri, apri_combos{a,1})
+                        % Find the result that has the same city and wind
+                        % division but the second a priori
+                        xx = strcmpi(set_cities, S(b).city) & strcmpi(set_winds, S(b).wind_speed) & strcmpi(set_apri, apri_combos{a,2});
+                        emis_dels(i) = abs(emis_vals(b) - emis_vals(xx));
+                        tau_dels(i) = abs(tau_vals(b) - tau_vals(xx));
+                        i = i+1;
+                    end
+                end
+                t_calc_emis(a) = nanmean(emis_dels) / nanstd(emis_dels) * sqrt(numel(emis_dels));
+                t_crit_emis(a) = tinv(0.975, numel(emis_dels) - 1);
+                t_calc_tau(a) = nanmean(tau_dels) / nanstd(tau_dels) * sqrt(numel(tau_dels));
+                t_crit_tau(a) = tinv(0.975, numel(tau_dels) - 1);
+            end
+            
+            table_out = array2table([t_calc_emis, t_crit_emis, t_calc_tau, t_crit_tau], 'VariableNames', varnames, 'RowNames', rownames);
+            if nout < 1
+                table_out
+            else
+                varargout{1} = table_out;
+            end
         else
-            varargout{1} = emis_table;
-            varargout{2} = emis_dof_table;
-            varargout{3} = tau_table;
-            varargout{4} = tau_dof_table;
+            E.notimplemented(t_type)
         end
         
     end
@@ -1131,7 +1197,7 @@ for a=1:numel(cities)
             else
                 num_obs = 1;
             end
-            fit_uncert = calc_fit_param_uncert(fitparams, fituncert, num_obs);
+            fit_uncert = calc_fit_param_uncert(fitparams, fituncert);%, num_obs);
             
             windcrit = str2double(strrep(wind_speeds{b},'pt','.'));
             
