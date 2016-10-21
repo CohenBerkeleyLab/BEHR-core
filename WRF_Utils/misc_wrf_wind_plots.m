@@ -52,6 +52,9 @@ switch plttype
         compare_to_geos_profs;
     case 'compare2runs'
         compare_2_runs;
+    case 'lnox-test'
+        compare_lnox;
+   
 end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1230,6 +1233,46 @@ end
         end
         
         
+    end
+
+    function compare_lnox
+        % Plot a pcolor plot of difference in no2 vs. level and time.
+        % Compares case with lnox on vs off, for now. Can make more general
+        % later
+        
+        no_lnox_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/Atlanta/No-LNOx-ICBC-Off';
+        lnox_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/Atlanta/LNOx-ICBC-Off';
+        
+        F_no_lnox = dir(fullfile(no_lnox_dir, 'wrfout*'));
+        F_lnox = dir(fullfile(lnox_dir, 'wrfout*'));
+        
+        % Keep only those files present in both directories
+        % will use same structure for both after this
+        xx = ismember({F_no_lnox.name}, {F_lnox.name});
+        F = F_no_lnox(xx);
+        dnums = date_from_wrf_filenames(F);
+        
+        no2_nolnox = squeeze(read_wrf_vars(no_lnox_dir, F, 'no2'));
+        no2_lnox = squeeze(read_wrf_vars(lnox_dir, F, 'no2'));
+        
+        sz = size(no2_nolnox);
+        if ~isequal(size(no2_lnox), sz)
+            error('no2 arrays have different sizes')
+        end
+        
+        no2_nolnox = reshape(no2_nolnox, [], sz(3), sz(4));
+        no2_lnox = reshape(no2_lnox, [], sz(3), sz(4));
+        
+        % Average and make the time dimension first
+        no2_nolnox = squeeze(nanmean(no2_nolnox,1))';
+        no2_lnox = squeeze(nanmean(no2_lnox,1))';
+        
+        figure;
+        pcolor(repmat(dnums',1,sz(3)), repmat((1:size(no2_lnox,2)),sz(4),1), no2_lnox - no2_nolnox);
+        datetick('x');
+        shading flat
+        colormap(blue_red_cmap);
+        colorbar;
     end
     %%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%% DATA FUNCTIONS %%%%%
