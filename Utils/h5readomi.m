@@ -26,9 +26,9 @@ if ~isnumeric(fill_crit) || ~isscalar(fill_crit) || fill_crit <= 0
 end
 
 dataset = h5read(filename, datasetname);
-fill_value = h5readatt(filename, dataset, '_FillValue');
-scale_factor = h5readatt(filename, dataset, 'ScaleFactor');
-offset = h5readatt(filename, dataset, 'Offset');
+fill_value = h5readatt(filename, datasetname, '_FillValue');
+scale_factor = h5readatt(filename, datasetname, 'ScaleFactor');
+offset = h5readatt(filename, datasetname, 'Offset');
 
 fills = abs(dataset - fill_value) ./ dataset < fill_crit;
 dataset(fills) = nan;
