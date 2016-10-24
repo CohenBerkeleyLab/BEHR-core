@@ -55,30 +55,36 @@ end
 % options - add 'reprocessed' here if doing in situ files
 if ~exist('options','var')
     options = {};
+elseif ischar(options)
+    options = {options};
 end
 
-% Make the list of variables to put in the HDF files. Std. variables will
-% be added by default; see the "set_variables" function for additional
-% options. The pixel type needs to be passed so that it knows whether to
-% keep the pixel specific variables or not.
 
-[vars, savename] = set_variables(pixel_type, output_type, options{:});
-attr = add_attributes(vars);
 
 % The dates to process, location of the files, and where to save the files.
 % If you want to process all files in a directory, set the start and end
 % dates to something silly.
 if ~exist('start_date','var') || ~exist('end_date','var')
-    start_date = '2008-02-18';
-    end_date = '2016-01-01';
+    start_date = '2013-06-01';
+    end_date = '2013-08-30';
 end
 
 global mat_file_dir
 global save_dir
 global numThreads
+global ret_id
 if ~onCluster
-    mat_file_dir = BEHR_paths('behr_mat_dir');
-    save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,BEHR_version);
+    if isDisplay
+        mat_file_dir = uigetdir();
+    else
+        mat_file_dir = input('Enter the path to the .mat files: ','s');
+        if isnumeric(mat_file_dir) && mat_file_dir == 0
+            fprintf('User cancelled\n');
+            return
+        end
+    end
+    ret_id = input('Enter the ID string for the retrieval: ','s');
+    save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,ret_id);
     save_dir = fullfile(BEHR_paths('website_staging_dir'),save_subdir);
     if ~exist(save_dir,'dir')
         mkdir(save_dir)
@@ -146,6 +152,14 @@ end
 %%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN LOOP %%%%%
 %%%%%%%%%%%%%%%%%%%%%
+
+% Make the list of variables to put in the HDF files. Std. variables will
+% be added by default; see the "set_variables" function for additional
+% options. The pixel type needs to be passed so that it knows whether to
+% keep the pixel specific variables or not.
+
+[vars, savename] = set_variables(pixel_type, output_type, options{:});
+attr = add_attributes(vars);
 
 % Split into two different loops: if running on a cluster, it will
 % parallelize and assume that you want to overwrite any existing files. If
@@ -249,8 +263,12 @@ vars = {'AMFStrat','AMFTrop','BEHRAMFTrop','BEHRColumnAmountNO2Trop',...
 
 
 % 
-
-savename = sprintf('OMI_BEHR_%s_',BEHR_version);
+global ret_id
+if ismember('pseudo', varargin) || ismember('prototype',varargin)
+    savename = sprintf('OMI_BEHR_prototype_%s_',ret_id);
+else
+    savename = sprintf('OMI_BEHR_%s_',BEHR_version);
+end
 
 % Add additional variable categories here. You'll need to add the variable
 % names to the "vars" variable, and you should consider adding an
@@ -272,7 +290,13 @@ end
 % is "gridded". Also add in some variables that are only included in the
 % gridded product.
 if ismember('gridded', varargin)
-    vars = remove_ungridded_variables(vars);
+    % Define what variables should be included in gridded products. You'll need
+    % to edit this is you add new gridded variables.
+    gridded_vars = {'AMFTrop', 'Areaweight', 'BEHRAMFTrop','BEHRColumnAmountNO2Trop',...
+        'CloudFraction', 'CloudRadianceFraction', 'ColumnAmountNO2Trop', 'GLOBETerpres',...
+        'Latitude', 'Longitude', 'MODISAlbedo', 'MODISCloud', 'Row', 'XTrackQualityFlags',...
+        'vcdQualityFlags', 'InSituAMF', 'BEHR_R_ColumnAmountNO2Trop'};
+    vars = cutdown_variables(vars, gridded_vars);
     vars{end+1} = 'Areaweight';
 end
 
@@ -282,24 +306,29 @@ if ismember('txt', varargin)
     vars = remove_vector_variables(vars);
 end
 
+% Remove variables not present in the pseudo retrievals used in Laughner,
+% Zare, and Cohen 2016.
+if ismember('pseudo',varargin)
+    pseudo_vars = {'Longitude', 'Latitude', 'Loncorn', 'Latcorn', 'SolarZenithAngle',...
+        'ViewingZenithAngle', 'RelativeAzimuthAngle', 'CloudFraction', 'CloudPressure',...
+        'CloudRadianceFraction', 'MODISAlbedo', 'GLOBETerpres', 'OriginalBEHRAMF',...
+        'OriginalBEHRColumn', 'ColumnAmountNO2Trop', 'AMFTrop', 'vcdQualityFlags',...
+        'XTrackQualityFlags', 'Time', 'BEHRAMFTrop', 'BEHRScatteringWeights',...
+        'BEHRAvgKernels', 'BEHRNO2apriori', 'BEHRaprioriMode', 'BEHRPressureLevels'};
+    vars = cutdown_variables(vars, pseudo_vars);
+end
+
 
 end
 
-function vars = remove_ungridded_variables(vars)
+function vars = cutdown_variables(vars, keepers)
 E = JLLErrors;
-if ~iscell(vars) || ~all(iscellcontents(vars,'ischar'))
-    E.badinput('"vars" must be a cell array of variable names as strings')
+if ~iscellstr(vars) || ~iscellstr(keepers)
+    E.badinput('"vars" and "keepers" must both be a cell array of variable names as strings')
 end
 
-% Define what variables should be included in gridded products. You'll need
-% to edit this is you add new gridded variables.
-gridded_vars = {'AMFTrop', 'Areaweight', 'BEHRAMFTrop','BEHRColumnAmountNO2Trop',...
-    'CloudFraction', 'CloudRadianceFraction', 'ColumnAmountNO2Trop', 'GLOBETerpres',...
-    'Latitude', 'Longitude', 'MODISAlbedo', 'MODISCloud', 'Row', 'XTrackQualityFlags',...
-    'vcdQualityFlags', 'InSituAMF', 'BEHR_R_ColumnAmountNO2Trop'};
-
-gg = ismember(vars,gridded_vars);
-vars = vars(gg);
+xx = ismember(vars,keepers);
+vars = vars(xx);
 
 end
 
@@ -438,7 +467,7 @@ end
 % Iterate through each swath and save it as under the group
 % /Data/Swath#####.
 for d=1:numel(Data_in)
-    swath_id = max(Data_in(d).Swath(:));
+    swath_id = 1;
     group_name = sprintf('/Data/Swath%d',swath_id);
     
     if swath_id == 0 || isnan(swath_id)
