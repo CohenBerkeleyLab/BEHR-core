@@ -76,12 +76,12 @@ global ret_id
 if ~onCluster
     if isDisplay
         mat_file_dir = uigetdir();
-    else
-        mat_file_dir = input('Enter the path to the .mat files: ','s');
         if isnumeric(mat_file_dir) && mat_file_dir == 0
             fprintf('User cancelled\n');
             return
         end
+    else
+        mat_file_dir = input('Enter the path to the .mat files: ','s');
     end
     ret_id = input('Enter the ID string for the retrieval: ','s');
     save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,ret_id);
@@ -467,7 +467,7 @@ end
 % Iterate through each swath and save it as under the group
 % /Data/Swath#####.
 for d=1:numel(Data_in)
-    swath_id = 1;
+    swath_id = max(Data_in(d).Swath(:));
     group_name = sprintf('/Data/Swath%d',swath_id);
     
     if swath_id == 0 || isnan(swath_id)
