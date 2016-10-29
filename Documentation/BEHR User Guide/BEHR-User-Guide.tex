@@ -188,17 +188,18 @@ equivalent to the one with the period and is used interchangeably.
 	\subsection{Pixel filtering}
 	For users wishing to identify high quality \ce{NO2} column information to ground, there are six key criteria to look for:
 	\begin{enumerate}
-		\item The VCD must be $> 0$ (values $< 0$ are present in the OMNO2 data, but likely result from error in stratospheric separation)
         \item The vcdQualityFlags field must be an even number. This indicates that
 the summary bit is not set, meaning there were no significant processing issues.
         \item Cloud fraction: BEHR contains three cloud fractions: OMI geometric,
 OMI radiance, and MODIS cloud fraction. We generally filter for OMI geometric or MODIS fraction to be $< 0.2$ (20\%).  As discussed in Russell et al. 2011, MODIS cloud fraction is often less susceptible to identifying high albedo ground surfaces as clouds.
-        \item The column amount should be $< 1 \times 10^{17}$. Such values are expected to
-indicate that the pixel has been affected by the row anomaly.
         \item The column amount must not be a fill value.
         \item Filter for row anomaly, typically by requiring that the 
 XTrackQualityFlags field = 0.
 	\end{enumerate}
+	
+	A previous version of this document indicated to removing negative VCDs and VCDs $> 1 \times 10^{17}$ molec. cm$^{-2}$; this is no longer recommended as removing negative VCDs can make the error in the stratospheric subtraction systematic instead of random (especially for small VCDs), and removing large VCDs should not be necessary as long as you check that XTrackQualityFlags = 0.
+	
+	If you see VCDs greater than $1 \times 10^{17}$ molec. cm$^{-2}$, check the BEHRAMFTrop field for that pixel; especially in older versions of the product, the AMF may be clamped to $1 \times 10^{-6}$ as a minimum value in cases where the algorithm encounters a non-fatal error.
 	
 	\subsection{Weighting temporal averaging}
 	When averaging the gridded product over time, use the \emph{Areaweight} variable to weight each contribution.  This is calculated for each grid cell as the average of the reciprocals of the areas of each pixel included in that grid cell.  Thus, grid cells containing contributions from large pixels are weighted less than those from smaller, more representative pixels.
