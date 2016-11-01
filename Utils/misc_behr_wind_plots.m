@@ -5,9 +5,6 @@ function [ varargout ] = misc_behr_wind_plots( plttype, varargin )
 
 E = JLLErrors;
 
-C=load('blue_red_cmap');
-C2=load('four_color_cmap.mat');
-
 switch lower(plttype)
     case 'windfield'
     case 'windmagangle'
@@ -57,6 +54,8 @@ switch lower(plttype)
         pix_pos_vs_cld();
     case 'wind-v-cld'
         wind_cond_vs_cld();
+    case 'apriori-surface'
+        plot_behr_apriori_surface();
     otherwise
         fprintf('plttype not recognized\n');
 end
@@ -1081,10 +1080,10 @@ end
                 switch diff_type
                     case 'a'
                         del = daily_no2_columns - monthly_no2_columns;
-                        cmap = C.blue_red_cmap;
+                        cmap = blue_red_cmap;
                     case 'p'
                         del = (daily_no2_columns ./ monthly_no2_columns - 1)*100;
-                        cmap = C.blue_red_cmap;
+                        cmap = blue_red_cmap;
                     case 'd'
                         del = daily_no2_columns;
                         cmap = 'jet';
@@ -1218,10 +1217,10 @@ end
                 switch diff_type
                     case 'a'
                         del = daily_value{i} - monthly_value{i};
-                        cmap = C2.four_color_cmap;
+                        cmap = four_color_cmap;
                     case 'p'
                         del = (daily_value{i} ./ monthly_value{i} - 1) * 100;
-                        cmap = C2.four_color_cmap;
+                        cmap = four_color_cmap;
                     case 'd'
                         del = daily_value{i};
                         cmap = 'jet';
@@ -1509,7 +1508,7 @@ end
             cb.FontSize = 20;
             cmax = max(abs(cb.Limits));
             caxis([-cmax, cmax]);
-            colormap(C.blue_red_cmap);
+            colormap(blue_red_cmap);
             
             figure; 
             pcolor(squeeze(new.Data.Loncorn(1,:,:)),squeeze(new.Data.Latcorn(1,:,:)),delmatstd);
@@ -2223,8 +2222,7 @@ end
             maxval = ceil(maxval/10)*10;
             caxis([-maxval maxval]);
             
-            C = load('blue_red_cmap.mat');
-            colormap(C.blue_red_cmap);
+            colormap(blue_red_cmap);
             
             if strcmp(quantity,'amf')
                 if strcmp(plot_type,'p')
@@ -2244,6 +2242,22 @@ end
             title(sprintf('%s: %s km %s', date_to_comp, res_base, base_interp_str));
             cb.Label.String = 'AMF';
         end
+    end
+
+    function plot_behr_apriori_surface()
+        [filename, pathname] = uigetfile();
+        D=load(fullfile(pathname,filename),'Data');
+        Data = D.Data;
+        nswaths = numel(Data);
+        swath = ask_number(sprintf('Which swath to plot (1-%d)?', nswaths), 'testfxn', @(x) x > 0 && x <= nswaths, 'testmsg', sprintf('Value must be between 1 and %d', nswaths));
+        
+        lon = squeeze(Data(swath).Loncorn(1,:,:));
+        lat = squeeze(Data(swath).Latcorn(1,:,:));
+        apri_surf = behr_apriori_surface(Data(swath));
+        
+        figure; pcolor(lon,lat,apri_surf);
+        cb=colorbar;
+        cb.Label.String = '[NO_2] (mixing ratio)';
     end
 
     function avg_prof = plot_ens_apriori()
