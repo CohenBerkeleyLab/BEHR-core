@@ -61,13 +61,16 @@ E = JLLErrors;
 % called: the variable name and the file name.
 E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %s. Likely this file was not processed with (slurm)run_wrf_output.sh, or the processing failed before writing the calculated quantites.');
 
+% The year that the profiles were simulated in.
+year_base = 2011;
+
 nearest = true;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
-allowed_avg_modes = {'hourly','daily','monthly','hybrid'};
+allowed_avg_modes = {'monthly'};
 avg_mode = lower(avg_mode);
 if ~ischar(avg_mode) || ~ismember(avg_mode, allowed_avg_modes);
     E.badinput('avg_mode must be one of %s',strjoin(allowed_avg_modes,', '));
@@ -118,13 +121,8 @@ end
 %%%%% LOAD netCDF and READ VARIABLES %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if strcmpi(avg_mode,'hybrid')
-    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars('monthly');
-    [wrf_no2_h, wrf_pres, ~, ~, ~, ~, wrf_utchr] = load_wrf_vars('hourly');
-    wrf_no2 = combine_wrf_profiles(wrf_no2_h, wrf_pres, wrf_no2_m, wrf_pres_m);
-else
-    [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars(avg_mode);
-end
+[wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars('monthly');
+wrf_no2 = scale_wrf_no2(wrf_no2, wrf_lon, wrf_lat, year(date_in), year_base);
 
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
@@ -393,29 +391,40 @@ end
     end
 end
 
-function wrf_no2 = combine_wrf_profiles(wrf_no2_h, wrf_pres_h, wrf_no2_m, ~)
-% For now this will be very simple, it will just replace any part of the
-% hourly profile above 750 hPa with the monthly profile.  I chose 750 hPa
-% to start with because that seems to be the pressure where the NO2
-% profiles around Atlanta get into free troposphere NO2, with less
-% influence from surface winds (i.e. no longer an exponential decay with
-% altitude). This is purely qualitative and intended (currently) to test if
-% removing FT profile changes from the AMF calc will simplify the
-% relationship between AMF and wind around Atlanta.
-%
-% In the future, the better way might be to use the monthly average PBL
-% height from WRF-Chem..
+function wrf_no2 = scale_wrf_no2(wrf_no2, wrf_lon, wrf_lat, year_in, year_base)
 E = JLLErrors;
 
-if any(size(wrf_no2_h)~=size(wrf_no2_m))
-    E.sizeMismatch('wrf_no2_h','wrf_no2_m');
-elseif any(size(wrf_no2_h)~=size(wrf_pres_h))
-    E.sizeMismatch('wrf_no2_h','wrf_pres_h');
+% Load the weights. These are precomputed by calc_scale_weights.m in the
+% AMF_tools folder.
+weight_file = fullfile(BEHR_paths('amf_tools_dir'), 'Data', 'ScaleWeights.mat');
+W = load(weight_file);
+Weights = W.ScaleWeights;
+
+% Would need tweaked if we did a few different months throughout the year
+if ~isequal(size(wrf_no2), size(Weights.June.w))
+    E.sizeMismatch('wrf_no2', 'weights');
+elseif any(abs(wrf_lon(:) - Weights.lon(:)) > 0.01) || any(abs(wrf_lat(:) - Weights.lat(:))>0.01)
+    E.badgeo('The WRF profile array has inconsistent lat/lon coordinates to the weights array')
 end
 
-pp = wrf_pres_h < 750;
-wrf_no2 = wrf_no2_h;
-wrf_no2(pp) = wrf_no2_m(pp);
+
+e_y = emiss_by_year(year_in);
+e_b = emiss_by_year(year_base);
+
+scale_factor = (1 + (e_y / e_b - 1) .* Weights.June);
+
+wrf_no2 = wrf_no2 .* scale_factor;
 
 end
 
+function e_y = emiss_by_year(year_in)
+E = JLLErrors;
+years     = [2004,  2005,  2006,  2007,  2008,  2009,  2010,  2011,  2012,  2013,  2014];
+total_nox = [21331, 20355, 19227, 18099, 16909, 15772, 14846, 14519, 13657, 13072, 12412];
+
+if ~ismember(year_in, years)
+    E.callError('undefined_year', 'Emissions are not defined for the year %d', year_in);
+end
+
+e_y = total_nox(years == year_in);
+end
