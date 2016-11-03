@@ -53,15 +53,17 @@ end
 if DEBUG_LEVEL > 1; fprintf('Adding folders\n'); end
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
-addpath(genpath('~/Documents/MATLAB/BEHR'))
-addpath(genpath('~/Documents/MATLAB/Classes'))
-addpath(genpath('~/Documents/MATLAB/Utils'))
+mpath = fileparts(mfilename('fullpath'));
+addpath(genpath(fullfile(mpath,'..','Utils')));
 
 
 % Add the paths needed to run on the cluster
 if onCluster;
     addpath(genpath('~/MATLAB/Classes'));
     addpath(genpath('~/MATLAB/Utils'));
+else
+    addpath(genpath(BEHR_paths('classes')));
+    addpath(genpath(BEHR_paths('utils')));
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -180,7 +182,9 @@ end
 
 
 %Go ahead and load the terrain pressure data - only need to do this once
-[terpres, refvec] = globedem(globe_dir,1,[latmin, latmax],[lonmin, lonmax]);
+%Add a little buffer around the edges to make sure we have terrain data
+%everywhere that we have NO2 profiles.
+[terpres, refvec] = globedem(globe_dir,1,[latmin-10, latmax+10],[lonmin-10, lonmax+10]);
     %refvec will contain (1) number of cells per degree, (2)
     %northwest corner latitude, (3) NW corner longitude.
     %(2) & (3) might differ from the input latmin & lonmin
@@ -196,7 +200,7 @@ globe_lonmin = refvec(3); globe_lonmax = globe_lonmin + size(terpres,2)*(1/cell_
 globe_lon_matrix = globe_lonmin + 1/(2*cell_count):(1/cell_count):globe_lonmax;
 globe_lon_matrix = repmat(globe_lon_matrix,size(terpres,1),1); 
 
-terpres(isnan(terpres)) = -500;
+terpres(isnan(terpres)) = 0;
 
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the
@@ -209,9 +213,11 @@ if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
 
+onCluster_local = onCluster;
+
 datenums = datenum(date_start):datenum(date_end);
 
-for j=1:length(datenums)
+parfor j=1:length(datenums)
     %Read the desired year, month, and day
     R=datenums(j);
     date=datestr(R,26);
@@ -221,9 +227,9 @@ for j=1:length(datenums)
     
     % Check if the file already exists. If it does, and if we're set
     % to not overwrite, we don't need to process this day.
-    filename=[satellite,'_',retrieval,'_',year,month,day,'.mat'];
-    if exist(fullfile(sp_mat_dir, filename), 'file') && ~overwrite
-        if DEBUG_LEVEL > 0; fprintf('File %s exists, skipping this day\n', filename); end
+    savename = sprintf('%s_%s_%s_%s.mat',satellite,retrieval,BEHR_version,datestr(datenums(j),'yyyymmdd'));
+    if exist(fullfile(sp_mat_dir, savename), 'file') && ~overwrite
+        if DEBUG_LEVEL > 0; fprintf('File %s exists, skipping this day\n', savename); end
         continue
     end
 
@@ -241,6 +247,7 @@ for j=1:length(datenums)
     file_dir = fullfile(omi_he5_dir,year,month); %Used both here to find all he5 files and in the swath for loop to identify each file.
     file=fullfile(file_dir,short_filename);
     sp_files = dir(file);
+    sp_files = remove_duplicate_orbits(sp_files);
     n = length(sp_files);
     E=0;
     if isempty(sp_files);
@@ -396,7 +403,7 @@ for j=1:length(datenums)
                 %AMFTroposphere
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'AmfTrop')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); AMFTrop = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); AMFTrop=double(AMFTrop); AMFTrop=AMFTrop';
                 %CloudFraction
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudFraction=double(CloudFraction); CloudFraction=CloudFraction'; CloudFraction = CloudFraction/1000;
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudFraction=double(CloudFraction); CloudFraction=CloudFraction'; CloudFraction(CloudFraction>-1) = CloudFraction(CloudFraction>-1)/1000; % don't scale the fill values
                 %CloudFractionError
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudFractionStd')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudFractionError = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudFractionError=double(CloudFractionError); CloudFractionError=CloudFractionError';
                 %CloudPressure
@@ -404,7 +411,7 @@ for j=1:length(datenums)
                 %CloudPressureError
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'CloudPressureStd')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudPressureError = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudPressureError=double(CloudPressureError); CloudPressureError=CloudPressureError';
                 %CloudRadianceFraction
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1, 'CloudRadianceFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudRadianceFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudRadianceFraction=double(CloudRadianceFraction); CloudRadianceFraction=CloudRadianceFraction'; CloudRadianceFraction = CloudRadianceFraction/1000;
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1, 'CloudRadianceFraction')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); CloudRadianceFraction = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); CloudRadianceFraction=double(CloudRadianceFraction); CloudRadianceFraction=CloudRadianceFraction'; CloudRadianceFraction(CloudRadianceFraction>-1) = CloudRadianceFraction(CloudRadianceFraction>-1)/1000; % don't scale the fill values.
                 %ColumnAmountNO2
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'ColumnAmountNO2')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); ColumnAmountNO2 = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); ColumnAmountNO2=double(ColumnAmountNO2); ColumnAmountNO2=ColumnAmountNO2';
                 %ColumnAmountNO2Trop
@@ -420,7 +427,7 @@ for j=1:length(datenums)
                 %TerrainPressure
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainPressure')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainPressure = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainPressure=double(TerrainPressure); TerrainPressure=TerrainPressure';
                 %TerrainReflectivity
-                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainReflectivity')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainReflectivity = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainReflectivity=double(TerrainReflectivity); TerrainReflectivity=TerrainReflectivity';
+                datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TerrainReflectivity')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TerrainReflectivity = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TerrainReflectivity=double(TerrainReflectivity); TerrainReflectivity=TerrainReflectivity'; TerrainReflectivity(TerrainReflectivity>-1) = TerrainReflectivity(TerrainReflectivity>-1)/1000; % only scale non-fill values
                 %TropopausePressure
                 datasetID = H5D.open(fileID, h5dsetname(hinfo,1,2,1,1,'TropopausePressure')); dataspaceID = H5D.get_space(datasetID); H5S.select_hyperslab(dataspaceID, 'H5S_SELECT_SET', offset, stride, slabsize, blocksize); TropopausePressure = H5D.read(datasetID, 'H5ML_DEFAULT', memspaceID, dataspaceID, 'H5P_DEFAULT'); TropopausePressure=double(TropopausePressure); TropopausePressure=TropopausePressure';
                 %vcdQualityFlags
@@ -430,7 +437,7 @@ for j=1:length(datenums)
                 
                 H5F.close(fileID); %close omi file to free up space
                 
-                RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle);
+                RelativeAzimuthAngle=abs(SolarAzimuthAngle+180-ViewingAzimuthAngle); % the extra factor of 180 corrects for the definition of RAA in the scattering weight lookup table
                 RelativeAzimuthAngle(RelativeAzimuthAngle > 180)=360-RelativeAzimuthAngle(RelativeAzimuthAngle > 180);
                 
                 % We already identified what rows to keep, so we'll reuse
@@ -501,7 +508,12 @@ for j=1:length(datenums)
                 %but before the next OMI file.
                 modis_file=(['MYD06_L2.A',year,julian_day,'*.hdf']);
                 modis_files=dir(fullfile(modis_myd06_dir,year,modis_file));
-                
+                % Error if no MODIS cloud files found and we are running in
+                % batch mode; this will prevent publishing data without
+                % MODIS cloud information.
+                if isempty(modis_files) && onCluster_local
+                    E.filenotfound(sprintf('MODIS cloud for %s',datestr(datenums(j))));
+                end
                     % Calculate the start time for the next OMI swath.
                     % Usually there is at least one swath starting after
                     % the one overflying the US west coast for that day,
@@ -767,7 +779,6 @@ for j=1:length(datenums)
             end %End the section carried out only if there are OMI pixels in the area of interest
         
         end %End the loop over all swaths in a day
-        savename=[satellite,'_',retrieval,'_',year,month,day];
         saveData(fullfile(sp_mat_dir,savename), Data); % Saving must be handled as a separate function in a parfor loop because passing a variable name as a string upsets the parallelization monkey (it's not transparent).
  %       toc
  %       t=toc;
@@ -792,4 +803,60 @@ if ~isempty(err.message)
 
     exit(1)
 end
+end
+
+function sp_files = remove_duplicate_orbits(sp_files)
+% From Oct 23, 2013 to Nov 4, 2013, several orbits have two files.  Since I
+% could find nothing about this, I'm assuming that the one with the later
+% processing date is the best one to use.  This subfunction will take a
+% structure of OMNO2 files returned from dir() and check for duplicate
+% orbits. If any are found, a warning is issued and only the one with the
+% most recent processing date is kept.
+
+orbits = zeros(size(sp_files));
+for a=1:numel(sp_files)
+    % The orbit is identified in the file name as "-o#####"
+    orbits(a) = str2double(sp_files(a).name(35:39));
+end
+
+uorbits = unique(orbits);
+if numel(uorbits) == numel(orbits)
+    % All orbits only present once, return now.
+    return
+end
+
+% Otherwise we need to identify the doubled orbits
+rm_bool = false(size(sp_files)); % will be set to true for the orbits to be removed
+for a=1:numel(uorbits)
+    % For each orbit that has >1 file, find the one with the most recent
+    % processing time; the rest for that orbit will be removed.
+    xx = find(orbits == uorbits(a));
+    if numel(xx) > 1
+        names = {sp_files(xx).name};
+        latest_proc_ind = 0;
+        latest_proc_datenum = 0;
+        for b = 1:numel(names)
+            proc_time = names{b}([46:49,51:54]);
+            proc_datenum = datenum(proc_time,'yyyymmdd');
+            if proc_datenum > latest_proc_datenum
+                latest_proc_ind = b;
+                latest_proc_datenum = proc_datenum;
+            end
+        end
+        yy = true(size(xx));
+        yy(latest_proc_ind) = false;
+        rm_bool(xx(yy)) = true;
+    end
+end
+
+% Give a warning for the log 
+if any(rm_bool)
+    rm_files = {sp_files(rm_bool).name};
+    fspec = repmat('\t%s\n',1,sum(rm_bool));
+    wmsg = sprintf('Duplicate orbits detected, the following files will not be used:\n%s',fspec);
+    warning(wmsg, rm_files{:});
+end
+
+sp_files(rm_bool) = [];
+
 end
