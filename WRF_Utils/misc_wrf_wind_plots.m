@@ -1240,20 +1240,25 @@ end
         % Compares case with lnox on vs off, for now. Can make more general
         % later
         
-        no_lnox_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/Atlanta/No-LNOx-ICBC-Off';
-        lnox_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/Atlanta/LNOx-ICBC-Off';
+        sharedir = '/Volumes/share2/USERS/LaughnerJ/WRF/Atlanta/';
+        F = dir(sharedir);
+        F(1:2) = []; % remove the . and .. entries
+        F = {F.name};
+        base_dir = ask_multichoice('Choose base directory', F, 'list', true);
+        F(strcmp(base_dir, F)) = [];
+        new_dir = ask_multichoice('Choose new directory', F, 'list', true);
         
-        F_no_lnox = dir(fullfile(no_lnox_dir, 'wrfout*'));
-        F_lnox = dir(fullfile(lnox_dir, 'wrfout*'));
+        F_base = dir(fullfile(base_dir, 'wrfout*'));
+        F_new = dir(fullfile(new_dir, 'wrfout*'));
         
         % Keep only those files present in both directories
         % will use same structure for both after this
-        xx = ismember({F_no_lnox.name}, {F_lnox.name});
-        F = F_no_lnox(xx);
+        xx = ismember({F_base.name}, {F_new.name});
+        F = F_base(xx);
         dnums = date_from_wrf_filenames(F);
         
-        no2_nolnox = squeeze(read_wrf_vars(no_lnox_dir, F, 'no2'));
-        no2_lnox = squeeze(read_wrf_vars(lnox_dir, F, 'no2'));
+        no2_nolnox = squeeze(read_wrf_vars(base_dir, F, 'no2'));
+        no2_lnox = squeeze(read_wrf_vars(new_dir, F, 'no2'));
         
         sz = size(no2_nolnox);
         if ~isequal(size(no2_lnox), sz)
