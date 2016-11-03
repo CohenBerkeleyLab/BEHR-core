@@ -223,7 +223,7 @@ parfor j=1:length(datenums)
                 [temperature, tmpSAVE] = rNmcTmp2(fileTmp, pressure, lon, lat, mon); %JLL 17 Mar 2014: Interpolates temperature values to the pressures and lat/lon coordinates desired
                 
                 surfPres = Data(d).GLOBETerpres(:);
-                albedo = Data(d).MODISAlbedo(:);
+                albedo = Data(d).MODISAlbedoBRDF(:);
                 
                 surfPres(surfPres>=1013)=1013; %JLL 17 Mar 2014: Clamp surface pressure to sea level or less.
                 cldPres = Data(d).CloudPressure(:);
