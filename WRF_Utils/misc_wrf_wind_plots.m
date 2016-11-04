@@ -1248,8 +1248,8 @@ end
         F(strcmp(base_dir, F)) = [];
         new_dir = ask_multichoice('Choose new directory', F, 'list', true);
         
-        F_base = dir(fullfile(base_dir, 'wrfout*'));
-        F_new = dir(fullfile(new_dir, 'wrfout*'));
+        F_base = dir(fullfile(sharedir, base_dir, 'wrfout*'));
+        F_new = dir(fullfile(sharedir, new_dir, 'wrfout*'));
         
         % Keep only those files present in both directories
         % will use same structure for both after this
@@ -1257,8 +1257,8 @@ end
         F = F_base(xx);
         dnums = date_from_wrf_filenames(F);
         
-        no2_nolnox = squeeze(read_wrf_vars(base_dir, F, 'no2'));
-        no2_lnox = squeeze(read_wrf_vars(new_dir, F, 'no2'));
+        no2_nolnox = squeeze(read_wrf_vars(fullfile(sharedir,base_dir), F, 'no2'));
+        no2_lnox = squeeze(read_wrf_vars(fullfile(sharedir,new_dir), F, 'no2'));
         
         sz = size(no2_nolnox);
         if ~isequal(size(no2_lnox), sz)
