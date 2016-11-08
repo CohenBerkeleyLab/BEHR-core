@@ -20,7 +20,8 @@ end
 no2_full = ncread(fullemis_file, 'no2');
 no2_half = ncread(halfemis_file, 'no2');
 
-Weights.June.w = compute_weights(no2_full, no2_half, 1, 0.5);
+%Weights.June.w = compute_weights(no2_full, no2_half, 1, 0.5);
+Weights.June.w = compute_weights(no2_half, no2_full, 0.5, 1);
 Weights.lon = double(lon);
 Weights.lat = double(lat);
 

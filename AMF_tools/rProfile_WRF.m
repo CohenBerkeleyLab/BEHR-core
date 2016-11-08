@@ -277,7 +277,7 @@ end
         wrf_output_mode_path = fullfile(wrf_output_path,avg_mode);
         
         % Find the file for this day or this month
-        year_in = year(date_num_in);
+        year_in = 2011; %temp kludge, always read 2011 data %year(date_num_in);
         month_in = month(date_num_in);
         day_in = day(date_num_in);
         if strcmp(avg_mode,'monthly');
@@ -411,8 +411,10 @@ end
 e_y = emiss_by_year(year_in);
 e_b = emiss_by_year(year_base);
 
-scale_factor = (1 + (e_y / e_b - 1) .* Weights.June);
-
+%scale_factor = (1 + (e_y / e_b - 1) .* Weights.June.w);
+% This is how I generated the "control" run for the emissions scaling test;
+% by multiplying the 2011 profiles by 1, I used the 2011 profiles directly
+scale_factor = ones(size(wrf_no2));
 wrf_no2 = wrf_no2 .* scale_factor;
 
 end

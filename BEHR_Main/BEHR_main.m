@@ -103,7 +103,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/W US BEHR Monthly - No ghost';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EmissionsScaling-Control';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -117,7 +117,7 @@ else
     %This is the directory where the NO2 profiles are stored. This will
     %need to be changed to match your machine and the files' location.
     %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
-    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/W_US_BEHR';
+    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/US_BEHR';
 end
 
 %Store paths to relevant files
@@ -130,7 +130,7 @@ fileDamf = fullfile(amf_tools_path,'damf.txt');
 %Process all files between these dates, in yyyy/mm/dd format
 %****************************%
 if nargin < 2
-    date_start='2013/06/10';
+    date_start='2013/06/01';
     date_end='2013/06/30';
     fprintf('BEHR_main: Used hard-coded start and end dates\n');
 end
