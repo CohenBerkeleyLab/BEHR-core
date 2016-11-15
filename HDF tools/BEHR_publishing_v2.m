@@ -186,6 +186,13 @@ if ~onCluster
             if strcmpi(pixel_type,'native')
                 Data_to_save = Data;
             else
+                if numel(OMI) == numel(Data)
+                    for d=1:numel(Data);
+                        OMI(d).Swath = max(Data(d).Swath(:));
+                    end
+                else
+                    E.callError('unequal_swaths','Different numbers of swaths in OMI and Data for %s, cannot assign Swath value to OMI', date_string);
+                end
                 Data_to_save = OMI;
             end
 
@@ -294,7 +301,7 @@ if ismember('gridded', varargin)
     % to edit this is you add new gridded variables.
     gridded_vars = {'AMFTrop', 'Areaweight', 'BEHRAMFTrop','BEHRColumnAmountNO2Trop',...
         'CloudFraction', 'CloudRadianceFraction', 'ColumnAmountNO2Trop', 'GLOBETerpres',...
-        'Latitude', 'Longitude', 'MODISAlbedo', 'MODISCloud', 'Row', 'XTrackQualityFlags',...
+        'Latitude', 'Longitude', 'MODISAlbedo', 'MODISCloud', 'XTrackQualityFlags',...
         'vcdQualityFlags', 'InSituAMF', 'BEHR_R_ColumnAmountNO2Trop'};
     vars = cutdown_variables(vars, gridded_vars);
     vars{end+1} = 'Areaweight';
