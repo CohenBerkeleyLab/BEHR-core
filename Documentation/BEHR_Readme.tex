@@ -155,6 +155,34 @@
 		
 		All satellite data is stored on the \texttt{share-sat} shared folder, in the \texttt{SAT} subfolder. It is organized first by instrument (OMI, MODIS) then product (OMNO2, MYD06\_L2, etc). Products necessary to run BEHR are organized chronologically in subfolders by year (and then month in the case of OMNO2). Other products that BEHR does not rely on are sorted in various ways.
 	
+	\subsection{NASA versioning system}
+	
+	First, there are a number of "levels" of data available for the OMI output:
+	\begin{itemize}
+	\item \textbf{Level 0} is the raw instrument data; it has not been calibrated or geolocated.
+	\item \textbf{Level 1b} are the ``calibrated Earthshine spectra.'' I believe this means that the reflected/backscattered light from Earth has been both geolocated and calibrated to the solar irradiance spectrum \citep{knmi-level0-1b, van-der-Oord06}. Additionally, a single pixel actually consists of four exposures across different rows; these are averaged together at this step \citep{van-der-Oord06}. No I do not know where level 1a went.
+	\item \textbf{Level 2} data is where we start. It converts the raw spectra into slant and vertical column densities, and handles stratospheric subtraction. Data is kept at the native pixel resolution; where the pixels are the result of averaging the four exposures mentioned previously \citep{omi-readme, bucsela13, marchenko15}.
+	\item \textbf{Level 2G} can be thought of as binning the Level 2 native pixels to a consistent $0.25^\circ \times 0.25^\circ$ grid. Any pixel whose center falls within the grid cell is binned to it. Up to 15 pixels per day will be stored; the data is kept separate for each pixel \citep{omi-readme}.
+	\item \textbf{Level 3} is the product resulting from averaging the Level 2G data. This provides a single daily average field \citep{omi-readme}.
+	\end{itemize}	
+	
+	These levels just represent the amount of processing that has been done to the satellite data, and should be consistent across all versions.
+	
+	\vspace{1em}
+	The versioning describes how the algorithm has changed in time; there are two components to the NASA versioning system for the level 2 product: ``collection number'' and ``data product version number.'' 
+	
+	The collection number refers to the version of the data processing used to get from Level 0 to Level 1b. As of 23 Nov 2016, the NASA product uses collection 3.  This is the number contained in the filename (i.e. \texttt{v003}) and in the metadata.
+	
+	The data product version number refers to the version of the algorithm that produces the Level 2 product. This number does not seem to be stored in the filename or metadata currently. The current version is also 3.0.
+	
+	Sources for the various data product versions:
+	\begin{itemize}
+	\item \citet{bucsela06} describes version 1 of the level 2 algorithm.
+	\item \citet{bucsela13} describes version 2.1 of the level 2 algorithm.
+	\item \citet{marchenko15} describes one of the changes between version 2.1 and version 3; namely the revised procedure for fitting the Earthshine radiances to obtain slant column densities.
+	\item See \citet{omi-readme} as well for information on changes to the chemical transport model used to generate the \ce{NO2} a priori profiles in version 3.
+	\end{itemize}
+	
 	\subsection{Downloading from web sites}
 	
 	\begin{itemize}
