@@ -237,10 +237,9 @@ parfor j=1:length(datenums)
                 if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
                 [no2_bins] = rProfile_US(PROFILE, loncorns, latcorns, c); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
                 no2_bins = reshape(no2_bins,length(pressure),size(vza,1),size(vza,2));
-                no2Profile1 = no2_bins ./ (10^6); % NO2 from WRF is in ppm in these files
-                prof_i = zeros(size(Data(d).Latitude)); prof_i(isnan(squeeze(no2Profile1(1,:,:)))==1)=1; %JLL 18 Mar 2014: prof_i is a matrix of 0 or 1s that is 1 wherever the bottom of NO2 profile is NaN
+                no2Profile = no2_bins ./ (10^6); % NO2 from WRF is in ppm in these files
+                prof_i = zeros(size(Data(d).Latitude)); prof_i(isnan(squeeze(no2Profile(1,:,:)))==1)=1; %JLL 18 Mar 2014: prof_i is a matrix of 0 or 1s that is 1 wherever the bottom of NO2 profile is NaN
                 
-                no2Profile2 = no2Profile1;
                 pTerr = surfPres;
                 pCld = cldPres;
                 if strcmpi(cloud_amf,'omi')
@@ -253,21 +252,20 @@ parfor j=1:length(datenums)
                 
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
-                noGhost=0; ak=1;
-                [amf, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels, ghost_fraction] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+                [amf, amfVis, ~, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
                 amf(prof_i==1)=NaN;
+                amfVis(prof_i==1)=NaN;
                 scattering_weights(:,prof_i==1)=NaN;
                 avg_kernels(:,prof_i==1)=NaN;
                 sw_plevels(:,prof_i==1)=NaN;
                 no2_prof_interp(:,prof_i==1)=NaN;
-                ghost_fraction(prof_i==1)=NaN;
                 
                 sz = size(Data(d).Longitude);
                 len_vecs = size(scattering_weights,1);  % JLL 26 May 2015 - find out how many pressure levels there are. Will often be 30, but might change.
                                                         % Need this to properly reshape the scattering weights, AKs, pressure levels, and (soon) profiles
                 
                 Data(d).BEHRAMFTrop = reshape(amf,sz); %JLL 18 Mar 2014: Save the resulting AMF of the pixel
-                Data(d).BEHRGhostFraction = reshape(ghost_fraction,sz);
+                Data(d).BEHRAMFTropVisOnly = reshape(amfVis,sz);
                 Data(d).BEHRScatteringWeights = reshape(scattering_weights, [len_vecs, sz]);
                 Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
                 Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
@@ -281,9 +279,11 @@ parfor j=1:length(datenums)
                 continue
             else
                 Data(z).BEHRColumnAmountNO2Trop=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTrop;
+                Data(z).BEHRColumnAmountNO2TropVisOnly=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTropVisOnly;
                 % make sure fill values in the original column or AMF are
                 % fill values in BEHR.
                 Data(z).BEHRColumnAmountNO2Trop(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AMFTrop < -30000) = nan; 
+                Data(z).BEHRColumnAmountNO2TropVisOnly(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AMFTrop < -30000) = nan; 
                 if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
             end
         end
@@ -325,7 +325,7 @@ parfor j=1:length(datenums)
             'RelativeAzimuthAngle', [], 'AMFStrat', [], 'AMFTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
             'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'ColumnAmountNO2TropStd',[],'ColumnAmountNO2Strat',[],'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'vcdQualityFlags',{{}},...
             'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
-            'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
+            'BEHRAMFTrop', [], 'BEHRColumnAmountNO2TropVisOnly', [], 'BEHRAMFTropVisOnly', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
         % Matlab treats structures as matrices, so we can duplicate our
         % structure to have the required number of entries just like a
         % matrix.
