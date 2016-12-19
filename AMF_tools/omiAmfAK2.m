@@ -83,14 +83,14 @@
 %   Josh Laughner <joshlaugh5@gmail.com> 
 
 %function [amf, amfCldTotCol, amfClr, avgKernel, vcd, vcdAvgKernel] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile, no2Profile2, noGhost, ak)
-function [amf, amfVis, amfCldTotCol, amfClr, sc_weights, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile)
+function [amf, amfVis, amfCldTotCol, amfCldVisOnly, amfClr, sc_weights, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile)
 
 
 % Each profile is expected to be a column in the no2Profile matrix.  Check
 % for this by ensuring that the first dimension of both profile matrices
 % has the same length as the pressure vector
 E = JLLErrors;
-if size(no2Profile,1) ~= length(pressure) || size(no2Profile2,1) ~= length(pressure);
+if size(no2Profile,1) ~= length(pressure) 
     error(E.callError('profile_input','Profiles must be column vectors in the input matrices.  Ensure size(no2Profile,1) == length(pressure)'));
 end
 if size(dAmfClr,1) ~= length(pressure) || size(dAmfCld,1) ~= length(pressure);
