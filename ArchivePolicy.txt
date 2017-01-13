@@ -1,0 +1,14 @@
+When a branch is no longer being actively developed, use the following
+git commands to archive it:
+
+git tag -a archive/<branchname> <branchname> -m "Archived: <message>"
+git push origin archive/<branchname>
+
+Confirm that the tag exists on both the local and remote repo with:
+git tag -l
+git ls-remote
+
+You can then delete the branch reference:
+git branch -D <branchname>
+
+

@@ -31,6 +31,43 @@ equivalent to the one with the period and is used interchangeably.
 2) Changelog
 ============
 
+**** 2.1C ****
+-- Change to how ghost columns are handled
+-- IMPORTANT: the field BEHRColumnAmountNO2Trop in all prior versions is the total column,
+   including the below cloud component (the "ghost column")
+-- Previous versions of the user guide stated that multiplying the BEHR VCD by the ghost
+   fraction would return the total column; that was incorrect. The BEHR VCD was the total
+   column, dividing the VCD by the ghost fraction in previous versions will, in fact, return
+   the visible only column.
+-- The ghost fraction has been removed in this version, now visible-only fields
+   BEHRColumnAmountNO2TropVisOnly and BEHRAMFTropVisOnly give the VCD and AMF for the visible
+   only column; that is, the total (to ground) column over the clear part of the pixel plus
+   the above-cloud column over the cloudy part of the pixel.
+
+**** 2.1B ****
+-- Slight change to VCDs along coasts or over oceans
+-- Previous versions used a fill value of -500 m when calculating surface pressure over
+   oceans from GLOBE elevation data; hence ocean pixels had a GLOBETerpres value of 
+   ~1080 hPa. This has been corrected and ocean pixel will now correctly report a surface
+   pressure value of ~1013 hPa.
+-- Changes to VCDs in BEHRColumnAmountNO2Trop are generally < 1x10^15 molec. cm^-2, and
+   primarily limited to coastlines and regions outside the domain of 25-50 N, 125-65 W.
+   These changes occur for two reasons:
+    1) Coastline changes occur where the average pixel surface pressure derived from the
+       GLOBE elevation data was < 1013 hPa, but greater than it should have been as ocean
+       fill values mentioned above were averaged in.  Pure ocean pixels are unaffected 
+       because surface pressures are clamped to <= 1013 hPa before AMF computation.
+    2) Changes outside 25-50 N, 125-65 W occur where NO2 a priori profiles are available
+       but GLOBE data was not imported before. This version imports GLOBE data from 15-60 N
+       and 135-55 W, which should cover all pixels with NO2 a priori profiles available.
+       Previously, pixels outside the 25-50 N, 125-65 W domain assumed a surface pressure of
+       1013 hPa.
+-- Any pixels outside the new 15-50 N, 135-55 W GLOBE import region have their GLOBETerpres
+   field given a fill value, instead of the previous value of 1013.
+-- Pixels without valid MODISAlbedo data would previously have a value of 0 instead of the 
+   proper fill value. This has been corrected; it should only affect totally invalid pixels
+   (pixels with latitude/longitude unspecified or given as fill values).
+
 
 **** 2.1Arev1 ****
 -- Revision only: no substantial changes to the data product itself.

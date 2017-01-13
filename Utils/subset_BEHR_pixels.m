@@ -88,6 +88,9 @@ if ~exist('options','var')
     if options.quad_bool || options.dist_limit > 0
         options.center_lon = ask_number('Enter the longitude of the point to calculate distance and/or angles from','testfxn',@(x) x>=-180 && x<=180,'testmsg','Value must be between -180 and 180');
         options.center_lat = ask_number('Enter the latitude of the point to calculate distance and/or angles from','testfxn',@(x) x>=-90 && x<=90,'testmsg','Value must be between -90 and 90');
+    else
+        options.center_lon = [];
+        options.center_lat = [];
     end
 elseif isempty(options)
     % Set default values
