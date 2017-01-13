@@ -57,6 +57,11 @@ done
 # .. points to a directory containing subfolders by year, each of which is
 # organized into monthly subfolders.
 
+# This will ensure that the cookies file is always fresh so that if something got
+# messed up before it'll be cleared
+rm -f "$HOME/.urs_cookies"
+touch "$HOME/.urs_cookies"
+
 for f in $(cat $dlf)
 do
     fname=$(basename $f)
@@ -78,7 +83,7 @@ do
         echo "File $fname exists"
         continue
     else
-        wget -q -nH -nd $f
+        wget --load-cookies ~/.urs_cookies --save-cookies ~/.urs_cookies --auth-no-challenge=on --keep-session-cookies -nH -nd $f
         mv $fname ../${y}/${m}/
     fi
     
