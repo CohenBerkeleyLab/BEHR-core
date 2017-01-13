@@ -97,13 +97,15 @@ equivalent to the one with the period and is used interchangeably.
 	For more information on the SP variables, see the links at \url{http://disc.sci.gsfc.nasa.gov/Aura/data-holdings/OMI/omno2_v003.shtml}, especially the Readme and OMNO2 Data Format.  Here we will describe primarily the BEHR variables in detail, although we will describe the presentation of some OMNO2 variables where necessary.
 	
 	\begin{itemize}
-	\item \textbf{BEHRAMFTrop}: the tropospheric AMF calculated by the BEHR algorithm using high resolution albedo, terrain pressure, and \ce{NO2} \emph{a priori} inputs.
+	\item \textbf{BEHRAMFTrop}: the tropospheric AMF calculated by the BEHR algorithm using high resolution albedo, terrain pressure, and \ce{NO2} \emph{a priori} inputs.  This AMF estimates a ghost column as well, and corresponds to the VCD in the BEHRColumnAmountNO2Trop field.
+	
+	\item \textbf{BEHRAMFTropVisOnly}: the tropospheric AMF calculated by the BEHR algorithm that does not attempt to estimate a ghost column. This corresponds to the VCD in BEHRColumnAmountNO2VisOnly.
 	
 	\item \textbf{BEHRAvgKernels}: a vector of averaging kernels that can be used when comparing model output to the BEHR product. See \S\ref{sec:scweights} for details.
 	
-	\item \textbf{BEHRColumnAmountNO2Trop}: the tropospheric \ce{NO2} column calculated using the BEHR algorithm as $V_{\mathrm{BEHR}} = V_{\mathrm{NASA}} \cdot A_{\text{trop, NASA}} / A_{\text{trop, BEHR}}$, where $V_{\mathrm{BEHR}}$ and $V_{\mathrm{NASA}}$ are the vertical column densities for BEHR and NASA respectively, and $A_{\text{trop, NASA}}$ and $A_{\text{trop, BEHR}}$ are the tropospheric AMFs.
+	\item \textbf{BEHRColumnAmountNO2Trop}: the tropospheric \ce{NO2} column calculated using the BEHR algorithm as $V_{\mathrm{BEHR}} = V_{\mathrm{NASA}} \cdot A_{\text{trop, NASA}} / A_{\text{trop, BEHR}}$, where $V_{\mathrm{BEHR}}$ and $V_{\mathrm{NASA}}$ are the vertical column densities for BEHR and NASA respectively, and $A_{\text{trop, NASA}}$ and $A_{\text{trop, BEHR}}$ are the tropospheric AMFs.  This field includes estimated ghost columns that are obscured by clouds. The estimate essentially scales the above-cloud component by the ratio of the above-cloud to total column from the model \emph{a priori} profile.
 	
-	\item \textbf{BEHRGhostFraction}: this is a correction factor that can be applied to add back in the ghost column if desired: $V_{\mathrm{total}} = V_{vis} \cdot G$ where $G$ is this factor, $V_{\mathrm{vis}}$ is the column given as BEHRColumnAmountNO2Trop, and $V_{\mathrm{total}}$ is the total column including estimated ghost fraction.
+	\item \textbf{BEHRColumnAmountNO2TropVisOnly}: the tropospheric \ce{NO2} column calculated using the BEHR algorithm and the same equation as for the previous variable, except that the visible-only AMF is used instead. This retrieves only the visible \ce{NO2} column, thus this is the \ce{NO2} column to ground for the clear fraction of the pixel, and only the above-cloud \ce{NO2} column for the cloudy fraction of the pixel.
 	
 	\item \textbf{BEHRNO2Apriori}: this is the \ce{NO2} profile used as the \emph{a priori} for the AMF calculations. It is given as unscaled mixing ratios; so multiplying these numbers by the number density of air will directly give the number density of \ce{NO2}. See \S\ref{sec:scweights} for more information.
 	
@@ -142,9 +144,10 @@ equivalent to the one with the period and is used interchangeably.
 	\rule{0pt}{3ex}AMFStrat	&Native		 &	SP			&	[0, $\infty$)	&	unitless \\
 	AMFTrop				&	Both	 		&	SP			& 	[0, $\infty$)	& unitless \\
 	BEHRAMFTrop			&	Both 		& 	BEHR			&	[0, $\infty$)	& unitless \\
+	BEHRAMFTropVisOnly	&	Both 		& 	BEHR			&	[0, $\infty$)	& unitless \\
 	BEHRAvgKernels		&	Native 		&	BEHR			&	[0, $\infty$)	& unitless \\
 	BEHRColumnAmountNO2Trop & Both	 	& 	BEHR		&	[0, $\infty$) & molec. cm$^{-2}$ \\
-	BEHRGhostFraction	&	Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRColumnAmountNO2TropVisOnly & Both	 	& 	BEHR		&	[0, $\infty$) & molec. cm$^{-2}$ \\
 	BEHRNO2Apriori		&	Native 		&	BEHR			& 	($-\infty$, $\infty$) & unscaled mixing ratio\\
 	BEHRPressureLevels	&	Native	 	& 	BEHR			& 	[0, $\infty$) & hPa \\
 	BEHRScatteringWeights & Native	 	&	BEHR			&	[0, $\infty$) & unitless \\

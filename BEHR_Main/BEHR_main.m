@@ -170,6 +170,11 @@ end
 
 datenums = datenum(date_start):datenum(date_end);
 parfor j=1:length(datenums)
+    savename = sprintf('%s_%s_%s_%s.mat',satellite,retrieval,BEHR_version,datestr(datenums(j),'yyyymmdd'));
+    if exist(fullfile(behr_mat_dir,savename),'file')
+        fprintf('%s already exists, skipping\n', savename);
+        continue
+    end
     month=datestr(datenums(j),'mm');
     if DEBUG_LEVEL > 0; disp(['Processing data for ', datestr(datenums(j))]); end
     filename = sprintf('OMI_SP_%s_%s.mat',BEHR_version,datestr(datenums(j),'yyyymmdd'));
