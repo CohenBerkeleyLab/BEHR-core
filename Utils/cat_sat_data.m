@@ -8,7 +8,8 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %   strings.
 %
 %   CAT_SAT_DATA( DATA, DATAFIELDS ) will concatenate all swaths in the
-%   structure DATA for the fields specified in DATAFIELDS.
+%   structure DATA for the fields specified in DATAFIELDS. If DATAFIELDS is
+%   an empty array, all fields will be concatenated.
 %
 %   Parameter arguments are:
 %
@@ -56,6 +57,8 @@ end
 
 if ischar(datafields)
     datafields = {datafields};
+elseif isempty(datafields) && isstruct(filepath)
+    datafields = fieldnames(Data);
 elseif ~iscell(datafields) || any(~iscellcontents(datafields,'ischar'))
     E.badinput('datafields must be a string or cell array of strings')
 end
