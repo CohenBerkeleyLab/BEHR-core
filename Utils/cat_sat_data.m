@@ -29,6 +29,10 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %       concatenated along the third dimension, a 3D one along the fourth).
 %       When false, they will be concatenated in the along track dimension.
 %
+%       'varname' - must be the string 'Data' or 'OMI'. 'Data' is default.
+%       Indicates whether the structure concatenated should be the native
+%       pixels ('Data') or the gridded pixels ('OMI').
+%
 %       'DEBUG_LEVEL' - set to 0 to suppress debugging messages, defaults
 %       to 1. Set to 'visual' to use the waitbar dialogue.
 %
@@ -61,6 +65,7 @@ p.addParameter('prefix','',@ischar);
 p.addParameter('startdate','');
 p.addParameter('enddate','');
 p.addParameter('newdim',false);
+p.addParameter('varname','Data');
 p.addParameter('DEBUG_LEVEL',1,@(x) (ischar(x) || isnumeric(x) && isscalar(x)));
 
 p.parse(varargin{:});
@@ -70,7 +75,12 @@ prefix = pout.prefix;
 startdate = pout.startdate;
 enddate = pout.enddate;
 newdim = pout.newdim;
+varname = pout.varname;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
+
+if ~ismember(varname,{'Data','OMI'})
+    E.badinput('VARNAME must be either ''Data'' or ''OMI''');
+end
 
 wbbool = false;
 if ischar(DEBUG_LEVEL)
@@ -156,12 +166,12 @@ for a=1:numel(F)
             continue
         end
         
-        D = load(fullfile(filepath, F(a).name),'Data');
-        if ~isfield(D, 'Data')
-            fprintf('%s does not contain the variable "Data", skipping\n', F(a).name);
+        D = load(fullfile(filepath, F(a).name),varname);
+        if ~isfield(D, varname)
+            fprintf('%s does not contain the variable "%s", skipping\n', F(a).name, varname);
             continue
         else
-            Data = D.Data;
+            Data = D.(varname);
         end
     
         if DEBUG_LEVEL > 0
