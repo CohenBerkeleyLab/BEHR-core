@@ -31,6 +31,19 @@ equivalent to the one with the period and is used interchangeably.
 2) Changelog
 ============
 
+**** 2.1C ****
+-- Change to how ghost columns are handled
+-- IMPORTANT: the field BEHRColumnAmountNO2Trop in all prior versions is the total column,
+   including the below cloud component (the "ghost column")
+-- Previous versions of the user guide stated that multiplying the BEHR VCD by the ghost
+   fraction would return the total column; that was incorrect. The BEHR VCD was the total
+   column, dividing the VCD by the ghost fraction in previous versions will, in fact, return
+   the visible only column.
+-- The ghost fraction has been removed in this version, now visible-only fields
+   BEHRColumnAmountNO2TropVisOnly and BEHRAMFTropVisOnly give the VCD and AMF for the visible
+   only column; that is, the total (to ground) column over the clear part of the pixel plus
+   the above-cloud column over the cloudy part of the pixel.
+
 **** 2.1B ****
 -- Slight change to VCDs along coasts or over oceans
 -- Previous versions used a fill value of -500 m when calculating surface pressure over

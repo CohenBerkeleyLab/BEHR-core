@@ -188,7 +188,7 @@ equivalent to the one with the period and is used interchangeably.
 \FloatBarrier
 
 \section{Considerations when working with BEHR files}
-	\subsection{Pixel filtering}
+	\subsection{Pixel filtering} \label{sec:pixel-filtering}
 	For users wishing to identify high quality \ce{NO2} column information to ground, there are six key criteria to look for:
 	\begin{enumerate}
         \item The vcdQualityFlags field must be an even number. This indicates that
@@ -206,6 +206,42 @@ XTrackQualityFlags field = 0.
 	
 	\subsection{Weighting temporal averaging}
 	When averaging the gridded product over time, use the \emph{Areaweight} variable to weight each contribution.  This is calculated for each grid cell as the average of the reciprocals of the areas of each pixel included in that grid cell.  Thus, grid cells containing contributions from large pixels are weighted less than those from smaller, more representative pixels.
+	
+	\subsection{Total vs. visible only columns}
+	The field BEHRColumnAmountNO2Trop contains the total column, which includes the estimated ghost column below the cloudy part of the pixel. The field BEHRColumnAmountNO2TropVisOnly does not include the ghost column; only the above-cloud \ce{NO2} is included for the cloudy component of the pixel.
+	
+	Most users should use the BEHRColumnAmountNO2Trop field, with appropriate filtering for cloud fraction (\S\ref{sec:pixel-filtering}). Users interested in cloud slicing approaches should use the BEHRColumnAmountNO2TropVisOnly field. 
+	
+	The difference in the VCDs stems from the difference in the computation of the cloudy AMF. The total AMF (BEHRAMFTrop or BEHRAMFTropVisOnly) is the cloud radiance fraction ($f$) weighted average of clear and cloudy AMFs:
+	
+	\begin{equation}
+	A = (1 - f) \cdot A_{\mathrm{clr}} + f \cdot A_{\mathrm{cld}}
+	\end{equation}
+	
+	The component AMFs are each calculated as:
+	
+	\begin{equation}
+	A_{\text{clr or cld}} = \frac{\int_{p_0}^{p_{\mathrm{tp}}} w(p) g(p) \: dp}{\int_{p_0'}^{p_\mathrm{tp}} g(p) \: dp}
+	\label{eqn:amf-integral}
+	\end{equation}
+	
+	\begin{table}
+	\centering
+	\begin{tabular}{l|ccc}
+	\hline
+	 & $p_0$ & $p_0'$ & $w$ \\ \hline
+	 $A_{\mathrm{clr}}$ (total and vis only) & Terrain pressure & Terrain pressure & Clear scattering wts. \\
+	 $A_{\mathrm{cld}}$ (total) & Cloud pressure & Terrain pressure & Cloudy scattering wts. \\
+	 $A_{\mathrm{cld}}$ (vis. only) & Cloud pressure & Cloud pressure & Cloudy scattering wts. \\ \hline
+	
+	\end{tabular}
+	\caption{Meaning of variables in Eq. \eqref{eqn:amf-integral} for the clear-sky AMF component, the cloudy AMF component for the total column, and the cloudy AMF component for the visible-only column.}
+	\label{tab:amf-vars}
+	\end{table}
+	
+	Eq. \eqref{eqn:amf-integral} is used for the calculation of all the AMF components (clear and cloudy). The variables $p_0$, $p_0'$, and $w_i$ change depending on whether the clear or cloudy AMF is being calculated, and whether the cloudy AMF should retrieve the total or visible only column (see Table \ref{tab:amf-vars}). $g(p)$ is always the WRF-Chem \emph{a priori} \ce{NO2} profile.
+	
+	From this, we can see how the AMF adds back in the ghost column to the total column. For the cloudy AMF, the numerator of Eq. \eqref{eqn:amf-integral} always calculates the modeled above-cloud slant column actually observed by OMI. In the visible-only product, the denominator is the model vertical column above cloud, thus the definition of AMF = SCD/VCD uses the visible column for both the SCD and VCD. In the total column product, the VCD is the total modeled column, so the visible SCD is scaled by how much \ce{NO2} the model expects there to be below cloud.
 	
 	\subsection{Using scattering weights/averaging kernels} \label{sec:scweights}
 	\subsubsection{Variable layout}
@@ -234,11 +270,11 @@ XTrackQualityFlags field = 0.
 	\end{align}
 	where $f_r$ is the radiance cloud fraction, $w_{i, \mathrm{clr}}$ is the $i$th element in the clear sky scattering weight vector, $w_{i, \mathrm{cld}}$ is the $i$th element in the cloudy scattering weight vector, $p_i$ is the pressure level for the $i$th element in the vectors, $p_\mathrm{terr}$ is the terrain pressure for the pixel, and $p_\mathrm{cld}$ is the cloud top pressure for the pixel.
 	
-	Therefore the final vector of scattering weights is the cloud radiance fraction-weighted average of the clear and cloudy scattering weight vectors after setting the clear sky vectors to 0 below the ground, and the cloudy vectors to 0 below the cloud top.  This is an approximation of how the NASA scattering weights are reported.  These scattering weights can be combined with an \emph{a priori} \ce{NO2} profile to get the total AMF as:
-	\begin{equation}
-		A = \int_{p_\mathrm{terr}}^{p_\mathrm{trop}} g(p) w(p) \: dp
-	\end{equation}
-	where $p_\mathrm{terr}$ is the terrain pressure, $p_\mathrm{trop}$ is the tropopause pressure, and $g(p)$ is the \emph{a priori} profile shape factor. Note that integration must be done w.r.t. number density, see Appendix B of \citet{ziemka01} for information on how mixing ratio integrated over pressure can be made equivalent to number density integrated over altitude.
+	Therefore the final vector of scattering weights is the cloud radiance fraction-weighted average of the clear and cloudy scattering weight vectors after setting the clear sky vectors to 0 below the ground, and the cloudy vectors to 0 below the cloud top.  This is an approximation of how the NASA scattering weights are reported.  These scattering weights can be combined with an \emph{a priori} \ce{NO2} profile to get the total AMF using Eq. \eqref{eqn:amf-integral} above.
+	
+	Note that, because the clear and cloudy scattering weights are combined by Eq. \eqref{eqn-pubSW}, using them in Eq. \eqref{eqn:amf-integral} will directly produce the final, total column AMF (rather than separate clear and cloudy AMFs that must be combined). You must use the terrain pressure for $p_0'$. Because of this, there is currently no way to produce visible-only columns using your own \emph{a priori} profiles.	
+	
+	Further note that Eq. \eqref{eqn:amf-integral} integrates $g(p)$ as the \emph{a priori} profile in mixing ratio over pressure, see Appendix B of \citet{ziemka01} for information on how mixing ratio integrated over pressure should be done to be equivalent to number density integrated over altitude.
 	
 	\subsubsection{Justification for including terrain and cloud pressure weights}
 	Although we publish the scattering weights in this form, we calculate our AMF as:
