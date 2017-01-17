@@ -29,6 +29,10 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %       concatenated along the third dimension, a 3D one along the fourth).
 %       When false, they will be concatenated in the along track dimension.
 %
+%       'vector' - boolean, defaults to false. When true, each swatch is
+%       resized into a column vector before concatenation. Mutually
+%       exclusive with 'newdim'.
+%
 %       'varname' - must be the string 'Data' or 'OMI'. 'Data' is default.
 %       Indicates whether the structure concatenated should be the native
 %       pixels ('Data') or the gridded pixels ('OMI').
@@ -65,6 +69,7 @@ p.addParameter('prefix','',@ischar);
 p.addParameter('startdate','');
 p.addParameter('enddate','');
 p.addParameter('newdim',false);
+p.addParameter('vector',false);
 p.addParameter('varname','Data');
 p.addParameter('DEBUG_LEVEL',1,@(x) (ischar(x) || isnumeric(x) && isscalar(x)));
 
@@ -75,11 +80,16 @@ prefix = pout.prefix;
 startdate = pout.startdate;
 enddate = pout.enddate;
 newdim = pout.newdim;
+vector_bool = pout.vector;
 varname = pout.varname;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 if ~ismember(varname,{'Data','OMI'})
     E.badinput('VARNAME must be either ''Data'' or ''OMI''');
+end
+
+if newdim && vector_bool
+    E.badinput('NEWDIM and VECTOR are mutually exclusive')
 end
 
 wbbool = false;
@@ -129,6 +139,10 @@ end
 
 if ~isscalar(newdim) || (~islogical(newdim) && ~isnumeric(newdim))
     E.badinput('The parameter newdim must be understood as a scalar logical.')
+end
+
+if ~isscalar(vector_bool) || (~islogical(vector_bool) && ~isnumeric(vector_bool))
+    E.badinput('The parameter vector must be understood as a scalar logical.')
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -190,6 +204,8 @@ for a=1:numel(F)
             if newdim
                 n = ndims(Data(c).(datafields{b}));
                 varargout{b} = cat(n+1, varargout{b}, Data(c).(datafields{b}));
+            elseif vector_bool
+                varargout{b} = cat(1, varargout{b}, Data(c).(datafields{b})(:));
             elseif ~newdim && ismatrix(Data(c).(datafields{b}))
                 varargout{b} = cat(1, varargout{b}, Data(c).(datafields{b}));
             elseif ~newdim && ~ismatrix(Data(c).(datafields{b}))
