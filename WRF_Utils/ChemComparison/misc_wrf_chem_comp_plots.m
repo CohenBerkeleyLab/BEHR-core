@@ -125,7 +125,28 @@ end
         line(dc3_ft_wrf_bl, dc3_pres, 'color', 'k', 'linestyle', '--'); % just a check that we are plotting the same profile
         set(gca,'ydir','reverse','fontsize',14);
         xlabel('[NO_2] (ppmv)'); title('DC3 FT, WRF BL');
-       
+        
+        
+        % Alternate figure for group meeting
+        subplot(1,3,1);
+        line(wrf_prof, wrf_pres, 'color', 'r', 'marker', 'x');
+        set(gca,'ydir','reverse','fontsize',14);
+        xlabel('[NO_2] (ppmv)'); ylabel('Pressure (hPa)'); title('WRF avg. profile');
+        
+        subplot(1,3,2);
+        line(wrf_prof(wrf_pres > 750), wrf_pres(wrf_pres > 750), 'color', 'r', 'marker', 'x');
+        line(wrf_prof(wrf_pres < 375), wrf_pres(wrf_pres < 375), 'color', 'r', 'marker', 'x');
+        line(dc3_prof(wrf_pres < 750 & wrf_pres > 375), dc3_pres(wrf_pres < 750 & wrf_pres > 375), 'color', 'b', 'marker', 's');
+        line(dc3_mt_wrf_bl_ut, wrf_pres, 'color', 'k', 'linestyle', '--');
+        set(gca,'ydir','reverse','fontsize',14);
+        xlabel('[NO_2] (ppmv)'); title('WRF avg. profile w/ DC3 mid trop');
+        
+        subplot(1,3,3);
+        l(1)=line(dc3_prof(dc3_pres < 750), dc3_pres(dc3_pres < 750), 'color', 'b', 'marker', 's');
+        l(2)=line(wrf_prof(wrf_pres > 750), wrf_pres(wrf_pres > 750), 'color', 'r', 'marker', 'x');
+        set(gca,'ydir','reverse','fontsize',14);
+        xlabel('[NO_2] (ppmv)'); title('DC3 FT, WRF BL');
+        legend(l', {'DC3 data', 'WRF Data'})
         
         % Assume profiles at the center of the US, in June
         us_clon = -95;
