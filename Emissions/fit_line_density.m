@@ -137,7 +137,7 @@ end
 if ~isempty(lbin) && numel(lbin) ~= 5
     E.badinput('If an lb is specified as input, it must have five elements')
 end
-if ~ismember(emgtype,{'defoy','lu'})
+if ~ismember(emgtype,{'defoy','lu','conv'})
     E.badinput('The parameter ''emgtype'' must be one of defoy or lu')
 end
 if ~ismember(fittype,{'ssresid','unexvar'})
@@ -175,11 +175,26 @@ end
         e(isnan(e)) = Inf;
     end
 
+    function e = trunc_exp(f,x)
+        e = exp( -(x - f(3))/f(2) );
+        e(x < f(3)) = 0;
+    end
+
+    function e = gaussian(f,x)
+        e = 1 ./ (sqrt(2*pi) .* f(4)) * exp( -(x .^ 2) ./ (2 * f(4).^2) );
+    end
+
+    function e = emgfxn_conv(f,x)
+        e = f(1) ./ f(2) .* conv(trunc_exp(f,x), gaussian(f,x), 'same') + f(5);
+    end
+
 switch emgtype
     case 'defoy'
         emgfxn = @emgfxn_defoy;
     case 'lu'
         emgfxn = @emgfxn_lu;
+    case 'conv'
+        emgfxn = @emgfxn_conv;
 end
 
 if strcmp(fittype,'ssresid')
