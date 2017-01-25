@@ -94,6 +94,8 @@ end
         wrf_ft_dc3_bl(wrf_pres > 750) = dc3_prof(dc3_pres > 750);
         dc3_mt_wrf_bl_ut = wrf_prof;
         dc3_mt_wrf_bl_ut(wrf_pres < 750 & wrf_pres > 375) = dc3_prof(dc3_pres < 750 & dc3_pres > 375);
+        dc3_rl_wrf_bl_ft = wrf_prof;
+        dc3_rl_wrf_bl_ft(wrf_pres >= 700 & wrf_pres <= 875) = dc3_prof(dc3_pres >= 700 & dc3_pres <= 875);
         
         figure; subplot(3,2,1);
         line(wrf_prof, wrf_pres, 'color', 'r', 'marker', 'x');
@@ -109,6 +111,13 @@ end
         line(wrf_prof(wrf_pres > 750 | wrf_pres < 375), wrf_pres(wrf_pres > 750 | wrf_pres < 375), 'color', 'r', 'marker', 'x');
         line(dc3_prof(wrf_pres < 750 & wrf_pres > 375), dc3_pres(wrf_pres < 750 & wrf_pres > 375), 'color', 'b', 'marker', 's');
         line(dc3_mt_wrf_bl_ut, wrf_pres, 'color', 'k', 'linestyle', '--');
+        set(gca,'ydir','reverse','fontsize',14);
+        ylabel('Pressure (hPa)'); title('WRF avg. profile w/ DC3 mid trop');
+        
+        subplot(3,2,4)
+        line(wrf_prof(wrf_pres > 875 | wrf_pres < 700), wrf_pres(wrf_pres > 875 | wrf_pres < 700), 'color', 'r', 'marker', 'x');
+        line(dc3_prof(wrf_pres <= 875 & wrf_pres >= 700), dc3_pres(wrf_pres <= 875 & wrf_pres >= 700), 'color', 'b', 'marker', 's');
+        line(dc3_rl_wrf_bl_ft, wrf_pres, 'color', 'k', 'linestyle', '--');
         set(gca,'ydir','reverse','fontsize',14);
         ylabel('Pressure (hPa)'); title('WRF avg. profile w/ DC3 mid trop');
         
@@ -128,12 +137,21 @@ end
         
         
         % Alternate figure for group meeting
-        subplot(1,3,1);
+        figure;
+        subplot(1,4,1);
         line(wrf_prof, wrf_pres, 'color', 'r', 'marker', 'x');
         set(gca,'ydir','reverse','fontsize',14);
         xlabel('[NO_2] (ppmv)'); ylabel('Pressure (hPa)'); title('WRF avg. profile');
+       
+        subplot(1,4,2);
+        line(wrf_prof(wrf_pres > 875), wrf_pres(wrf_pres > 875), 'color', 'r', 'marker', 'x');
+        line(wrf_prof(wrf_pres < 700), wrf_pres(wrf_pres < 700), 'color', 'r', 'marker', 'x');
+        line(dc3_prof(wrf_pres <= 875 & wrf_pres >= 700), dc3_pres(wrf_pres <= 875 & wrf_pres >= 700), 'color', 'b', 'marker', 's');
+        line(dc3_mt_wrf_bl_ut, wrf_pres, 'color', 'k', 'linestyle', '--');
+        set(gca,'ydir','reverse','fontsize',14);
+        xlabel('[NO_2] (ppmv)'); title('WRF avg. profile w/ DC3 mid trop');
         
-        subplot(1,3,2);
+        subplot(1,4,3);
         line(wrf_prof(wrf_pres > 750), wrf_pres(wrf_pres > 750), 'color', 'r', 'marker', 'x');
         line(wrf_prof(wrf_pres < 375), wrf_pres(wrf_pres < 375), 'color', 'r', 'marker', 'x');
         line(dc3_prof(wrf_pres < 750 & wrf_pres > 375), dc3_pres(wrf_pres < 750 & wrf_pres > 375), 'color', 'b', 'marker', 's');
@@ -141,7 +159,7 @@ end
         set(gca,'ydir','reverse','fontsize',14);
         xlabel('[NO_2] (ppmv)'); title('WRF avg. profile w/ DC3 mid trop');
         
-        subplot(1,3,3);
+        subplot(1,4,4);
         l(1)=line(dc3_prof(dc3_pres < 750), dc3_pres(dc3_pres < 750), 'color', 'b', 'marker', 's');
         l(2)=line(wrf_prof(wrf_pres > 750), wrf_pres(wrf_pres > 750), 'color', 'r', 'marker', 'x');
         set(gca,'ydir','reverse','fontsize',14);
@@ -157,16 +175,17 @@ end
         dc3_mt_wrf_bl_ut_amfs = amfSensitivityTest(dc3_mt_wrf_bl_ut, wrf_pres, us_clon, us_clat, 6);
         wrf_ft_dc3_bl_amfs = amfSensitivityTest(wrf_ft_dc3_bl, wrf_pres, us_clon, us_clat, 6);
         dc3_ft_wrf_bl_amfs = amfSensitivityTest(dc3_ft_wrf_bl, dc3_pres, us_clon, us_clat, 6);
+        dc3_rl_wrf_bl_ft_amfs = amfSensitivityTest(dc3_rl_wrf_bl_ft, wrf_pres, us_clon, us_clat, 6);
         warning(warn_state);
         
         % Print out everything
-        amf_cell = cell(numel(wrf_amfs), 10);
+        amf_cell = cell(numel(wrf_amfs), 11);
         for a = 1:numel(wrf_amfs)
             [x1,x2,x3,x4,x5] = ind2sub(size(wrf_amfs), a);
-            amf_cell(a,:) = {szas(x1), vzas(x2), raas(x3), albs(x4), surfps(x5), wrf_amfs(a), dc3_amfs(a), wrf_ft_dc3_bl_amfs(a), dc3_mt_wrf_bl_ut_amfs(a), dc3_ft_wrf_bl_amfs(a)};
+            amf_cell(a,:) = {szas(x1), vzas(x2), raas(x3), albs(x4), surfps(x5), wrf_amfs(a), dc3_amfs(a), dc3_rl_wrf_bl_ft_amfs(a), wrf_ft_dc3_bl_amfs(a), dc3_mt_wrf_bl_ut_amfs(a), dc3_ft_wrf_bl_amfs(a)};
         end
         
-        amf_table = cell2table(amf_cell, 'VariableNames', {'SZA','VZA','RAA','ALB','SurfP','WRF_AMF','DC3_AMF','WRF_FT_DC3_BL_AMF','WRF_BL_UT_DC3_MT_AMF','DC3_FT_WRF_BL_AMF'});
+        amf_table = cell2table(amf_cell, 'VariableNames', {'SZA','VZA','RAA','ALB','SurfP','WRF_AMF','DC3_AMF','DC3_ResidLayer_WRF_BL_FT_AMFS','WRF_FT_DC3_BL_AMF','WRF_BL_UT_DC3_MT_AMF','DC3_FT_WRF_BL_AMF'});
         if req_var_out == 0
             % print the table
             amf_table
