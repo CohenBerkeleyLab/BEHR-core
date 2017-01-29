@@ -332,9 +332,12 @@ end
     end
 
     function [air_data, wrf_data, xstr] = read_data(Match)
-        comparisons = {'NOx','NO2','MPN','HNO3'};
+        comparisons = {'NOx','NO2','MPN','HNO3','NO2:NO'};
         if isfield(Match.wrf,'lnox_total')
             comparisons{end+1} = 'Aircraft NOx vs model LNOx';
+        end
+        if isfield(Match.wrf, 'PHOTR_NO2')
+            comparisons{end+1} = 'NO2 Photolysis';
         end
         quantity = ask_multichoice('Which species to compare?', comparisons, 'list', true);
         % The DC3 NO2 and MPN data have already been corrected for MPN
@@ -358,10 +361,18 @@ end
                 air_data = Match.data.hno3;
                 wrf_data = Match.wrf.hno3;
                 xstr = 'HNO_3';
+            case 'no2:no'
+                air_data = Match.data.no2 ./ Match.data.no;
+                wrf_data = Match.wrf.no2 ./ Match.wrf.no;
+                xstr = 'NO2/NO ratio';
             case 'aircraft nox vs model lnox'
                 air_data = (Match.data.no + Match.data.no2);
                 wrf_data = Match.wrf.lnox_total;
                 xstr = 'Aircraft NOx, WRF lnox total';
+            case 'no2 photolysis'
+                air_data = Match.data.PHOTR_NO2;
+                wrf_data = Match.wrf.PHOTR_NO2;
+                xstr = 'jNO_2 (min^{-1})';
         end
         
         % Also make sure that NaNs in one vector are NaNs in the other
