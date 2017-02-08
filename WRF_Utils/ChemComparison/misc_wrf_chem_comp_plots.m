@@ -333,6 +333,9 @@ end
 
     function [air_data, wrf_data, xstr] = read_data(Match)
         comparisons = {'NOx','NO2','MPN','HNO3','NO2:NO'};
+        if isfield(Match.wrf,'o3') && isfield('Match.data','o3')
+            comparisons{end+1} = 'o3';
+        end
         if isfield(Match.wrf,'lnox_total')
             comparisons{end+1} = 'Aircraft NOx vs model LNOx';
         end
@@ -365,6 +368,10 @@ end
                 air_data = Match.data.no2 ./ Match.data.no;
                 wrf_data = Match.wrf.no2 ./ Match.wrf.no;
                 xstr = 'NO2/NO ratio';
+            case 'o3'
+                air_data = Match.data.o3;
+                wrf_data = Match.wrf.o3;
+                xstr = 'O_3';
             case 'aircraft nox vs model lnox'
                 air_data = (Match.data.no + Match.data.no2);
                 wrf_data = Match.wrf.lnox_total;
