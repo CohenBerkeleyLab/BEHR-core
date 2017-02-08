@@ -8,7 +8,8 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %   strings.
 %
 %   CAT_SAT_DATA( DATA, DATAFIELDS ) will concatenate all swaths in the
-%   structure DATA for the fields specified in DATAFIELDS.
+%   structure DATA for the fields specified in DATAFIELDS. If DATAFIELDS is
+%   an empty array, all fields will be concatenated.
 %
 %   Parameter arguments are:
 %
@@ -28,6 +29,14 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %       be concatenated along a new dimension (so a 2D variable will be
 %       concatenated along the third dimension, a 3D one along the fourth).
 %       When false, they will be concatenated in the along track dimension.
+%
+%       'vector' - boolean, defaults to false. When true, each swatch is
+%       resized into a column vector before concatenation. Mutually
+%       exclusive with 'newdim'.
+%
+%       'varname' - must be the string 'Data' or 'OMI'. 'Data' is default.
+%       Indicates whether the structure concatenated should be the native
+%       pixels ('Data') or the gridded pixels ('OMI').
 %
 %       'DEBUG_LEVEL' - set to 0 to suppress debugging messages, defaults
 %       to 1. Set to 'visual' to use the waitbar dialogue.
@@ -52,6 +61,8 @@ end
 
 if ischar(datafields)
     datafields = {datafields};
+elseif isempty(datafields) && isstruct(filepath)
+    datafields = fieldnames(Data);
 elseif ~iscell(datafields) || any(~iscellcontents(datafields,'ischar'))
     E.badinput('datafields must be a string or cell array of strings')
 end
@@ -61,6 +72,8 @@ p.addParameter('prefix','',@ischar);
 p.addParameter('startdate','');
 p.addParameter('enddate','');
 p.addParameter('newdim',false);
+p.addParameter('vector',false);
+p.addParameter('varname','Data');
 p.addParameter('DEBUG_LEVEL',1,@(x) (ischar(x) || isnumeric(x) && isscalar(x)));
 
 p.parse(varargin{:});
@@ -70,7 +83,17 @@ prefix = pout.prefix;
 startdate = pout.startdate;
 enddate = pout.enddate;
 newdim = pout.newdim;
+vector_bool = pout.vector;
+varname = pout.varname;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
+
+if ~ismember(varname,{'Data','OMI'})
+    E.badinput('VARNAME must be either ''Data'' or ''OMI''');
+end
+
+if newdim && vector_bool
+    E.badinput('NEWDIM and VECTOR are mutually exclusive')
+end
 
 wbbool = false;
 if ischar(DEBUG_LEVEL)
@@ -121,6 +144,10 @@ if ~isscalar(newdim) || (~islogical(newdim) && ~isnumeric(newdim))
     E.badinput('The parameter newdim must be understood as a scalar logical.')
 end
 
+if ~isscalar(vector_bool) || (~islogical(vector_bool) && ~isnumeric(vector_bool))
+    E.badinput('The parameter vector must be understood as a scalar logical.')
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN FUNCTION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -156,7 +183,13 @@ for a=1:numel(F)
             continue
         end
         
-        load(fullfile(filepath, F(a).name),'Data'); % brings the variable Data into the workspace
+        D = load(fullfile(filepath, F(a).name),varname);
+        if ~isfield(D, varname)
+            fprintf('%s does not contain the variable "%s", skipping\n', F(a).name, varname);
+            continue
+        else
+            Data = D.(varname);
+        end
     
         if DEBUG_LEVEL > 0
             fprintf('Loading file %s...\n',F(a).name);
@@ -174,6 +207,8 @@ for a=1:numel(F)
             if newdim
                 n = ndims(Data(c).(datafields{b}));
                 varargout{b} = cat(n+1, varargout{b}, Data(c).(datafields{b}));
+            elseif vector_bool
+                varargout{b} = cat(1, varargout{b}, Data(c).(datafields{b})(:));
             elseif ~newdim && ismatrix(Data(c).(datafields{b}))
                 varargout{b} = cat(1, varargout{b}, Data(c).(datafields{b}));
             elseif ~newdim && ~ismatrix(Data(c).(datafields{b}))

@@ -52,6 +52,9 @@ switch plttype
         compare_to_geos_profs;
     case 'compare2runs'
         compare_2_runs;
+    case 'lnox-test'
+        compare_lnox;
+   
 end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1230,6 +1233,51 @@ end
         end
         
         
+    end
+
+    function compare_lnox
+        % Plot a pcolor plot of difference in no2 vs. level and time.
+        % Compares case with lnox on vs off, for now. Can make more general
+        % later
+        
+        sharedir = '/Volumes/share2/USERS/LaughnerJ/WRF/Atlanta/';
+        F = dir(sharedir);
+        F(1:2) = []; % remove the . and .. entries
+        F = {F.name};
+        base_dir = ask_multichoice('Choose base directory', F, 'list', true);
+        F(strcmp(base_dir, F)) = [];
+        new_dir = ask_multichoice('Choose new directory', F, 'list', true);
+        
+        F_base = dir(fullfile(sharedir, base_dir, 'wrfout*'));
+        F_new = dir(fullfile(sharedir, new_dir, 'wrfout*'));
+        
+        % Keep only those files present in both directories
+        % will use same structure for both after this
+        xx = ismember({F_base.name}, {F_new.name});
+        F = F_base(xx);
+        dnums = date_from_wrf_filenames(F);
+        
+        no2_nolnox = squeeze(read_wrf_vars(fullfile(sharedir,base_dir), F, 'no2'));
+        no2_lnox = squeeze(read_wrf_vars(fullfile(sharedir,new_dir), F, 'no2'));
+        
+        sz = size(no2_nolnox);
+        if ~isequal(size(no2_lnox), sz)
+            error('no2 arrays have different sizes')
+        end
+        
+        no2_nolnox = reshape(no2_nolnox, [], sz(3), sz(4));
+        no2_lnox = reshape(no2_lnox, [], sz(3), sz(4));
+        
+        % Average and make the time dimension first
+        no2_nolnox = squeeze(nanmean(no2_nolnox,1))';
+        no2_lnox = squeeze(nanmean(no2_lnox,1))';
+        
+        figure;
+        pcolor(repmat(dnums',1,sz(3)), repmat((1:size(no2_lnox,2)),sz(4),1), no2_lnox - no2_nolnox);
+        datetick('x');
+        shading flat
+        colormap(blue_red_cmap);
+        colorbar;
     end
     %%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%% DATA FUNCTIONS %%%%%

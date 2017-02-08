@@ -161,6 +161,9 @@ echo "addpath(genpath('${HOME}/Documents/MATLAB/Utils'))" >> ${MATRUNDIR}/runscr
 echo "global onCluster; onCluster = true;" >> ${MATRUNDIR}/runscript_pub.m
 echo "global numThreads; numThreads = 1;" >> ${MATRUNDIR}/runscript_pub.m
 echo "global mat_file_dir; mat_file_dir = '$BEHRDIR'" >> ${MATRUNDIR}/runscript_pub.m
+# Ensure that the website's record of the version number is up-to-date. Do this first so that if there isn't
+# any data to publish, it still gets updated.
+echo "update_behr_version_website;" >> ${MATRUNDIR}/runscript_pub.m
 # Native HDF files
 echo "global save_dir; save_dir = '${HDFSAVEDIR}/behr_hdf'" >> ${MATRUNDIR}/runscript_pub.m
 echo "BEHR_publishing_v2('hdf','native',{},'${startdate}', '${enddate}'); " >> ${MATRUNDIR}/runscript_pub.m
@@ -170,8 +173,7 @@ echo "BEHR_publishing_v2('txt','native',{},'${startdate}', '${enddate}'); " >> $
 # Gridded HDF files
 echo "global save_dir; save_dir = '${HDFSAVEDIR}/behr_regridded_hdf'" >> ${MATRUNDIR}/runscript_pub.m
 echo "BEHR_publishing_v2('hdf','gridded',{},'${startdate}', '${enddate}');" >> ${MATRUNDIR}/runscript_pub.m
-# Ensure that the website's record of the version number is up-to-date.
-echo "update_behr_version_website; exit(0)" >> ${MATRUNDIR}/runscript_pub.m
+echo "exit(0)" >> ${MATRUNDIR}/runscript_pub.m
 
 startmatlab -r "run('${MATRUNDIR}/runscript_pub.m')" > "${MATRUNDIR}/mat-pub.log"
 

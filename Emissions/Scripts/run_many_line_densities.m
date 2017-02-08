@@ -91,6 +91,8 @@ fprintf('\tSlow coarse monthly\n')
 
 return
 
+return
+
 F = dir(fullfile(behr_work_dir, wrf_dir, '*.mat'));
 fdnums = nan(size(F));
 for a=1:numel(fdnums)

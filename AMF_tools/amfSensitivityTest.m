@@ -48,26 +48,26 @@ if ~isscalar(numThreads); E.badvartype(numThreads, 'scalar'); end
 %%%%%%%%%%%%%%%%%%%%%%
 
 % # SZAs between 0 and 88 degrees to test
-nSZA = 2;%9;
+nSZA = 3;%9;
 
 % # VZAs between 0 and 70 degrees to test
-nVZA = 1;%6;
+nVZA = 3;%6;
 
 % # RAA (rel. azimuth angles) between 0 and 180 degrees to test
-nRAA = 1;%11;
+nRAA = 3;%11;
 
 % Surface albedo can be between 0 and 1; but you can reset the min and max
 % to restrict to i.e. 0 and 0.1 - this allows you to examine effects of
 % albedo in a range appropriate to a ground type or clouds.
 minAlb = 0;
 maxAlb = 0.1;
-nAlb = 1;%6;
+nAlb = 4;%6;
 
 % Surface pressure can vary between 1013 and 0.003 hPa; but like albedo,
 % you may reset the min and max.
 minSurfPres = 880;
 maxSurfPres = 1013;
-nSurfPres = 1;%5;
+nSurfPres = 2;%5;
 
 % set to 'OMI' (eventually perhaps 'GOME' will be an option) to determine
 % what pressure levels to use
@@ -196,8 +196,7 @@ for x6 = 1:n6;
                             cldRadFrac_i = 0;
                             dAmfCld = rDamf2(fileDamf, presLevels, sza_i, vza_i, phi_i, cloudalbedo, cloudPres_i);
                             
-                            noGhost = 1; ak = 0;
-                            amf_i = omiAmfAK2(surfPres_i, cloudPres_i, cldFrac_i, cldRadFrac_i, presLevels, dAmfClr, dAmfCld, temperature, interp_profile, interp_profile, noGhost, ak);
+                            amf_i = omiAmfAK2(surfPres_i, cloudPres_i, cldFrac_i, cldRadFrac_i, presLevels, dAmfClr, dAmfCld, temperature, interp_profile);
                             
                             AMFs(x1,x2,x3,x4,x5,x6,x7) = amf_i;
                         end
