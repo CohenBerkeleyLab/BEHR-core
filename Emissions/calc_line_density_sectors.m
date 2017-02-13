@@ -1,4 +1,4 @@
-function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, num_valid_obs, nox, debug_cell ] = calc_line_density_sectors( fpath, fnames, center_lon, center_lat, theta, varargin )
+function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, num_valid_obs, nox, debug_cell ] = calc_line_density_sectors( fdates, center_lon, center_lat, theta, windvel, varargin )
 %[ NO2_X, NO2_LINEDENS, NO2_LINEDENS_STD, LON, LAT, NO2_MEAN, NO2_STD, NUM_VALID_OBS] = CALC_LINE_DENSITY( FPATH, FNAMES, CENTER_LON, CENTER_LAT, THETA )
 %   Calculate a wind-aligned line density for a given time period.
 %
@@ -24,6 +24,10 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, nu
 %
 %       theta - a vector of wind directions given as degrees CCW from east
 %       between -180 and 180. Must match the number of files to be loaded.
+%
+%       'windvel' - a vector of wind velocities to be used in separated
+%       days into slow and fast wind conditions. The separation value can
+%       be altered with the parameter 'windsepcrit'.
 %
 %   Outputs:
 %
@@ -64,22 +68,8 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, nu
 %       (as is default) an empty vector which will use all the swaths present
 %       in each file.
 %
-%       'windvel' - a vector of wind velocities to be used in filtering out
-%       days that do not meet desired criteria. If not given, all days that
-%       have sufficient coverage (pixels not removed for clouds or row
-%       anomaly) are used.
-%
-%       'windcrit' - the number to compare windvel values to, if given, the
-%       parameter 'windop' must also be specified.
-%
-%       'windop' - can be '<', '>', '<=', or '>=' and will be used with
-%       'windcrit' to evalute windvel values in the expression windvel
-%       <windop> windcrit. If that evaluates to false, the day will be
-%       skipped.
-%
-%       'crit_logical' - an alternative to the wind inputs, this should be a 
-%       logical vector that is true for days that shold be included. Must
-%       have the same number of elements as the number of files to use.
+%       'windsepcrit' - the speed used to separate slow and fast winds.
+%       Defaults to 2 (m/s).
 %
 %       'rel_box_corners' - a four element vector to be passed to rotate
 %       plume describing how large a box to use to circumscribe the plumes.
@@ -89,13 +79,12 @@ function [ no2_x, no2_linedens, no2_lindens_std, lon, lat, no2_mean, no2_std, nu
 %       with too many unfilled pixels and use all days that meet the
 %       windvel criterion. Defaults to false.
 %
-%       'interp' - boolean, defaults to true. If true, individual days are
+%       'interp' - boolean, defaults to false. If true, individual days are
 %       chosen if they have a sufficient number of viable observations to
 %       represent the entire domain well. Any missing elements are filled
 %       my interpolation.  If false, bad observations (cloud fraction or 
 %       row anomaly) are removed, but all days are averaged together. This
 %       mode is closer to how Lu et al. 2015 did their analysis, I believe.
-%       In the future, the default may change to false.
 %
 %       'DEBUG_LEVEL' - level of output to console. Defaults to 1, 0 shuts
 %       off all output.
@@ -111,13 +100,10 @@ E = JLLErrors;
 p=inputParser;
 p.addOptional('nox_or_no2','no2',@(x) ismember(lower(x),{'nox','no2'}));
 p.addParameter('data_ind',[]);
-p.addParameter('windvel',[]);
-p.addParameter('windcrit',[]);
-p.addParameter('windop','');
-p.addParameter('crit_logical',[]);
+p.addParameter('windsepcrit',2);
 p.addParameter('rel_box_corners',[]);
-p.addParameter('force_calc',false);
-p.addParameter('interp',true);
+p.addParameter('datatype','domino');
+p.addParameter('gridingmethod','interp');
 p.addParameter('DEBUG_LEVEL',1);
 
 p.parse(varargin{:});
@@ -125,33 +111,11 @@ p.parse(varargin{:});
 pout=p.Results;
 nox_or_no2 = pout.nox_or_no2;
 data_ind = pout.data_ind;
-windvel = pout.windvel;
-windcrit = pout.windcrit;
-windop = pout.windop;
-crit_logical = pout.crit_logical;
+windsepcrit = pout.windsepcrit;
 rel_box_corners = pout.rel_box_corners;
-force_calc = pout.force_calc;
-interp_bool = pout.interp;
+datatype = pout.datatype;
+grid_method = pout.griddingmethod;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
-
-if ~ischar(fpath)
-    E.badinput('fpath must be a string')
-elseif ~exist(fpath,'dir')
-    E.badinput('fpath (%s) does not exist',fpath);
-end
-
-if ischar(fnames)
-    fnames_struct = dir(fullfile(fpath,fnames));
-elseif iscellstr(fnames);
-    fnames_struct = struct('name', repmat({''},size(fnames)));
-    for f=1:numel(fnames)
-        fnames_struct(f).name = fnames{f};
-    end
-elseif isstruct(fnames) && isfield(fnames,'name')
-    fnames_struct = fnames;
-else
-    E.badinput('Input fnames is not a valid format; see documentation')
-end
 
 use_data_ind = true;
 if ~isempty(data_ind) && ~isnumeric(data_ind)
@@ -166,68 +130,23 @@ if ~isscalar(center_lat) || ~isnumeric(center_lat)
     E.badinput('center_lat must be a scalar number')
 end
 
-if ~isnumeric(theta) || any(theta < -180 | theta > 180) || numel(theta) ~= numel(fnames_struct)
+if ~isnumeric(theta) || any(theta < -180 | theta > 180) || numel(theta) ~= numel(fdates)
     E.badinput('theta must be a numeric vector with values between -180 and +180 that has the same number of elements as the number of files to be loaded')
 end
 
-if ~isempty(crit_logical) && (numel(crit_logical) ~= numel(fnames_struct) || ~islogical(crit_logical))
-    E.badinput('crit_logical must be a logical vector with the same number of elements as the number of files to be loaded');
+if ~isscalar(windsepcrit) || ~isnumeric(windsepcrit)
+    E.badinput('windsepcrit must be a scalar number')
+elseif windsepcrit <= 0
+    warning('windsepcrit should be >0')
 end
-
-% Check that if any one of windvel, windop, or windcrit are passed,
-% all of them are. Alternatively, if the crit_logical matrix is
-% available, none of those should be given.
-E.addCustomError('windvelcrit','If any of windvel, windop, or windcrit are given, all must be given');
-E.addCustomError('crit_conflict','crit_logical and the windvel/windop/windcrit parameters are mutually exclusive. You may only set one of them.');
-windvel_set = false;
-if ~isempty(windvel)
-    if ~isnumeric(windvel) || any(windvel < 0) || numel(windvel) ~= numel(fnames_struct)
-        E.badinput('windvel (if given) must be a numeric vector with values >= 0 that has the same number of elements as the number of files to be loaded')
-    end
-    windvel_set = true;
-    if ~isempty(crit_logical)
-        E.callCustomError('crit_conflict');
-    end
-end
-if ~isempty(windcrit)
-    if ~isnumeric(windcrit) || ~isscalar(windcrit) || windcrit < 0
-        E.badinput('windcrit (if given) must be a numeric vector with values >= 0 that has the same number of elements as the number of files to be loaded')
-    elseif ~windvel_set
-        E.callCustomError('windvelcrit');
-    end
-    if ~isempty(crit_logical)
-        E.callCustomError('crit_conflict');
-    end
-elseif windvel_set
-    E.callCustomError('windvelcrit');
-end
-if ~isempty(windop)
-    if ~ischar(windop) || ~ismember(windop,{'<','>','<=','>='})
-        E.badinput('windop (if given) must be one of ''<'', ''>'', ''<='', ''>=''')
-    elseif ~windvel_set
-        E.callCustomError('windvelcrit');
-    end
-    if ~isempty(crit_logical)
-        E.callCustomError('crit_conflict');
-    end
-elseif windvel_set
-    E.callCustomError('windvelcrit')
-end
-% Finished with the wind crit input checking
 
 if ~isempty(rel_box_corners) && ( ~isvector(rel_box_corners) || numel(rel_box_corners) ~= 4 )
     E.badinput('rel_box_corners must be a 4 element vector');
-end
-if ~isscalar(force_calc) || ~islogical(force_calc)
-    E.badinput('force_calc must be a scalar logical');
 end
 if ~isscalar(DEBUG_LEVEL) || ~isnumeric(DEBUG_LEVEL) || DEBUG_LEVEL < 0
     E.badinput('DEBUG_LEVEL must be a scalar number >= 0.')
 end
 
-if ~isscalar(interp_bool) || ~islogical(interp_bool)
-    E.badinput('interp must be a scalar logical')
-end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -241,22 +160,20 @@ else
     nox_no2_scale = 1;
 end
 
-if isempty(crit_logical) && windvel_set
-    crit_logical = eval(sprintf('windvel %s windcrit',windop));
+switch lower(datatype)
+    case 'domino'
+        Grid = design_dom_grid(0.18, rel_box_corners(2));
 end
 
 create_array = true;
 i = 0;
-for d=1:numel(fnames_struct)
-    D = load(fullfile(fpath,fnames_struct(d).name),'Data');
-    
-    if ~crit_logical(d)
-        if DEBUG_LEVEL > 0; fprintf('Condition criteria not met, skipping %s\n',fnames_struct(d).name); end
-        continue
-    end
+for d=1:numel(fdates)
+    D = load_files_for_day(fdates(d), datatype);
     
     if ~use_data_ind
-        n_swath = numel(D.Data);
+        xx_swath = find_useful_swaths(D.Data, center_lon, center_lat, n_rows_excl);
+        data_ind = find(xx_swath);
+        n_swath = sum(xx_swath);
     else 
         n_swath = numel(data_ind);
     end
@@ -266,70 +183,50 @@ for d=1:numel(fnames_struct)
     % directions contribute to certain features of the line density.
     for s=1:n_swath
         i = i+1;
-        if ~use_data_ind
-            e = s;
-        else
-            e = data_ind(s);
-        end
-        if DEBUG_LEVEL > 0; disp('Rotating plume'); end
-        if ~isempty(rel_box_corners)
-            OMI = rotate_plume(D.Data(e), center_lon, center_lat, theta(d), rel_box_corners);
-        else
-            OMI = rotate_plume(D.Data(e), center_lon, center_lat, theta(d));
-        end
-        if isempty(OMI.Longitude)
-            if DEBUG_LEVEL > 0; fprintf('No grid cells in %s\n',fnames_struct(d).name); end 
-            continue
-        end
-        OMI = omi_pixel_reject(OMI,'omi',0.2,'XTrackFlags');
-        xx = OMI.Areaweight > 0;
-        if create_array
-            directions = {'W','SW','S','SE','E','NE','N','NW'};
-            theta_bin_edges = [-180, -157.5, -112.5, -67.5, -22.5, 22.5, 67.5, 112.5, 157.5];
-            nox = make_empty_struct_from_cell(directions, nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct)*n_swath));
-            aw = make_empty_struct_from_cell(directions, nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fnames_struct)*n_swath));
-            lon = OMI.Longitude;
-            lat = OMI.Latitude;
-            debug_cell = cell(numel(fnames_struct)*n_swath,1);
-            create_array = false;
-        end
+        e = data_ind(s);
         
-        debug_cell{i} = sprintf('%s: swath %d', fnames_struct(d).name, e);
-
-        
-        % Find which bin this belongs in
-        if theta(d) < theta_bin_edges(2) || theta(d) > theta_bin_edges(end)
-            bin = 'W';
-        else
-            theta_xx = theta_bin_edges(1:end-1) <= theta(d) & theta_bin_edges(2:end) > theta(d);
-            bin = directions{theta_xx};
-        end
-        
-        if interp_bool
-            % This criterion accounts for how many neighbors are empty, giving more
-            % weight to large clumps of NaNs (due to row anomaly or clouds) and
-            % less weight to scattered pixels. It still looks like 50% is a good
-            % cutoff.
-            mfrac = badpix_metric(~xx);
-            if mfrac > .5 && ~force_calc
-                if DEBUG_LEVEL > 0; fprintf('Too many clumped missing pixels, skipping %s\n',fnames_struct(d).name); end
+        if strcmpi(grid_method,'rotate')
+            E.notimplemented('grid_method == rotate (not updated to use NO2WindSector class');
+            if DEBUG_LEVEL > 0; disp('Rotating plume'); end
+            if ~isempty(rel_box_corners)
+                OMI = rotate_plume(D.Data(e), center_lon, center_lat, theta(d), rel_box_corners);
+            else
+                OMI = rotate_plume(D.Data(e), center_lon, center_lat, theta(d));
+            end
+            if isempty(OMI.Longitude)
+                if DEBUG_LEVEL > 0; fprintf('No grid cells in %s\n',datestr(fdates(d))); end
                 continue
             end
+            OMI = omi_pixel_reject(OMI,'omi',0.2,'XTrackFlags');
+            xx = OMI.Areaweight > 0;
+            if create_array
+                directions = {'W','SW','S','SE','E','NE','N','NW'};
+                theta_bin_edges = [-180, -157.5, -112.5, -67.5, -22.5, 22.5, 67.5, 112.5, 157.5];
+                nox = make_empty_struct_from_cell(directions, nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fdates)*n_swath));
+                aw = make_empty_struct_from_cell(directions, nan(size(OMI.Longitude,1), size(OMI.Longitude,2), numel(fdates)*n_swath));
+                lon = OMI.Longitude;
+                lat = OMI.Latitude;
+                debug_cell = cell(numel(fdates)*n_swath,1);
+                create_array = false;
+            end
             
-            % Fill in empty grid boxes by interpolation to prevent discontinuity in the
-            % line density due to an uneven number of missing values for different
-            % distances from the city.
-            if DEBUG_LEVEL > 0; disp('Interpolating to fill in gaps in NO2 matrix'); end
-            F = scatteredInterpolant(OMI.Longitude(xx), OMI.Latitude(xx), OMI.BEHRColumnAmountNO2Trop(xx));
-            Faw = scatteredInterpolant(OMI.Longitude(xx), OMI.Latitude(xx), OMI.Areaweight(xx));
-            nox.(bin)(:,:,i) = F(OMI.Longitude, OMI.Latitude)*nox_no2_scale;
-            aw.(bin)(:,:,i) = Faw(OMI.Longitude, OMI.Latitude);
-        else
+            debug_cell{i} = sprintf('%s: swath %d', datestr(fdates(d)), e);
+            
+            
+            % Find which bin this belongs in
+            if theta(d) < theta_bin_edges(2) || theta(d) > theta_bin_edges(end)
+                bin = 'W';
+            else
+                theta_xx = theta_bin_edges(1:end-1) <= theta(d) & theta_bin_edges(2:end) > theta(d);
+                bin = directions{theta_xx};
+            end
             
             OMI.BEHRColumnAmountNO2Trop(~xx) = nan;
             OMI.Areaweight(~xx) = nan;
             nox.(bin)(:,:,i) = OMI.BEHRColumnAmountNO2Trop*nox_no2_scale;
             aw.(bin)(:,:,i) = OMI.Areaweight;
+        else
+            [nox_slow, nox_fast] = grid_by_interp(D.Data(e), theta(d), windvel(d), Grid, nox_slow, nox_fast);
         end
     end
 end
@@ -382,45 +279,103 @@ for f=1:numel(directions)
 end
 end
 
-function [mfrac, msum] = badpix_metric(xx)
-% Calculates a metric for the badness of missing pixels. A missing grid
-% cell doesn't contribute to this metric unless it has at least one
-% neighbor that is also missing
-sz = size(xx);
-m = zeros(sz);
-for a=1:sz(1)
-    for b=1:sz(2)
-        if a > 1 && b > 1
-            m(a,b) = m(a,b) + xx(a-1, b-1);
-        end
-        if a > 1
-            m(a,b) = m(a,b) + xx(a-1,b);
-        end
-        if a > 1 && b < sz(2)
-            m(a,b) = m(a,b) + xx(a-1,b+1);
-        end
-        if b < sz(2)
-            m(a,b) = m(a,b) + xx(a,b+1);
-        end
-        if a < sz(1) && b < sz(2)
-            m(a,b) = m(a,b) + xx(a+1,b+1);
-        end
-        if a < sz(1)
-            m(a,b) = m(a,b) + xx(a+1,b);
-        end
-        if a < sz(1) && b > 1
-            m(a,b) = m(a,b) + xx(a+1,b-1);
-        end
-        if b > 1
-            m(a,b) = m(a,b) + xx(a,b-1);
-        end
+function xx = find_useful_swaths(Data, clon, clat, n_edge_rows)
+end_rows = [1+n_edge_rows, 60-n_edge_rows];
+xx = false(size(Data));
+for a=1:numel(Data)
+    westlon = interp1(Data(a).Latitude(end_rows(1),:), Data(a).Longitude(end_rows(1),:), clat);
+    eastlon = interp1(Data(a).Latitude(end_rows(2),:), Data(a).Longitude(end_rows(2),:), clat);
+    % Note: this will fail for center lons around the international date
+    % line
+    if westlon < clon && eastlon > clon
+        xx(a) = true;
     end
 end
+end
 
-% How many neighbors there are, i.e. the maximum value m could take on.
-% Corner cells have 3 neighbors, non-corner edge cells have 5 and non-edge
-% cells have 8.
-n_neighbors = prod(sz-2)*8 + (prod(sz) - prod(sz-2) - 4) * 5 + 12;
-msum = sum(m(:));
-mfrac = msum / n_neighbors;
+function D = load_files_for_day(dnum, datatype)
+switch datatype
+    case 'domino'
+        D.Data = load_domino_for_day(dnum);
+    otherwise
+        E.badinput('%s is not a recognized value for the parameter ''datatype''', datatype);
+end
+end
+
+function Data = load_domino_for_day(dnum)
+domino_root = '/Volumes/share-sat/SAT/OMI/DOMINOv2.0';
+year_str = datestr(dnum, 'yyyy');
+month_str = datestr(dnum, 'mm');
+f_str = sprintf('OMI-Aura_L2-OMDOMINO_%04dm%02d%02d*.he5', year(dnum), month(dnum), day(dnum));
+F = dir(fullfile(domino_root, year_str, month_str, f_str));
+fnames = cell(size(F));
+for a=1:numel(F)
+    fnames{a} = fullfile(domino_vcd_check, year_str, month_str, F(a).name);
+end
+
+dom_vars = {'Longitude', 'Latitude', 'TroposphericVerticalColumn', 'TroposphericColumnFlag', 'CloudFraction', 'SurfaceAlbedo'};
+
+addpath('/Users/Josh/Documents/MATLAB/Non BEHR Satellite/OMI Utils');
+Data = read_domino_simple(fnames{:}, 'variables', dom_vars);
+for a=1:numel(Data)
+    badvals = domino_pixel_reject(Data(a), 'cloudfrac', 0.3, 'nedgerows', 10);
+    Data(a).TroposphericVerticalColumn(badvals) = nan;
+end
+end
+
+function G = design_dom_grid(res, box_length, clon, clat)
+% Ask for a domain that puts the center lon and lat in the center box and
+% is long enough for the line densities requested. Add 0.5 so that we
+% properly locate the city in the center of a pixel, then add a number of
+% grid cells around the edge to give us some wiggle room, just in case.
+buffer = 5;
+
+nbox = ceil(box_length/res);
+deg_to_edge = res*(nbox + 0.5 + buffer);
+lon_origin = clon - deg_to_edge;
+lon_end = clon + deg_to_edge;
+lat_origin = clat - deg_to_edge;
+lat_end = clat + deg_to_edge;
+
+G = GlobeGrid(res, 'domain', [lon_origin, lon_end, lat_origin, lat_end]);
+end
+
+
+function [nox_slow, nox_fast] = grid_by_interp(Data, est_ntimes, theta, windvel, fast_slow_sep, Grid, nox_slow, nox_fast)
+% The name of this function is perhaps misleading; this is a gridding
+% approach that works with integrating the column densities to line
+% densities later on in the code. The key point is that for each wind
+% direction, NO2 column densities all around the city are stored; the
+% integration domain will be extracted later.
+
+E = JLLErrors;
+% First, grid the NO2 data
+no2_grid = nan(size(Grid.GridLon));
+count = zeros(size(Grid.GridLon));
+for a=1:numel(Data.Longitude)
+    [indx, indy] = Grid.GridcellContains(Data.Longitude(a), Data.Latitude(a));
+    if ~isempty(indx)
+        continue
+    end
+    
+    no2_grid(indx, indy) = nansum2(no2_grid(indx, indy) * count(indx, indy)) / (count(indx, indy)+1);
+    count(indx, indy) = count(indx, indy) + 1;
+end
+
+amclass = [isa(nox_slow, 'NO2WindSectors'), isa(nox_fast, 'NO2WindSectors')];
+if any(amclass) && ~all(amclass)
+    E.badinput('Do not input some but not all of the nox NO2WindSectors instances initialized')
+elseif all(amclass)
+    nox_slow = NO2WindSectors(size(no2_grid), est_ntimes);
+    nox_fast = NO2WindSectors(size(no2_grid), est_ntimes);
+end
+
+if windvel < fast_slow_sep
+    nox_slow.AddDataToDirection(no2_grid, theta, windvel);
+else
+    nox_fast.AddDataToDirection(no2_grid, theta, windvel);
+end
+
+
+
 end
