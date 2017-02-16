@@ -24,6 +24,7 @@ function OMI = hdf_quadrangle_BEHR(Data, OMI, maxx, minx, maxy, miny, lCoordLon,
 fill_val = -9e9;
 
 BEHRColumnAmountNO2Trop=fill_val * ones(maxx,maxy);
+BEHRColumnAmountNO2TropVisOnly=fill_val * ones(maxx,maxy);
 Time=fill_val * ones(maxx,maxy);
 ViewingZenithAngle=fill_val * ones(maxx,maxy);
 SolarZenithAngle=fill_val * ones(maxx,maxy);
@@ -46,6 +47,7 @@ ColumnAmountNO2Strat=fill_val * ones(maxx,maxy);
 GLOBETerpres=fill_val * ones(maxx,maxy);
 MODISAlbedo=fill_val * ones(maxx,maxy);
 BEHRAMFTrop=fill_val * ones(maxx,maxy);
+BEHRAMFTropVisOnly=fill_val * ones(maxx,maxy);
 MODISCloud=fill_val * ones(maxx,maxy);
 Row=fill_val * ones(maxx,maxy);
 Swath=fill_val * ones(maxx,maxy);
@@ -134,6 +136,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     %OMI standard product
     
     BEHRColumnAmountNO2Trop_val = Data.BEHRColumnAmountNO2Trop(x);
+    BEHRColumnAmountNO2TropVisOnly_val = Data.BEHRColumnAmountNO2TropVisOnly(x);
     Time_val = Data.Time(x);
     ViewingZenithAngle_val = Data.ViewingZenithAngle(x);
     SolarZenithAngle_val = Data.SolarZenithAngle(x);
@@ -156,6 +159,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     GLOBETerpres_val = Data.GLOBETerpres(x);
     MODISAlbedo_val = Data.MODISAlbedo(x);
     BEHRAMFTrop_val = Data.BEHRAMFTrop(x);
+    BEHRAMFTropVisOnly_val = Data.BEHRAMFTropVisOnly(x);
     MODISCloud_val = Data.MODISCloud(x);
     Row_val = Data.Row(x);
     Swath_val = Data.Swath(x);
@@ -225,6 +229,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     
                     % Regular fields will be a running average
                     BEHRColumnAmountNO2Trop(x_quad, y_quad) = sum([BEHRColumnAmountNO2Trop(x_quad, y_quad)*(Count(x_quad, y_quad)-1), BEHRColumnAmountNO2Trop_val])/Count(x_quad,y_quad);
+                    BEHRColumnAmountNO2TropVisOnly(x_quad, y_quad) = sum([BEHRColumnAmountNO2TropVisOnly(x_quad, y_quad)*(Count(x_quad, y_quad)-1), BEHRColumnAmountNO2TropVisOnly_val])/Count(x_quad,y_quad);
                     Time(x_quad, y_quad) = sum([Time(x_quad, y_quad)*(Count(x_quad, y_quad)-1), Time_val])/Count(x_quad,y_quad);
                     ViewingZenithAngle(x_quad, y_quad) = sum([ViewingZenithAngle(x_quad, y_quad)*(Count(x_quad, y_quad)-1), ViewingZenithAngle_val])/Count(x_quad,y_quad);
                     SolarZenithAngle(x_quad, y_quad) = sum([SolarZenithAngle(x_quad, y_quad)*(Count(x_quad, y_quad)-1), SolarZenithAngle_val])/Count(x_quad,y_quad);
@@ -247,6 +252,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     GLOBETerpres(x_quad, y_quad) = sum([GLOBETerpres(x_quad, y_quad)*(Count(x_quad, y_quad)-1), GLOBETerpres_val])/Count(x_quad,y_quad);
                     MODISAlbedo(x_quad, y_quad) = sum([MODISAlbedo(x_quad, y_quad)*(Count(x_quad, y_quad)-1), MODISAlbedo_val])/Count(x_quad,y_quad);
                     BEHRAMFTrop(x_quad, y_quad) = sum([BEHRAMFTrop(x_quad, y_quad)*(Count(x_quad, y_quad)-1), BEHRAMFTrop_val])/Count(x_quad,y_quad);
+                    BEHRAMFTropVisOnly(x_quad, y_quad) = sum([BEHRAMFTropVisOnly(x_quad, y_quad)*(Count(x_quad, y_quad)-1), BEHRAMFTropVisOnly_val])/Count(x_quad,y_quad);
                     MODISCloud(x_quad, y_quad) = sum([MODISCloud(x_quad, y_quad)*(Count(x_quad, y_quad)-1), MODISCloud_val])/Count(x_quad,y_quad);
                     Row(x_quad, y_quad) = sum([Row(x_quad, y_quad)*(Count(x_quad, y_quad)-1), Row_val])/Count(x_quad,y_quad);
                     Swath(x_quad, y_quad) = sum([Swath(x_quad, y_quad)*(Count(x_quad, y_quad)-1), Swath_val])/Count(x_quad,y_quad);
@@ -275,6 +281,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     
                     % Regular fields will be a running average
                     BEHRColumnAmountNO2Trop(x_quad, y_quad) = BEHRColumnAmountNO2Trop_val;
+                    BEHRColumnAmountNO2TropVisOnly(x_quad, y_quad) = BEHRColumnAmountNO2TropVisOnly_val;
                     Time(x_quad, y_quad) = Time_val;
                     ViewingZenithAngle(x_quad, y_quad) = ViewingZenithAngle_val;
                     SolarZenithAngle(x_quad, y_quad) = SolarZenithAngle_val;
@@ -297,6 +304,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     GLOBETerpres(x_quad, y_quad) = GLOBETerpres_val;
                     MODISAlbedo(x_quad, y_quad) = MODISAlbedo_val;
                     BEHRAMFTrop(x_quad, y_quad) = BEHRAMFTrop_val;
+                    BEHRAMFTropVisOnly(x_quad, y_quad) = BEHRAMFTropVisOnly_val;
                     MODISCloud(x_quad, y_quad) = MODISCloud_val;
                     Row(x_quad, y_quad) = Row_val;
                     Swath(x_quad, y_quad) = Swath_val;
@@ -317,6 +325,7 @@ end
 % Create the OMI structure for output
 OMI.Date = Data.Date;
 OMI.BEHRColumnAmountNO2Trop = BEHRColumnAmountNO2Trop;
+OMI.BEHRColumnAmountNO2TropVisOnly = BEHRColumnAmountNO2TropVisOnly;
 OMI.Time = Time;
 OMI.ViewingZenithAngle = ViewingZenithAngle;
 OMI.SolarZenithAngle = SolarZenithAngle;
@@ -339,6 +348,7 @@ OMI.ColumnAmountNO2Strat = ColumnAmountNO2Strat;
 OMI.GLOBETerpres = GLOBETerpres;
 OMI.MODISAlbedo = MODISAlbedo;
 OMI.BEHRAMFTrop = BEHRAMFTrop;
+OMI.BEHRAMFTropVisOnly = BEHRAMFTropVisOnly;
 OMI.MODISCloud = MODISCloud;
 OMI.Row = Row;
 OMI.Swath = Swath;

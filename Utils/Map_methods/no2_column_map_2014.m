@@ -39,11 +39,12 @@ function [cbhandle, GriddedColumn, longrid, latgrid, GriddedCount] = no2_column_
 %                function). Otherwise, defaults to no holidays.
 %   clouds = Use OMI cloud fraction (default) or MODIS cloud fraction
 %       ('modis').
-%   cloudfraccrit = The maximum allowable cloud fraction. Defaults to 200
-%       (0.2 real value) for OMI and 0 for MODIS
-%   rowanomaly = Parse mode for row anomaly (see function
-%       "omi_rowanomaly"). Default value is 'XTrackFlags', other options
-%       are 'AlwaysByRow', 'RowsByTime', and 'XTrackFlagsLight'.
+%   cloudfraccrit = The maximum allowable cloud fraction. Defaults to 0.2
+%       for OMI and 0 for MODIS 
+%   rowanomaly = Parse mode for row anomaly
+%       (see function "omi_rowanomaly"). Default value is 'XTrackFlags',
+%       other options are 'AlwaysByRow', 'RowsByTime', and
+%       'XTrackFlagsLight'.
 %   rows = restrict the averaging to using certain rows. This is useful to
 %       duplicate Luke's check where he averaged a month's worth of data
 %       from each side of the detector and found a significant difference

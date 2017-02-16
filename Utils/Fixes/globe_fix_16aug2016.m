@@ -99,7 +99,6 @@ parfor d=1:numel(dnums)
         save_name = sprintf('OMI_SP_v2-1B_%04d%02d%02d.mat',year(dnums(d)), month(dnums(d)), day(dnums(d)));
         saveData(fullfile(save_dir, save_name),Data);
     end
-    
 end
 
 

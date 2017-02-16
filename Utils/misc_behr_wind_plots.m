@@ -1015,7 +1015,14 @@ end
         end
         
         if strcmp(source,'wrf')
-            
+            % If we're not doing a difference, point both base and new to
+            % the same file. This skirts around an issue with loading the
+            % lat/lon
+            if strcmpi(diff_type,'d')
+                base_file = new_file;
+            elseif strcmpi(diff_type,'m')
+                new_file = base_file;
+            end
             
             XLONG = ncread(new_file, 'XLONG');
             XLAT = ncread(new_file, 'XLAT');
@@ -3642,10 +3649,12 @@ switch source
                 hybrid_path = NaN;
                 monthly_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR',wrf_coast),'monthly-13.5-lonwt-1822UTC');
             case 'c'
-                daily_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR_COARSE',wrf_coast),'hourly');
+                daily_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR_COARSE_13lonwt_1822UTC',wrf_coast),'hourly');
                 hybrid_path = NaN;
-                monthly_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR_COARSE',wrf_coast),'monthly');
-                warning('The coarse %s apriori using lonweight assuming OMI overpass at 1330 LST or profiles from 1800-2200 UTC has not been downloaded', apriori);
+                monthly_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR_COARSE_13lonwt_1822UTC',wrf_coast),'monthly');
+                if strcmpi(apriori, 'hourly')
+                    warning('The coarse hourly apriori using lonweight assuming OMI overpass at 1330 LST or profiles from 1800-2200 UTC has not been downloaded');
+                end
         end
     case 'behr'
         daily_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
