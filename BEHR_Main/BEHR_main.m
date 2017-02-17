@@ -103,11 +103,11 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = BEHR_paths('behr_mat_dir');
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Production tests/v2-1D';%BEHR_paths('behr_mat_dir');
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
-    sp_mat_dir = BEHR_paths('sp_mat_dir');
+    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Production tests/v2-1D';%BEHR_paths('sp_mat_dir');
     
     %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
     %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this

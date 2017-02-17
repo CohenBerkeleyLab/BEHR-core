@@ -156,7 +156,7 @@ if onCluster
     
 else
     %This is the directory where the final .mat file will be saved.
-    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Production tests';%BEHR_paths('sp_mat_dir');
+    sp_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Production tests/v2-1D';%BEHR_paths('sp_mat_dir');
     
     %This is the directory where the he5 files are saved.
     omi_he5_dir = BEHR_paths('omno2_dir');
@@ -206,6 +206,12 @@ terpres(isnan(terpres)) = 0;
 % total_days=datenum(date_end)-datenum(last_date)+1;
 % for j=1:total_days;
 
+if onCluster
+    n_workers=numThreads;
+else
+    n_workers=0;
+end
+
 if onCluster && isempty(gcp('nocreate'))
     parpool(numThreads);
 end
@@ -214,7 +220,7 @@ onCluster_local = onCluster;
 
 datenums = datenum(date_start):datenum(date_end);
 
-parfor j=1:length(datenums)
+parfor(j=1:length(datenums), n_workers)
     %Read the desired year, month, and day
     R=datenums(j);
     date=datestr(R,26);
