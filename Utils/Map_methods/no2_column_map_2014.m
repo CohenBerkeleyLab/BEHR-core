@@ -197,7 +197,13 @@ for period = 1:per %Loop over each temporal period you wish to average
         elseif ~isbusday(date,holidays,weekend) % Tests if the day is a weekend based on the weekend flags set and whether or not to use US holidays.
             if DEBUG_LEVEL > 1; fprintf('\t %s will not be considered for averaging\n',date); end
         else
-            load(file,'OMI')
+            O=load(file,'OMI');
+            if isempty(O.OMI)
+                warning('No gridded data found in %s, skipping', file);
+                continue
+            else
+                OMI = O.OMI;
+            end
             
             if first_time_through %The first time through, generate the Sum matrices that will hold the total areaweight and weighted column density
                 if DEBUG_LEVEL > 0; fprintf('Initializing SumWeightedColumn and SumWeight matrices\n'); end
