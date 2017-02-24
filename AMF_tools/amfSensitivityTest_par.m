@@ -1,4 +1,4 @@
-function [ AMFs, SZAvec, VZAvec, RAAvec, ALBvec, SURFPRESSvec ] = amfSensitivityTest_par(profile, profile_pressures, lon, lat, month  )
+function [ Out ] = amfSensitivityTest_par(profile, profile_pressures, lon, lat, month  )
 %amfSensitivityTest Given a latitude, longitude, and profile, constructs a
 %five-dimension matrix of AMFs
 %   Scattering weights in the OMNO2 algorithm depend on SZA, VZA, RAA
@@ -210,6 +210,13 @@ for xlon = 1:nlon;
         end
     end
 end
+
+Out.AMFs = AMFs;
+Out.SZAs = SZAmat;
+Out.VZAs = VZAmat;
+Out.RAAs = RAAmat;
+Out.ALBs = ALBmat;
+Out.SurfPs = SURFPRESSmat;
 
 if closeparpool
     p = gcp('nocreate');
