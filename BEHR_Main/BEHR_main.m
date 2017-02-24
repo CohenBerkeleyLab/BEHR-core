@@ -103,7 +103,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/W US BEHR Monthly - No ghost';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/LNOx-AMFs/DC3-old-new-hybrid';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -117,7 +117,8 @@ else
     %This is the directory where the NO2 profiles are stored. This will
     %need to be changed to match your machine and the files' location.
     %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
-    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/W_US_BEHR';
+    no2_profile_path_old = BEHR_paths('no2_profile_path');
+    no2_profile_path_new = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/iccg_eq_2-fr_factor_1-mol_flash_500_newprof-fixedBC';
 end
 
 %Store paths to relevant files
@@ -175,8 +176,8 @@ elseif ~exist(sp_mat_dir,'dir')
     E.filenotfound(sp_mat_dir)
 elseif ~exist(amf_tools_path,'dir')
     E.filenotfound(amf_tools_path)
-elseif ~exist(no2_profile_path,'dir')
-    E.filenotfound(no2_profile_path)
+elseif ~exist(no2_profile_path_new,'dir')
+    E.filenotfound(no2_profile_path_new)
 end
 
 %Find the last file completed and set the start date to the next day.  This
@@ -221,6 +222,14 @@ for j=1:length(datenums)
         if DEBUG_LEVEL > 1; fprintf('\t ...Found.\n'); end
         S=load(fullfile(sp_mat_dir,filename)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
         Data=S.Data;
+        
+        if exist('profile_file','file')==1 && strcmp(profile_file(2:3),month)==1; %JLL 20 Mar 2014: 
+        else
+            profile_file=['m',month,'_NO2_profile'];
+            if DEBUG_LEVEL > 1; disp(['Loading ',fullfile(no2_profile_path_old,profile_file)]); end
+            S=load(fullfile(no2_profile_path_old,profile_file));
+            PROFILE = S.PROFILE;
+        end
         
         for d=1:length(Data);
             % Data is initialized in read_omno2_v_aug2012 with a single 0
@@ -279,9 +288,23 @@ for j=1:length(datenums)
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
                 if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
-                [no2_bins, apriori_bin_mode] = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, time, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
-                no2Profile1 = no2_bins;
-                no2Profile2 = no2_bins;
+                no2_bins_old = rProfile_US(PROFILE, loncorns, latcorns, c);
+                no2_bins_old = reshape(no2_bins_old,length(pressure),size(vza,1),size(vza,2));
+                no2_bins_old = no2_bins_old ./ (10^6); % NO2 from WRF is in ppm in these files
+                [no2_bins_new, apriori_bin_mode] = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, time, pTerr, pressure, no2_profile_path_new); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+                
+                % Use old profiles for the boundary layer (below 700 hPa),
+                % new profiles above that. This will let us look at the
+                % impact of adding lightning NOx to WRF on the AMFs
+                no2Profile1 = nan(size(no2_bins_old));
+                hy_xx = pressure >= 700;
+                for a = 1:numel(vza)
+                    if all(isnan(no2_bins_new(:,a))); continue; end % outside of the DC3 WRF domain, the new profiles don't exist. Don't retrieve with just the BL.
+                    if all(isnan(no2_bins_old(:,a))); continue; end % if the old bins are all NaNs too, skip because we won't have any boundary layer
+                    no2Profile1(hy_xx,a) = no2_bins_old(hy_xx,a);
+                    no2Profile1(~hy_xx,a) = no2_bins_new(~hy_xx,a);
+                end
+                no2Profile2 = no2Profile1;
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
                 noGhost=0; ak=1;
@@ -354,7 +377,7 @@ for j=1:length(datenums)
         %             'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
         OMI = struct('BEHRColumnAmountNO2Trop', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'AMFTrop', [], 'CloudFraction', [], 'CloudRadianceFraction', [],...
             'CloudPressure', [], 'ColumnAmountNO2Trop', [], 'RelativeAzimuthAngle', [], 'MODISAlbedo', [], 'MODISCloud', [], 'GLOBETerpres', [], 'BEHRAMFTrop', [],...% 'OriginalBEHRAMF', [], 'OriginalBEHRColumn', [],...
-            'Latitude', [], 'Longitude', [], 'MapData', struct, 'Count', [], 'Area', [], 'Areaweight', [], 'vcdQualityFlags', {{}}, 'XTrackQualityFlags', {{}});
+            'Latitude', [], 'Longitude', [], 'MapData', struct, 'Row', [], 'Count', [], 'Area', [], 'Areaweight', [], 'vcdQualityFlags', {{}}, 'XTrackQualityFlags', {{}});
         % Matlab treats structures as matrices, so we can duplicate our
         % structure to have the required number of entries just like a
         % matrix.

@@ -47,6 +47,7 @@ GLOBETerpres=fill_val * ones(maxx,maxy);
 BEHRAMFTrop=fill_val * ones(maxx,maxy);
 %OriginalBEHRAMF=fill_val * ones(maxx,maxy);
 %OriginalBEHRColumn=fill_val * ones(maxx,maxy);
+Row = zeros(maxx,maxy);
 Count = zeros(maxx, maxy);
 Area = nan(maxx, maxy);
 Areaweight = nan(maxx, maxy);
@@ -143,6 +144,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     %OriginalBEHRColumn_val = Data.OriginalBEHRColumn(x);
     vcdQualityFlags_val = Data.vcdQualityFlags(x);
     XTrackQualityFlags_val = Data.XTrackQualityFlags(x);
+    Row_val = Data.Row(x);
     
     
     %dim=[maxx maxy];
@@ -216,7 +218,8 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     BEHRAMFTrop(x_quad, y_quad) = sum([BEHRAMFTrop(x_quad, y_quad)*(Count(x_quad, y_quad)-1), BEHRAMFTrop_val])/Count(x_quad,y_quad);
                     %OriginalBEHRAMF(x_quad, y_quad) = sum([OriginalBEHRAMF(x_quad, y_quad)*(Count(x_quad, y_quad)-1), OriginalBEHRAMF_val])/Count(x_quad,y_quad);
                     %OriginalBEHRColumn(x_quad, y_quad) = sum([OriginalBEHRColumn(x_quad, y_quad)*(Count(x_quad, y_quad)-1), OriginalBEHRColumn_val])/Count(x_quad,y_quad);
-                    
+                    Row(x_quad,y_quad) = sum([Row(x_quad, y_quad)*(Count(x_quad,y_quad)-1), Row_val])/Count(x_quad,y_quad);
+                        
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
                     
@@ -243,6 +246,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     MODISAlbedo(x_quad, y_quad) = MODISAlbedo_val;
                     GLOBETerpres(x_quad, y_quad) = GLOBETerpres_val;
                     BEHRAMFTrop(x_quad, y_quad) = BEHRAMFTrop_val;
+                    Row(x_quad, y_quad) = Row_val;
                     %OriginalBEHRAMF(x_quad, y_quad) = OriginalBEHRAMF_val;
                     %OriginalBEHRColumn(x_quad, y_quad) = OriginalBEHRColumn_val;
                     
@@ -269,6 +273,7 @@ OMI.RelativeAzimuthAngle = RelativeAzimuthAngle;
 OMI.MODISAlbedo = MODISAlbedo;
 OMI.GLOBETerpres = GLOBETerpres;
 OMI.BEHRAMFTrop = BEHRAMFTrop;
+OMI.Row = Row;
 %OMI.OriginalBEHRAMF = OriginalBEHRAMF;
 %OMI.OriginalBEHRColumn = OriginalBEHRColumn;
 OMI.Count = Count;
