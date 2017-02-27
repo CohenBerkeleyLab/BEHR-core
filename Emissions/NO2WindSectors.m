@@ -5,6 +5,7 @@ classdef NO2WindSectors < handle
     properties
         MinWindToAll = true;
         MinWindCrit = 0.1;
+        Grid
     end
     properties(SetAccess = protected)
         E
@@ -26,13 +27,25 @@ classdef NO2WindSectors < handle
         iS = 1;
         iSE = 1;
     end
-    properties(Hidden, Access = protected, Constant)
+    properties(Constant)
         directions = {'W','SW','S','SE','E','NE','N','NW'};
+        theta_bin_centers = [-180, -135, -90, -45, 0, 45, 90, 135];
+    end
+    properties(Hidden, Access = protected, Constant)
         theta_bin_edges = [-180, -157.5, -112.5, -67.5, -22.5, 22.5, 67.5, 112.5, 157.5];
     end
     
     methods
-        function obj = NO2WindSectors(sz, ntimes, minwindtoall)
+        function obj = NO2WindSectors(Grid, ntimes, minwindtoall)
+            if ~isa(Grid,'GlobeGrid')
+                error('NO2WindSectors:bad_input','GRID must be an instance of GlobeGrid')
+            elseif ~isscalar(ntimes) || ~isnumeric(ntimes) || ntimes < 1 || mod(ntimes,1) ~= 0
+                error('NO2WindSectors:bad_input','NTIMES must be a scalar whole number >= 1')
+            elseif exist('minwindtoall','var') && (~isscalar(minwindtoall) || ~islogical(minwindtoall))
+                error('NO2WindSectors:bad_input','MINWINDTOALL must be a scalar logical (if given)')
+            end
+            obj.Grid = Grid;
+            sz = size(Grid.GridLon);
             init_grid = nan([sz, ntimes]);
             for a=1:numel(NO2WindSectors.directions)
                 obj.(NO2WindSectors.directions{a}) = init_grid;
@@ -45,7 +58,7 @@ classdef NO2WindSectors < handle
         %%%%%%%%%%%
         % Setters %
         %%%%%%%%%%%
-        function obj = set.MinWindToAll(obj, val)
+        function obj = set.MinWindToAll(obj, val) %#ok<MCHV2>
             if ~isscalar(val) || ~islogical(val)
                 error('NO2WindSectors:bad_value','MinWindToAll must be a scalar boolean value')
             end
