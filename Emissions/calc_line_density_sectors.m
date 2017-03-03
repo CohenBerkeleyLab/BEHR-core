@@ -101,10 +101,10 @@ p=inputParser;
 p.addOptional('nox_or_no2','no2',@(x) ismember(lower(x),{'nox','no2'}));
 p.addParameter('data_ind',[]);
 p.addParameter('windsepcrit',2);
-p.addParameter('rel_box_corners',[2 4 2 2]);
+p.addParameter('rel_box_corners', [2 4 2 2]);
 p.addParameter('datatype','domino');
 p.addParameter('griddingmethod','interp');
-p.addParameter('n_rows_excl',0);
+p.addParameter('n_rows_excl',10);
 p.addParameter('DEBUG_LEVEL',1);
 
 p.parse(varargin{:});
@@ -118,6 +118,8 @@ datatype = pout.datatype;
 grid_method = pout.griddingmethod;
 n_rows_excl = pout.n_rows_excl;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
+
+DEBUG_MODE = true;
 
 use_data_ind = true;
 if ~isempty(data_ind) && ~isnumeric(data_ind)
@@ -167,25 +169,40 @@ switch lower(datatype)
         Grid = design_dom_grid(0.18, rel_box_corners(2), center_lon, center_lat);
 end
 
-nox_fast = [];
 nox_slow = [];
-
-create_array = true;
+nox_fast = [];
 i = 0;
+do_est = true;
+
+ndays_used = 0;
+ndays_skipped = 0;
 for d=1:numel(fdates)
+    if DEBUG_MODE
+        continue
+    end
+    fprintf('Binning data for %s\n',datestr(fdates(d)));
     D = load_files_for_day(fdates(d), datatype);
     
     if ~use_data_ind
         xx_swath = find_useful_swaths(D.Data, center_lon, center_lat, n_rows_excl);
         data_ind = find(xx_swath);
+        % n_swath may be 0 if excluding rows at the edges, it is okay that
+        % that day will not be handled
         n_swath = sum(xx_swath);
+        if n_swath < 1
+            ndays_skipped = ndays_skipped + 1;
+            continue
+        else
+            ndays_used = ndays_used + 1;
+        end
     else
         n_swath = numel(data_ind);
     end
     
-    if d==1
+    if do_est
         % Estimate how many swaths will be included in the average.
         estimated_ntimes = numel(fdates)*n_swath;
+        do_est = false;
     end
     
     % We'll still "rotate" each day but divide it by sectors. This isn't so
@@ -236,10 +253,12 @@ for d=1:numel(fdates)
             nox.(bin)(:,:,i) = OMI.BEHRColumnAmountNO2Trop*nox_no2_scale;
             aw.(bin)(:,:,i) = OMI.Areaweight;
         else
-            [nox_slow, nox_fast] = grid_by_interp(D.Data(e), estimated_ntimes, theta(d), windvel(d), windsepcrit, Grid, nox_slow, nox_fast);
+            %[nox_slow, nox_fast] = grid_by_interp(D.Data(e), estimated_ntimes, theta(d), windvel(d), windsepcrit, Grid, nox_slow, nox_fast);
         end
     end
 end
+
+fprintf('ndays_used = %d, ndays_skipped = %d\n', ndays_used, ndays_skipped);
 
 if strcmpi(grid_method,'rotate')
     
@@ -292,7 +311,13 @@ if strcmpi(grid_method,'rotate')
 else
     % Do the integration by interpolating to a rotated grid, then adding up
     % across that grid as before
-    [ld_fast, ld_slow] = integrate_by_interp(nox_fast, nox_slow); 
+    if DEBUG_MODE
+        NOX = load('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG-Fast-Slow-Method/Debugging/NOx-instances-2005-new.mat');
+        nox_fast = NOX.nox_fast;
+        nox_slow = NOX.nox_slow;
+    end
+    ld_fast = integrate_by_interp(nox_fast, rel_box_corners); 
+    ld_slow = integrate_by_interp(nox_slow, rel_box_corners);
 end
 end
 
@@ -300,8 +325,33 @@ function xx = find_useful_swaths(Data, clon, clat, n_edge_rows)
 end_rows = [1+n_edge_rows, 60-n_edge_rows];
 xx = false(size(Data));
 for a=1:numel(Data)
-    westlon = interp1(Data(a).Latitude(end_rows(1),:), Data(a).Longitude(end_rows(1),:), clat);
-    eastlon = interp1(Data(a).Latitude(end_rows(2),:), Data(a).Longitude(end_rows(2),:), clat);
+    % If half of the longitudes/latitudes are NaNs, it means that this is a
+    % zoom mode swath (I think). Skip these.
+    if sum(isnan(Data(a).Longitude(:))) >= 0.5 || sum(isnan(Data(a).Latitude(:))) >= 0.5
+        fprintf('\tSkipping swath %d because at least half of lon/lat is NaNs\n',a)
+        continue
+    end
+    
+    % Only do the daytime side - from where the latitude starts increasing
+    % to where it starts decreasing. This avoids an issue of
+    % non-monotonically increasing grid vectors in interp1
+    in = end_rows(1):end_rows(2);
+    [~,mi] = min(Data(a).Latitude(in,:),[],2);
+    [~,me] = max(Data(a).Latitude(in,:),[],2);
+    % The inflection points in the satellite latitude may be different for
+    % different rows - make sure all rows are on the daytime side.
+    mi = max(mi);
+    me = min(me);
+    
+    x = 1:numel(mi:me);
+    
+    [~,edge_lon_left] = fill_nans(x, Data(a).Longitude(end_rows(1),mi:me));
+    [~,edge_lon_right] = fill_nans(x, Data(a).Longitude(end_rows(2),mi:me));
+    [~,edge_lat_left] = fill_nans(x, Data(a).Latitude(end_rows(1),mi:me));
+    [~,edge_lat_right] = fill_nans(x, Data(a).Latitude(end_rows(2),mi:me));
+    
+    westlon = interp1(edge_lat_left, edge_lon_left, clat);
+    eastlon = interp1(edge_lat_right, edge_lon_right, clat);
     % Note: this will fail for center lons around the international date
     % line
     if westlon < clon && eastlon > clon
@@ -332,7 +382,7 @@ end
 
 dom_vars = {'Longitude', 'Latitude', 'TroposphericVerticalColumn', 'TroposphericColumnFlag', 'CloudFraction', 'SurfaceAlbedo'};
 
-addpath('/Users/Josh/Documents/MATLAB/Non BEHR Satellite/OMI Utils');
+addpath(genpath('/Users/Josh/Documents/MATLAB/Non BEHR Satellite/OMI Utils'));
 Data = read_domino_simple(fnames{:}, 'variables', dom_vars);
 for a=1:numel(Data)
     badvals = domino_pixel_reject(Data(a), 'cloudfrac', 0.3, 'nedgerows', 10);
@@ -360,6 +410,7 @@ function [nox_slow, nox_fast] = grid_by_interp(Data, est_ntimes, theta, windvel,
 % integration domain will be extracted later.
 
 E = JLLErrors;
+
 % First, grid the NO2 data
 no2_grid = nan(size(Grid.GridLon));
 count = zeros(size(Grid.GridLon));
@@ -407,17 +458,19 @@ clat = nox.Grid.GridCenterLat;
 GridRot = GlobeGrid(nox.Grid.LonRes, 'projection', 'equirect-rotated');
 GridRot.SetDomain([clon, clat], box_edges)
 
-ld = make_empty_struct_from_cell(nox.directions, struct('no2_x',[],'no2_ld',[], 'no2_cd', 'no2_lon', 'no2_lat'));
+ld = make_empty_struct_from_cell(nox.directions, struct('no2_x', [],'no2_ld', [], 'no2_cd', [], 'no2_lon', [], 'no2_lat', []));
 
 for a=1:numel(nox.directions)
     GridRot.Rotation = nox.theta_bin_centers(a);
-    no2_cd = interp2(nox.Grid.GridLon, nox.Grid.GridLat, nox.(nox.directions{a}), GridRot.GridLon, GridRot.GridLat);
+    no2_cd = nanmean(nox.(nox.directions{a}),3);
+    F = scatteredInterpolant(nox.Grid.GridLon(:), nox.Grid.GridLat(:), no2_cd(:));
+    no2_cd = F(GridRot.GridLon, GridRot.GridLat);
     
     ld.(nox.directions{a}).no2_cd = no2_cd;
     ld.(nox.directions{a}).no2_lon = GridRot.GridLon;
     ld.(nox.directions{a}).no2_lat = GridRot.GridLat;
     
-    ld.(nox.directions{a}).no2_x = do_along_wind_distance(GridRot.GridLon, GridRot.GridLat, clon, clat);
+    ld.(nox.directions{a}).no2_x = do_along_wind_distance(GridRot.GridLon, GridRot.GridLat, clon, clat, nox.theta_bin_centers(a));
     ld.(nox.directions{a}).no2_ld = do_cross_wind_integration(GridRot.GridLoncorn, GridRot.GridLatcorn, no2_cd);
 end
 
@@ -432,7 +485,7 @@ function ld = do_cross_wind_integration(loncorn, latcorn, no2_mean)
 loncorn = (loncorn(:, 1:end-1) + loncorn(:, 2:end))/2;
 latcorn = (latcorn(:, 1:end-1) + latcorn(:, 2:end))/2;
 
-ld = nan(1, size(no2_mean,2));
+ld = zeros(1, size(no2_mean,2));
 d_cm = nan(size(no2_mean));
 for a=1:size(no2_mean,2)
     for b=1:size(no2_mean,1)
@@ -444,12 +497,14 @@ for a=1:size(no2_mean,2)
 end
 end
 
-function x = do_along_wind_distance(lon, lat, center_lon, center_lat)
+function x = do_along_wind_distance(lon, lat, center_lon, center_lat, theta)
 
-x = nan(1, size(lon,2));
-mid = round(size(lon,1));
-
-for a=1:size(lon,2)
-    x(a) = m_lldist([lon(mid,a), center_lon], [lat(mid, a), center_lat]) * sign(lon(mid,a) - center_lon);
+x = nan(1, size(lon,1));
+mid = round(size(lon,2)/2);
+for a=1:size(lon,1)
+    this_angle = atan2d(lat(a, mid)-center_lat, lon(a, mid)-center_lon);
+    s = sign(cosd(angle_diffd(this_angle,theta)));
+    if s==0; s = 1; end
+    x(a) = m_lldist([lon(a, mid), center_lon], [lat(a, mid), center_lat]) * s;
 end
 end
