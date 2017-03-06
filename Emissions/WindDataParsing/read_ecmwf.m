@@ -1,10 +1,60 @@
-function [ windvel, theta, avail_dnums ] = read_ecmwf( file, center_lon, center_lat )
+function [ windvel, theta, avail_dnums ] = read_ecmwf( files, center_lon, center_lat )
 %READ_ECMWF Read and average wind data from an ECMWF netCDF file
 %   WINDS = READ_ECMWF( FILES, CENTER_LON, CENTER_LAT ) Read in the U and V
 %   wind data from the netCDF file given by FILES and find the
 %   average wind at OMI overpass time for a 3x3 set of wind data grid cells
 %   around the CENTER_LON and CENTER_LAT. File must be a single file name
 %   as a string
+
+windvel_cell = cell(size(files));
+theta_cell = cell(size(files));
+avail_dnums_cell = cell(size(files));
+
+for f=1:numel(files)
+    check_file(files{f});
+    [windvel_cell{f}, theta_cell{f}, avail_dnums_cell{f}] = read_single_ecmwf(files{f}, center_lon, center_lat);
+end
+
+windvel = veccat(windvel_cell{:});
+theta = veccat(theta_cell{:});
+avail_dnums= veccat(avail_dnums_cell{:});
+
+% Ensure outputs are in order by date
+[avail_dnums, sortvec] = sort(avail_dnums);
+windvel = windvel(sortvec);
+theta = theta(sortvec);
+
+end
+
+function check_file(filename)
+E = JLLErrors;
+if ~exist(filename,'file')
+    E.filenotfound(filename);
+end
+
+try
+    ni = ncinfo(filename);
+catch err
+    if strcmp(err.identifier,'MATLAB:imagesci:netcdf:libraryFailure')
+        E.callError('not_ecmwf','%s does not appear to be a netcdf file',filename);
+    else
+        rethrow(err)
+    end
+end
+
+file_vars = {ni.Variables.Name};
+req_vars = {'longitude','latitude','level','time','u','v'};
+xx = ~ismember(req_vars, file_vars);
+if any(xx)
+    E.callError('not_ecmwf','%s does not contain the expected variables: %s', filename, strjoin(req_vars(xx), ', '));
+end
+if ~strcmpi(ncreadatt(ni.Filename, 'level', 'long_name'), 'pressure_level')
+    E.callError('ecmwf_level', '%s does not have pressure as the vertical coordinate', filename)
+end
+end
+
+function [ windvel, theta, avail_dnums ] = read_single_ecmwf( file, center_lon, center_lat )
+
 
 %%%%%%%%%%%%%%%%%%%%%
 %%%%% CONSTANTS %%%%%
