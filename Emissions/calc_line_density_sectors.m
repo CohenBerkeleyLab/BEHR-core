@@ -119,7 +119,7 @@ grid_method = pout.griddingmethod;
 n_rows_excl = pout.n_rows_excl;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
-DEBUG_MODE = true;
+DEBUG_MODE = false;
 
 use_data_ind = true;
 if ~isempty(data_ind) && ~isnumeric(data_ind)
