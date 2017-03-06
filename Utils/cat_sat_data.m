@@ -200,7 +200,11 @@ for a=1:numel(F)
     
     for b=1:numel(datafields)
         if ~isfield(Data,datafields{b})
-            E.callError('fieldnotfound','The field %s is not present in file %s',datafields{b},F(a).name);
+            if isstruct(F)
+                E.callError('fieldnotfound','The field %s is not present in file %s',datafields{b},F(a).name);
+            else
+                E.callError('fieldnotfound','The field %s is not present in the input Data structure',datafields{b});
+            end
         end
         
         for c=1:numel(Data)
