@@ -253,7 +253,7 @@ for d=1:numel(fdates)
             nox.(bin)(:,:,i) = OMI.BEHRColumnAmountNO2Trop*nox_no2_scale;
             aw.(bin)(:,:,i) = OMI.Areaweight;
         else
-            %[nox_slow, nox_fast] = grid_by_interp(D.Data(e), estimated_ntimes, theta(d), windvel(d), windsepcrit, Grid, nox_slow, nox_fast);
+            [nox_slow, nox_fast] = grid_by_interp(D.Data(e), estimated_ntimes, theta(d), windvel(d), windsepcrit, Grid, nox_slow, nox_fast);
         end
     end
 end
