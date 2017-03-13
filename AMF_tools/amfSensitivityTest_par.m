@@ -1,4 +1,4 @@
-function [ Out ] = amfSensitivityTest_par(profile, profile_pressures, lon, lat, month  )
+function [ Out ] = amfSensitivityTest_par(profile, profile_pressures, lon, lat, month, skytype  )
 %amfSensitivityTest Given a latitude, longitude, and profile, constructs a
 %five-dimension matrix of AMFs
 %   Scattering weights in the OMNO2 algorithm depend on SZA, VZA, RAA
@@ -48,33 +48,43 @@ if ~isscalar(numThreads); E.badvartype(numThreads, 'scalar'); end
 %%%%%%%%%%%%%%%%%%%%%%
 
 % # SZAs between 0 and 88 degrees to test
-nSZA = 5;%9;
+nSZA = 9;
 
 % # VZAs between 0 and 70 degrees to test
-nVZA = 5;%6;
+nVZA = 6;
 
 % # RAA (rel. azimuth angles) between 0 and 180 degrees to test
-nRAA = 5;%11;
+nRAA = 5;
 
 % Surface albedo can be between 0 and 1; but you can reset the min and max
 % to restrict to i.e. 0 and 0.1 - this allows you to examine effects of
 % albedo in a range appropriate to a ground type or clouds.
-minAlb = 0;
-maxAlb = 0.1;
-nAlb = 6;%6;
+if strcmpi(skytype,'clear')
+    minAlb = 0;
+    maxAlb = 0.1;
+else
+    minAlb = 0.7;
+    maxAlb = 0.9;
+end
+nAlb = 10;
 
 % Surface pressure can vary between 1013 and 0.003 hPa; but like albedo,
 % you may reset the min and max.
-minSurfPres = 880;
-maxSurfPres = 1013;
-nSurfPres = 4;%5;
+if strcmpi(skytype,'clear')
+    minSurfPres = 880;
+    maxSurfPres = 1013;
+else
+    minSurfPres = 400;
+    maxSurfPres = 800;
+end
+nSurfPres = 8;
 
 % set to 'OMI' (eventually perhaps 'GOME' will be an option) to determine
 % what pressure levels to use
 satellite = 'OMI';
 
 % Location of the OMI temperature profiles and scattering weights
-amf_tools_path = '/Users/Josh/Documents/MATLAB/BEHR/AMF_tools';
+amf_tools_path = fileparts(mfilename('fullpath'));
 fileTmp = fullfile(amf_tools_path,'nmcTmpYr.txt');
 fileDamf = fullfile(amf_tools_path,'damf.txt');
 
