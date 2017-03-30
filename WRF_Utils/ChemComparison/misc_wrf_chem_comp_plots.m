@@ -1,14 +1,43 @@
-function [ varargout ] = misc_wrf_chem_comp_plots( plttype )
+function [ varargout ] = misc_wrf_chem_comp_plots( plttype, varargin )
 %UNTITLED4 Summary of this function goes here
 %   Detailed explanation goes here
+%
+% Many of these subfunctions allow you to call them with a structure to
+% skip the questions used to subset the data. This structure can have any
+% or all of the following fields:
+%
+%       match_file - the file name containing the MatchDC3 structure to
+%       load. These must be located in the directory specified by the
+%       matchdir variable in this function.
+%
+%       quantity - which quantity to plot. Can be 'NOx', 'NO2', 'MPN',
+%       'HNO3', 'NO2:NO', 'lnox_total', 'PHOTR_NO2'. Note that some may not
+%       be in a particular match file.
+%
+%       lats_filter - can be one of 'all', 'midlats', 'subtrop'. Midlats
+%       are > 35 N only, subtrop 20--35 N.
+%
+%       strat_filter - must be a scalar logical. If true, removes aircraft
+%       data with O3/CO < 1.5 which is indicative of stratospheric
+%       influence.
+%
+%       fresh_filter - must be a scalar logical. If true, removes aircraft
+%       data with NOx / HNO3 < 5 which is indicative of fresh (unaged)
+%       emissions.
+
 E = JLLErrors;
 matchdir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/WRF/Chem Comparison';
 
 switch lower(plttype)
     case 'grand-scatter'
-        grand_scatterplot();
+        grand_scatterplot(varargin{:});
     case 'grand-profile'
-        pres_binned_grand_profile();
+        if nargout == 0
+            pres_binned_grand_profile(varargin{:});
+        else
+            varargout = cell(1,6);
+            [varargout{:}] = pres_binned_grand_profile(varargin{:});
+        end
     case 'amf-sens'
         if nargout > 0
             varargout{1} = amf_test(nargout);
@@ -23,13 +52,16 @@ switch lower(plttype)
         two_histograms()
 end
 
-    function varargout = grand_scatterplot()
-        Match = get_match_struct();
-        [air_data, wrf_data, xstr] = read_data(Match);
+    function varargout = grand_scatterplot(Opts)
+        if ~exist('Opts','var')
+            Opts = struct;
+        end
+        Match = get_match_struct(Opts);
+        [air_data, wrf_data, xstr] = read_data(Match, Opts);
         wrf_xx = unique_wrf_element(Match);
-        lats_xx = subset_latitudes(Match);
-        trop_xx = filter_strat_influence(Match);
-        fresh_xx = filter_fresh_lnox(Match);
+        lats_xx = subset_latitudes(Match, Opts);
+        trop_xx = filter_strat_influence(Match, Opts);
+        fresh_xx = filter_fresh_lnox(Match, Opts);
         
         data_log = lats_xx & trop_xx & fresh_xx;
         
@@ -55,8 +87,11 @@ end
         end
     end
 
-    function [air_data_bins, air_data_means, air_pres_bins, wrf_data_bins, wrf_data_means, wrf_pres_bins] = pres_binned_grand_profile
-        [air_data, air_pres, wrf_data, wrf_pres, xstr] = grand_scatterplot();
+    function [air_data_bins, air_data_means, air_pres_bins, wrf_data_bins, wrf_data_means, wrf_pres_bins] = pres_binned_grand_profile(Opts)
+        if ~exist('Opts','var')
+            Opts = struct;
+        end
+        [air_data, air_pres, wrf_data, wrf_pres, xstr] = grand_scatterplot(Opts);
         [air_data_bins, air_pres_bins, air_quants] = bin_omisp_pressure(air_pres, air_data);
         [wrf_data_bins, wrf_pres_bins, wrf_quants] = bin_omisp_pressure(wrf_pres, wrf_data);
         air_data_means = bin_omisp_pressure(air_pres, air_data, 'mean');
@@ -317,10 +352,20 @@ end
 %%%% INTERNAL FUNCTIONS %%%%
 
 
-    function Match = get_match_struct()
+    function Match = get_match_struct(Opts)
+        if ~exist('Opts','var')
+            Opts = struct;
+        end
         matchfiles = dir(fullfile(matchdir, '*.mat'));
         matchfiles = {matchfiles.name};
-        fname = ask_multichoice('Choose comparison file:', matchfiles, 'list', true);
+        if ~isfield(Opts,'match_file')
+            fname = ask_multichoice('Choose comparison file:', matchfiles, 'list', true);
+        else
+            if ~ismember(Opts.match_file,matchfiles)
+                E.badinput('Match file %s specified in Opts structure is not present in %s', Opts.match_file, matchdir);
+            end
+            fname = Opts.match_file;
+        end
         M = load(fullfile(matchdir, fname));
         matchfield = glob(fieldnames(M), 'Match.*');
         if numel(matchfield)>1
@@ -331,7 +376,11 @@ end
         Match = M.(matchfield);
     end
 
-    function [air_data, wrf_data, xstr] = read_data(Match)
+    function [air_data, wrf_data, xstr] = read_data(Match, Opts)
+        if ~exist('Opts','var')
+            Opts = struct;
+        end
+        
         comparisons = {'NOx','NO2','MPN','HNO3','NO2:NO'};
         if isfield(Match.wrf,'o3') && isfield('Match.data','o3')
             comparisons{end+1} = 'o3';
@@ -342,7 +391,14 @@ end
         if isfield(Match.wrf, 'PHOTR_NO2')
             comparisons{end+1} = 'NO2 Photolysis';
         end
-        quantity = ask_multichoice('Which species to compare?', comparisons, 'list', true);
+        if ~isfield(Opts,'quantity')
+            quantity = ask_multichoice('Which species to compare?', comparisons, 'list', true);
+        else
+            if ~ismember(Opts.quantity,comparisons)
+                E.badinput('%s is not a valid quantity for this match file; valid quantities are %s', Opts.quantity, strjoin(comparisons, ', '));
+            end
+            quantity = Opts.quantity;
+        end
         % The DC3 NO2 and MPN data have already been corrected for MPN
         % dissociation in the NO2 channel.
         switch lower(quantity)
@@ -390,9 +446,22 @@ end
 
 end
 
-function lats_xx = subset_latitudes(Match)
+function lats_xx = subset_latitudes(Match, Opts)
 E = JLLErrors;
-lats_choice = ask_multichoice('Which latitudes to use?', {'All','Midlatitude (>35 N)','Subtropics (20-35 N)'}, 'list', true);
+if ~exist('Opts', 'var')
+    Opts = struct; 
+end
+allowed_vals = {'All','Midlatitude (>35 N)','Subtropics (20-35 N)'};
+short_vals = {'all','midlats','subtrop'};
+if ~isfield(Opts,'lats_filter')
+    lats_choice = ask_multichoice('Which latitudes to use?', allowed_vals, 'list', true);
+else
+    xx = strcmpi(Opts.lats_filter, short_vals);
+    if sum(xx) ~= 1
+        E.badinput('Opts.lats_filter must be one of %s (case insensitive)', strjoin(short_vals, ', '));
+    end
+    lats_choice = allowed_vals{xx};
+end
 switch lats_choice
     case 'All'
         lats_xx = true(size(Match.data.lat));
@@ -405,14 +474,25 @@ switch lats_choice
 end
 end
 
-function trop_xx = filter_strat_influence(Match)
+function trop_xx = filter_strat_influence(Match, Opts)
+E = JLLErrors;
+if ~exist('Opts', 'var')
+    Opts = struct; 
+end
 if ~isfield(Match.data, 'o3') || ~isfield(Match.data, 'co')
     fprintf('O3 and CO from DC3 not present in Match file, cannot filter stratospheric influence\n');
     trop_xx = true(size(Match.data.lon));
     return
 end
 
-strat_choice = strcmpi(ask_multichoice('Remove stratospheric influence (O3/CO > 1.5)?', {'y','n'}),'y');
+if ~isfield(Opts,'strat_filter')
+    strat_choice = strcmpi(ask_multichoice('Remove stratospheric influence (O3/CO > 1.5)?', {'y','n'}),'y');
+else
+    if ~isscalar(Opts.strat_filter) || ~islogical(Opts.strat_filter)
+        E.badinput('Opts.strat_filter must be a scalar logical, if given')
+    end
+    strat_choice = Opts.strat_filter;
+end
 if strat_choice
     trop_xx = Match.data.o3 ./ Match.data.co < 1.5;
 else
@@ -420,8 +500,19 @@ else
 end
 end
 
-function fresh_xx = filter_fresh_lnox(Match)
-fresh_choice = strcmpi(ask_multichoice('Remove fresh lightning NOx/freshly emitted NOx (NOx/HNO3 > 5)?',{'y','n'}),'y');
+function fresh_xx = filter_fresh_lnox(Match,Opts)
+E = JLLErrors;
+if ~exist('Opts', 'var')
+    Opts = struct; 
+end
+if ~isfield(Opts,'fresh_filter')
+    fresh_choice = strcmpi(ask_multichoice('Remove fresh lightning NOx/freshly emitted NOx (NOx/HNO3 > 5)?',{'y','n'}),'y');
+else
+    if ~isscalar(Opts.fresh_filter) || ~islogical(Opts.fresh_filter)
+        E.badinput('Opts.fresh_filter must be a scalar logical, if given')
+    end
+    fresh_choice = Opts.fresh_filter;
+end
 if fresh_choice
     fresh_xx = (Match.data.no + Match.data.no2) ./ Match.data.hno3 < 5;
 else
