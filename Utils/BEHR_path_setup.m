@@ -9,6 +9,7 @@ function [  ] = BEHR_path_setup( )
 %   Utils repo
 %   SP mat dir
 %   OMNO2 dir
+%   OMPIXCOR dir
 %   MYD06 dir
 %   MCD43C3 dir
 %   GLOBE database
@@ -36,11 +37,15 @@ elseif ~isempty(which('BEHR_paths.m'))
 end
 
 
-% Get each path via the directory UI
+% Get each path via the directory UI. If you ever need to add a new path,
+% note that the field name will be how that path should be referred to in
+% the call to BEHR_paths, i.e. to get paths.behr_mat_dir, one would call
+% BEHR_paths('behr_mat_dir')
 paths.classes = get_path('Classes repository','Please find the directory of the Matlab classes repository; it should contain at least the class JLLErrors. See the BEHR readme for information on how to clone that repo if necessary.');
 paths.utils = get_path('Utils repository','Please find the directory of the general Matlab Utils repository (not the one inside the BEHR repo). See the BEHR readme for information on how to clone that repo if necessary.');
 paths.sp_mat_dir = get_path('OMI SP .mat directory',sprintf('Please find the directory on the file server at %s containing OMI_SP_yyyymmdd.mat files. The file server should be mounted on your computer.',file_server_ip));
 paths.omno2_dir = get_path('OMNO2 .he5 directory',sprintf('Please find the OMNO2 directory on the file server at %s. It should contain folders for each year. The file server should be mounted on your computer.',file_server_ip));
+paths.ompixcor_dir = get_path('OMPIXCOR .he5 directory',sprintf('Please find the OMPIXCOR directory on the file server at %s. It should contain folders for each year. The file server should be mounted on your computer.',file_server_ip));
 paths.myd06_dir = get_path('MYD06_L2 .hdf directory',sprintf('Please find the MYD06_L2 directory on the file server at %s. It should contain folders for each year. The file server should be mounted on your computer.',file_server_ip));
 paths.mcd43c3_dir = get_path('MCD43C3 .hdf directory',sprintf('Please find the MCD43C3 directory on the file server at %s. It should contain folders for each year. The file server should be mounted on your computer.',file_server_ip));
 paths.globe_dir = get_path('GLOBE directory',sprintf('Please find the GLOBE database directory on the file server at %s. It should contain files a10g through p10g and their .hdr files. The file server should be mounted on your computer.',file_server_ip));

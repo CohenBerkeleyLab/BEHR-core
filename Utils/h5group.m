@@ -16,7 +16,6 @@ else
     for i=1:n
         info = info.Groups(groups(i));
     end
-        
 end
 
 end

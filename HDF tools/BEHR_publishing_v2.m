@@ -328,7 +328,7 @@ attr = make_empty_struct_from_cell(vars);
 % (SP or BEHR) and description in that order.
 longfill = single(-1.267650600228229401496703205376e30);
 shortfill = single(-32767);
-behrfill = single(-3.402e38);
+behrfill = single(behr_fill_val());
 nofill = NaN;
 
 attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric AMF';...

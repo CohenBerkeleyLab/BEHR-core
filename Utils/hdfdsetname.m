@@ -10,6 +10,8 @@ function [ dsetname ] = hdfdsetname( varargin )
 %
 % --Josh Laughner <joshlaugh5@gmail.com> 3 Mar 2014--
 
+dset_path = '/';
+
 if length(varargin) < 2
     disp('hdfsetname error: needs at least 2 input arguments')
 else
@@ -19,6 +21,7 @@ else
         groups = cell2mat(varargin(2:end-1));
         for i=1:n
             info = info.Vgroup(groups(i));
+            dset_path = strcat(dset_path, info.Name, '/');
         end
     end
     
@@ -39,7 +42,7 @@ else
         dset = info.SDS(tmp).Name;
     end
     try
-        dsetname = [info.Name, '/', dset]; %Format the full dataset path + name in the style needed for h5read.
+        dsetname = strcat(dset_path, dset); %Format the full dataset path + name in the style needed for h5read.
     catch err
         % If the SDSs are not in a Vgroup and are in the top level, there
         % will be no Name field to read, so format the SDS name to indicate
