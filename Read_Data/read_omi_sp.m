@@ -46,8 +46,6 @@ end
 xx = ~isfield(data, sp_vars);
 if any(xx)
     E.badinput('All variable names in SP_VARS must exist as fields in DATA (missing: %s)', strjoin(sp_vars(xx)', ', '));
-elseif ~isfield(data,'Row')
-    E.badinput('DATA must also contain the field Row');
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -79,9 +77,10 @@ end
 
 % Row will keep track of the pixel's location in the across-track
 % direction. These indices are 0 based by NASA convention.
-Row = find(cut_acrosstrack)-1;
-data.Row = repmat(Row, size(lat,1), 1);
-
+if isfield(data,'Row')
+    Row = find(cut_acrosstrack)-1;
+    data.Row = repmat(Row, size(lat,1), 1);
+end
 
 for a=1:numel(sp_vars)
     dset_name = find_dset(hgrp_info, sp_vars{a});

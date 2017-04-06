@@ -1,6 +1,53 @@
 function [ data ] = read_modis_cloud( modis_directory, date_in, data, omi_swath_start, omi_next_swath_start, lonlim, latlim, varargin )
-%UNTITLED3 Summary of this function goes here
-%   Detailed explanation goes here
+%READ_MODIS_CLOUD Reads MODIS MYD06_L2 files and averages the cloud fraction to OMI pixels
+%   DATA = READ_MODIS_CLOUD( MODIS_DIRECTORY, DATE_IN, DATA,
+%   OMI_SWATH_START, OMI_NEXT_SWATH_START, LONLIM, LATLIM) Reads MYD06_L2
+%   files' Cloud_Fraction dataset and averages those values to OMI pixels.
+%   The result is stored in the MODISCloud field of DATA. The MODIS files
+%   used are stored in a cell array in the MODISCloudFiles field of DATA.
+%   Description of all inputs follows:
+%
+%       MODIS_DIRECTORY: the directory containing the MYD06_L2 files, which
+%       should be organized by year in subdirectories.
+%
+%       DATE_IN: a representation of the date to average for as either a
+%       Matlab datenum or a string that can be parsed by DATENUM() without
+%       a format specified.
+%
+%       DATA: a structure to which the MODIS data will be added. It must
+%       contain fields MODISCloud and MODISCloudFiles to accept the data,
+%       plus the field Longitude, Latitude, and the pixel corner fields
+%       specified by the parameters 'LoncornField' and 'LatcornField'.
+%
+%       OMI_SWATH_START: the starting UTC time of the OMI swath that is
+%       being operated on (the number following the first "t" in the NASA
+%       SP filename) given as a number (not a string). Running str2double()
+%       on the time given in the filename will return the appropriate
+%       value, which should be HHMM or HMM (depending if the hour has two
+%       digits or not). This along with OMI_NEXT_SWATH_START are used to
+%       determine which MODIS cloud files are temporally coincident with
+%       the current swath.
+%
+%       OMI_NEXT_SWATH_START: the starting UTC time of the next OMI swath
+%       after the one being operated on currently, again given as a number.
+%
+%       LONLIM: a two element vector giving the longitude limits of the
+%       retrieval domain. The more negative element should go first.
+%
+%       LATLIM: same as LONLIM but for the latitude limits.
+%
+%   Parameter values:
+%
+%       'DEBUG_LEVEL': takes a scalar number, sets the verbosity of the
+%       function. Defaults to 0 (i.e. no debugging messages printed).
+%       Higher numbers increase the verbosity.
+%
+%       'LoncornField': indicates which field describes the corner points
+%       of the pixels. This field must be 3D and have size == 
+%       [4, size(DATA.Latitude)]. Defaults to 'FoV75CornerLongitude'.
+%
+%       'LatcornField': similar to 'LoncornField', but for latitude.
+%       Defaults to 'FoV75CornerLatitude'.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% INPUT VALIDATION %%%%%
@@ -31,7 +78,7 @@ if isnumeric(date_in)
     end
 elseif ischar(date_in)
     try
-        datenum(date_in);
+        date_in = datenum(date_in);
     catch err
         if strcmp(err.identifier, 'MATLAB:datenum:ConvertDateString')
             E.badinput('DATE_IN could not be recognized as a valid format for a date string')
@@ -64,10 +111,14 @@ end
 
 if ~ischar(loncorn_field) 
     E.badinput('The parameter LONCORN_FIELD must be a string')
+elseif ~isfield(data, loncorn_field)
+    E.badinput('The LONCORN_FIELD "%s" is not in DATA', loncorn_field)
 end
 
 if ~ischar(latcorn_field) 
     E.badinput('The parameter LATCORN_FIELD must be a string')
+elseif ~isfield(data, latcorn_field)
+    E.badinput('The LATCORN_FIELD "%s" is not in DATA', latcorn_field)
 end
 
 % If you ever read more data fields from the Data structure, or save more
@@ -86,7 +137,7 @@ end
 % dimension and, then the same size as the Longitude fields
 sz_loncorn = size(data.(loncorn_field));
 sz_latcorn = size(data.(latcorn_field));
-sz_check = [4, size(data.Longitude)];
+sz_check = [4, size(data.Latitude)];
 
 if ~isequal(sz_loncorn, sz_check)
     E.badinput('The shape of the longitude corner field (%s) is not %s (i.e. corners then same size as Longitude)', loncorn_field, mat2str(sz_loncorn));
