@@ -46,6 +46,3 @@ if scale_factor ~= 1 && offset ~= 0
         datasetname, filename)
 end
 end
-
-end
-

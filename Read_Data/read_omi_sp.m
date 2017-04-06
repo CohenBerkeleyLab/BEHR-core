@@ -63,8 +63,8 @@ lon = lon';
 
 %Restrict data to that which falls within the bounds specified by the lon
 %and lat limits
-xx = lon > lonlim(1) - 0.25 & lon < lonlim(2) + 0.25;
-yy = lat > latlim(1) - 0.25 & lat < latlim(2) + 0.25;
+xx = lon > lonlim(1) & lon < lonlim(2);
+yy = lat > latlim(1) & lat < latlim(2);
 cut_alongtrack = any(xx & yy, 2);
 cut_acrosstrack = true(1,60); % keep all elements in the across track direction for now
 lat = lat(cut_alongtrack, cut_acrosstrack);

@@ -316,7 +316,7 @@ for j=1:length(datenums)
         'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'Loncorn', 'Latcorn'};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
-    Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), estimated_num_swaths, 1);
+    Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
     
     %Set the file path and name, assuming that the file structure is
     %<he5_directory>/<year>/<month>/...files...  Then figure out how many
@@ -368,7 +368,7 @@ for j=1:length(datenums)
         % read function produces identical files to the version 2 read
         % function is complete, since the MODIS and GLOBE variables rely on
         % the lat/lon corners to be averaged to the pixel.
-        this_data = add_behr_corners(this_data, this_sp_filename, [lonmin, lonmax], [latmin, latmax]);
+        this_data = add_behr_corners(this_data, this_sp_filename);
         
         % Add MODIS cloud info to the files 
         if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
@@ -534,15 +534,20 @@ elseif numel(F) > 1
 end
 end
 
-function data = add_behr_corners(data, sp_filename, lonlim, latlim)
-spacecraft_vars = {'SpacecraftAltitude', 'SpacecraftLatitude', 'SpacecraftLongitude'};
+function data = add_behr_corners(data, sp_filename)
+spacecraft_vars = {'Longitude', 'Latitude', 'SpacecraftAltitude', 'SpacecraftLatitude', 'SpacecraftLongitude'};
 spacecraft = make_empty_struct_from_cell(spacecraft_vars);
-spacecraft = read_omi_sp(sp_filename, '/HDFEOS/SWATHS/ColumnAmountNO2', spacecraft_vars, spacecraft, lonlim, latlim);
+spacecraft = read_omi_sp(sp_filename, '/HDFEOS/SWATHS/ColumnAmountNO2', spacecraft_vars, spacecraft, [-180 180], [-90 90]);
+subinds = find_submatrix2(data.Longitude, data.Latitude, spacecraft.Longitude, spacecraft.Latitude);
 
-corners = fxn_corner_coordinates(data.Latitude, data.Longitude, spacecraft.SpacecraftLatitude, spacecraft.SpacecraftLongitude, spacecraft.SpacecraftAltitude);
-loncorn = squeeze(corners(:,:,1,1:4));
+corners = fxn_corner_coordinates(spacecraft.Latitude, spacecraft.Longitude, spacecraft.SpacecraftLatitude, spacecraft.SpacecraftLongitude, spacecraft.SpacecraftAltitude);
+
+
+xx = subinds(1,1):subinds(1,2);
+yy = subinds(2,1):subinds(2,2);
+loncorn = squeeze(corners(xx,yy,1,1:4));
 loncorn = permute(loncorn, [3 1 2]);
-latcorn = squeeze(corners(:,:,2,1:4));
+latcorn = squeeze(corners(xx,yy,2,1:4));
 latcorn = permute(latcorn, [3 1 2]);
 
 data.Loncorn = loncorn;

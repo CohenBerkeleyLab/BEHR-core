@@ -84,8 +84,8 @@ band3_lon=-180+0.05/2:0.05:180-0.05/2; band3_lons=repmat(band3_lon,3600,1);
 %only the area we need to worry about.  This will
 %significantly speed up the search for albedo values within
 %each pixel.
-loncorn = data.(loncorn_field);
-latcorn = data.(latcorn_field);
+loncorn = data.(loncorn_field)(:);
+latcorn = data.(latcorn_field)(:);
 loncorn(loncorn==0) = [];
 latcorn(latcorn==0) = [];
 lon_min = floor(min(loncorn));
