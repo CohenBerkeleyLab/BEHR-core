@@ -55,14 +55,10 @@ mpath = fileparts(mfilename('fullpath'));
 addpath(genpath(fullfile(mpath,'..','Utils')));
 
 
-% Add the paths needed to run on the cluster
-if onCluster;
-    addpath(genpath('~/MATLAB/Classes'));
-    addpath(genpath('~/MATLAB/Utils'));
-else
-    addpath(genpath(BEHR_paths('classes')));
-    addpath(genpath(BEHR_paths('utils')));
-end
+% Add the paths needed for certain utility classes and functions
+addpath(genpath(BEHR_paths('classes')));
+addpath(genpath(BEHR_paths('utils')));
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INITIALIZATION & INPUT VALIDATION %%%%%
@@ -80,7 +76,7 @@ p.addParameter('modis_myd06_dir', '');
 p.addParameter('modis_mcd43_dir', '');
 p.addParameter('globe_dir', '');
 p.addParameter('region', 'US');
-p.addParameter('overwrite', true)
+p.addParameter('overwrite', false)
 
 p.parse(varargin{:});
 pout = p.Results;
@@ -119,10 +115,6 @@ elseif (~islogical(overwrite) && ~isnumeric(overwrite)) || ~isscalar(overwrite)
     E.badinput('Parameter "overwrite" must be a scalar logical or number')
 end
 
-
-%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% CODED INPUT %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%
 
 % Specify the longitude and latitude ranges of interest for this retrieval.
 % Additionally, set the earliest and latest start time (in UTC) for the
@@ -297,11 +289,12 @@ for j=1:length(datenums)
     % /HDFEOS/SWATHS/ColumnAmountNO2 group and is spelled exactly how the
     % dataset is named.
     sp_variables = {'Longitude', 'Latitude', 'Time', 'ViewingZenithAngle',...
-        'SolarZenithAngle', 'AmfStrat', 'AmfTrop', 'CloudFraction',...
-        'CloudRadianceFraction', 'TerrainHeight', 'TerrainPressure',...
-        'TerrainReflectivity', 'CloudPressure', 'ColumnAmountNO2',...
-        'SlantColumnAmountNO2', 'ColumnAmountNO2Trop', 'VcdQualityFlags',...
-        'XTrackQualityFlags'};
+        'SolarZenithAngle', 'ViewingAzimuthAngle', 'SolarAzimuthAngle',...
+        'AmfStrat', 'AmfTrop', 'CloudFraction', 'CloudRadianceFraction',...
+        'TerrainHeight', 'TerrainPressure', 'TerrainReflectivity',...
+        'CloudPressure', 'ColumnAmountNO2', 'SlantColumnAmountNO2',...
+        'ColumnAmountNO2Trop', 'ColumnAmountNO2TropStd', 'ColumnAmountNO2Strat',...
+        'TropopausePressure', 'VcdQualityFlags', 'XTrackQualityFlags'};
     
     % Variables from the OMPIXCOR files. As with the SP variables, adding a
     % variable here that is under the '/HDFEOS/SWATHS/OMI Ground Pixel
@@ -312,8 +305,8 @@ for j=1:length(datenums)
     % Variables that will be added by BEHR. These will need manual
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
-    behr_variables = {'Date', 'LatBdy', 'LonBdy', 'Row', 'MODISCloud', 'MODISCloudFiles',...
-        'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'Loncorn', 'Latcorn'};
+    behr_variables = {'Date', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
+        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'Loncorn', 'Latcorn'};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
     Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
@@ -363,6 +356,16 @@ for j=1:length(datenums)
         pixcor_name = make_pixcorn_name_from_sp(this_sp_filename, fullfile(omi_pixcor_dir, this_year_str, this_month_str));
         this_data = read_omi_sp(pixcor_name, '/HDFEOS/SWATHS/OMI Ground Pixel Corners VIS', pixcor_variables, this_data, [lonmin, lonmax], [latmin, latmax]);
         
+        % Add a few pieces of additional information
+        % Swath is given in the file name as a five digits number following
+        % the "-o" in the name (swath == orbit number)
+        swath = str2double(regexp(this_sp_filename, '(?<=-o)\d\d\d\d\d', 'match', 'once'));
+        this_data.Swath = swath;
+        
+        raa_tmp=abs(this_data.SolarAzimuthAngle + 180 - this_data.ViewingAzimuthAngle); % the extra factor of 180 corrects for the definition of RAA in the scattering weight lookup table
+        raa_tmp(raa_tmp > 180)=360-raa_tmp(raa_tmp > 180);
+        this_data.RelativeAzimuthAngle = raa_tmp;
+        
         % Add our calculated lat and lon corners. This should only be
         % temporary until the unit testing to verify that the version 3
         % read function produces identical files to the version 2 read
@@ -377,23 +380,21 @@ for j=1:length(datenums)
             'DEBUG_LEVEL', DEBUG_LEVEL, 'LoncornField', 'Loncorn', 'LatcornField', 'Latcorn');
         
         
-        %Add MODIS albedo info to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Add MODIS albedo info to the files
         if DEBUG_LEVEL>0; fprintf('\n Adding MODIS albedo information \n'); end
         this_data = read_modis_albedo(modis_mcd43_dir, this_dnum, this_data, 'DEBUG_LEVEL', DEBUG_LEVEL, 'LoncornField', 'Loncorn', 'LatcornField', 'Latcorn');
         
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        
-        %Add GLOBE terrain pressure to the files%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Add GLOBE terrain pressure to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
         
         this_data = avg_globe_data_to_pixels(this_data, globe_elevations, globe_lon_matrix, globe_lat_matrix,...
             'DEBUG_LEVEL', DEBUG_LEVEL, 'LatcornField', 'Latcorn', 'LoncornField', 'Loncorn');
         
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Add the few attribute-like variables
+        this_data.Date = datestr(this_dnum, 'yyyy/mm/dd');
+        this_data.LonBdy = [lonmin, lonmax];
+        this_data.LatBdy = [latmin, latmax];
+        
         data_ind = data_ind + 1;
         Data(data_ind) = this_data;
         

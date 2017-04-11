@@ -51,15 +51,15 @@ BEHRAMFTropVisOnly=fill_val * ones(maxx,maxy);
 MODISCloud=fill_val * ones(maxx,maxy);
 Row=fill_val * ones(maxx,maxy);
 Swath=fill_val * ones(maxx,maxy);
-AMFTrop=fill_val * ones(maxx,maxy);
-AMFStrat=fill_val * ones(maxx,maxy);
+AmfTrop=fill_val * ones(maxx,maxy);
+AmfStrat=fill_val * ones(maxx,maxy);
 TropopausePressure=fill_val * ones(maxx,maxy);
 
 Count = zeros(maxx, maxy);
 Area = nan(maxx, maxy);
 Areaweight = nan(maxx, maxy);
 
-vcdQualityFlags=cell(maxx,maxy);
+VcdQualityFlags=cell(maxx,maxy);
 XTrackQualityFlags=cell(maxx,maxy);
 
 
@@ -89,9 +89,9 @@ XTrackQualityFlags=cell(maxx,maxy);
 % MODISCloud_i=Data(d).MODISCloud;
 % Row_i=Data(d).Row;
 % Swath_i=Data(d).Swath;
-% AMFTrop_i=Data(d).AMFTrop;
-% AMFStrat_i=Data(d).AMFStrat;
-% vcdQualityFlags_i=Data(d).vcdQualityFlags;
+% AMFTrop_i=Data(d).AmfTrop;
+% AMFStrat_i=Data(d).AmfStrat;
+% VcdQualityFlags_i=Data(d).VcdQualityFlags;
 % XTrackQualityFlags_i=Data(d).XTrackQualityFlags;
 % TropopausePressure_i=Data(d).TropopausePressure;
 %
@@ -137,7 +137,8 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     
     BEHRColumnAmountNO2Trop_val = Data.BEHRColumnAmountNO2Trop(x);
     BEHRColumnAmountNO2TropVisOnly_val = Data.BEHRColumnAmountNO2TropVisOnly(x);
-    Time_val = Data.Time(x);
+    [tx,~] = ind2sub(size(Data.Longitude),x);
+    Time_val = Data.Time(tx);
     ViewingZenithAngle_val = Data.ViewingZenithAngle(x);
     SolarZenithAngle_val = Data.SolarZenithAngle(x);
     ViewingAzimuthAngle_val = Data.ViewingAzimuthAngle(x);
@@ -162,11 +163,11 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     BEHRAMFTropVisOnly_val = Data.BEHRAMFTropVisOnly(x);
     MODISCloud_val = Data.MODISCloud(x);
     Row_val = Data.Row(x);
-    Swath_val = Data.Swath(x);
-    AMFTrop_val = Data.AMFTrop(x);
-    AMFStrat_val = Data.AMFStrat(x);
+    Swath_val = Data.Swath;
+    AMFTrop_val = Data.AmfTrop(x);
+    AMFStrat_val = Data.AmfStrat(x);
     TropopausePressure_val = Data.TropopausePressure(x);
-    vcdQualityFlags_val = Data.vcdQualityFlags(x);
+    VcdQualityFlags_val = Data.VcdQualityFlags(x);
     XTrackQualityFlags_val = Data.XTrackQualityFlags(x);
     
     
@@ -256,14 +257,14 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     MODISCloud(x_quad, y_quad) = sum([MODISCloud(x_quad, y_quad)*(Count(x_quad, y_quad)-1), MODISCloud_val])/Count(x_quad,y_quad);
                     Row(x_quad, y_quad) = sum([Row(x_quad, y_quad)*(Count(x_quad, y_quad)-1), Row_val])/Count(x_quad,y_quad);
                     Swath(x_quad, y_quad) = sum([Swath(x_quad, y_quad)*(Count(x_quad, y_quad)-1), Swath_val])/Count(x_quad,y_quad);
-                    AMFTrop(x_quad, y_quad) = sum([AMFTrop(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFTrop_val])/Count(x_quad,y_quad);
-                    AMFStrat(x_quad, y_quad) = sum([AMFStrat(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFStrat_val])/Count(x_quad,y_quad);
+                    AmfTrop(x_quad, y_quad) = sum([AmfTrop(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFTrop_val])/Count(x_quad,y_quad);
+                    AmfStrat(x_quad, y_quad) = sum([AmfStrat(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFStrat_val])/Count(x_quad,y_quad);
                     TropopausePressure(x_quad, y_quad) = sum([TropopausePressure(x_quad, y_quad)*(Count(x_quad, y_quad)-1), TropopausePressure_val])/Count(x_quad,y_quad);
                     
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
                     
-                    vcdQualityFlags(x_quad, y_quad) = {[vcdQualityFlags{x_quad, y_quad}, vcdQualityFlags_val]};
+                    VcdQualityFlags(x_quad, y_quad) = {[VcdQualityFlags{x_quad, y_quad}, VcdQualityFlags_val]};
                     XTrackQualityFlags(x_quad, y_quad) = {[XTrackQualityFlags{x_quad, y_quad}, XTrackQualityFlags_val]};
                     
                     % If there is no existing field
@@ -308,13 +309,13 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     MODISCloud(x_quad, y_quad) = MODISCloud_val;
                     Row(x_quad, y_quad) = Row_val;
                     Swath(x_quad, y_quad) = Swath_val;
-                    AMFTrop(x_quad, y_quad) = AMFTrop_val;
-                    AMFStrat(x_quad, y_quad) = AMFStrat_val;
+                    AmfTrop(x_quad, y_quad) = AMFTrop_val;
+                    AmfStrat(x_quad, y_quad) = AMFStrat_val;
                     TropopausePressure(x_quad, y_quad) = TropopausePressure_val;
                     
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
-                    vcdQualityFlags(x_quad, y_quad) = {vcdQualityFlags_val};
+                    VcdQualityFlags(x_quad, y_quad) = {VcdQualityFlags_val};
                     XTrackQualityFlags(x_quad, y_quad) = {XTrackQualityFlags_val};
                 end
             end
@@ -352,13 +353,13 @@ OMI.BEHRAMFTropVisOnly = BEHRAMFTropVisOnly;
 OMI.MODISCloud = MODISCloud;
 OMI.Row = Row;
 OMI.Swath = Swath;
-OMI.AMFTrop = AMFTrop;
-OMI.AMFStrat = AMFStrat;
+OMI.AmfTrop = AmfTrop;
+OMI.AmfStrat = AmfStrat;
 OMI.Count = Count;
 OMI.Area = Area;
 OMI.Areaweight = Areaweight;
 OMI.TropopausePressure = TropopausePressure;
-OMI.vcdQualityFlags = vcdQualityFlags;
+OMI.VcdQualityFlags = VcdQualityFlags;
 OMI.XTrackQualityFlags = XTrackQualityFlags;
 
 % Replace fill values with NaNs. Of course, we can only do this for numeric
