@@ -5,9 +5,6 @@ function [ varargout ] = misc_behr_wind_plots( plttype, varargin )
 
 E = JLLErrors;
 
-C=load('blue_red_cmap');
-C2=load('four_color_cmap.mat');
-
 switch lower(plttype)
     case 'windfield'
     case 'windmagangle'
@@ -57,6 +54,8 @@ switch lower(plttype)
         pix_pos_vs_cld();
     case 'wind-v-cld'
         wind_cond_vs_cld();
+    case 'apriori-surface'
+        plot_behr_apriori_surface();
     otherwise
         fprintf('plttype not recognized\n');
 end
@@ -780,7 +779,11 @@ end
         end
         
         % Follow up if using BEHR: should we compare hybrid or hour-wise
-        % data to the monthly average?
+        % data to the monthly average? Allow the user to manually choose
+        % two directories to compare if the a priori they want is not
+        % listed. This will remove the need for some later questions as
+        % well.
+        manual_dir = false;
         if ~strcmpi(source,'wrf')
             if strcmpi(source,'pseudo-behr')
                 allowed_apriori = {'hourly','hybrid','hybrid-avg','monthly'};
@@ -788,8 +791,40 @@ end
                 allowed_apriori = {'hourly','hybrid','monthly','monthly-converg','monthly-sqrt-converg'};
             end
             if any(~isfield(options,{'apriori_base','apriori_new'}))
-                apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly','list',true);
-                apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori, 'list', true);
+                apriori_base = ask_multichoice('Which a priori will be the base case?', [allowed_apriori, {'Choose directory manually'}], 'default', 'monthly','list',true);
+                if ~strcmpi(apriori_base,'Choose directory manually') || ~isDisplay
+                    if strcmpi(apriori_base,'Choose directory manually') && ~isDisplay
+                        fprintf('Not using a display, cannot open UIGETDIR dialogue. Please choose an a priori.\n')
+                        apriori_base = ask_multichoice('Which a priori will be the base case?', allowed_apriori, 'default', 'monthly','list',true);
+                    end
+                    apriori_new = ask_multichoice('Which a priori will be the new case?', allowed_apriori, 'list', true);
+                else
+                    fprintf('Choose the base apriori first, then the new apriori\n');
+                    input('Press ENTER to continue','s');
+                    base_dir = uigetdir('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed', 'Choose the base a priori folder');
+                    new_dir = uigetdir('/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed', 'Choose the new a priori folder');
+                    if isnumeric(base_dir) && base_dir == 0 || isnumeric(new_dir) && new_dir == 0
+                        E.userCancel;
+                    end
+                    manual_dir = true;
+                    
+                    % Check that the directory name includes "Atlanta" if
+                    % doing pseudo retrieval or "SE US"/"W US" for full
+                    % BEHR. This is just how I named the folders.
+                    if strcmpi(source,'pseudo-behr')
+                        teststr = 'Atlanta';
+                    else
+                        teststr = '(SE US|W US)';
+                    end
+                    btest = isempty(regexp(base_dir, teststr, 'once'));
+                    ntest = isempty(regexp(new_dir, teststr, 'once'));
+                    if btest || ntest
+                        fprintf('One of the directories does not appear to be a %s directory (did not pass the regexp test "%s"\n', source, teststr);
+                        if strcmpi(ask_multichoice('Continue?', {'y','n'}, 'default', 'n'),'n')
+                            E.userCancel;
+                        end
+                    end
+                end
             else
                 if any(~ismember({options.apriori_base, options.apriori_new}, allowed_apriori))
                     E.badinput('options.apriori_base and options.apriori_new must be one of %s',strjoin(allowed_apriori,', '))
@@ -804,7 +839,9 @@ end
         
         % Do we want to use the fine or coarse WRF simulation?
         allowed_res = {'f','c'};
-        if ~isfield(options,'res_base') || ~isfield(options,'res_new')
+        if manual_dir
+            %do nothing
+        elseif ~isfield(options,'res_base') || ~isfield(options,'res_new')
             res_base = ask_multichoice('Do you want the fine (12 km) or coarse (108 km) WRF for the base a priori', allowed_res);
             res_new = ask_multichoice('And for the new a priori?', allowed_res, 'default', res_base);
         else
@@ -816,7 +853,9 @@ end
         end
         
         % Use the hour-average or instantaneous profiles?
-        if strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'}) & strcmpi({res_base, res_new},'f'))
+        if manual_dir
+            %do nothing
+        elseif strcmpi(source,'pseudo-behr') && any(ismember({apriori_base, apriori_new},{'hourly','hybrid'}) & strcmpi({res_base, res_new},'f'))
             allowed_timemode = {'avg','instant'};
             if ~isfield(options,'timemode')
                 timemode = ask_multichoice('Use profiles averaged over an hour or instantaneous at the top of the hour?', allowed_timemode);
@@ -933,28 +972,28 @@ end
                 city_lon = -84.39;
                 city_lat = 33.775;
                 city_swaths = 2;
-                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta-Wind-Conditions-1900UTC-5layers.mat';
+                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta-Wind-Conditions-1900UTC-5layers-earthrel.mat';
             case 'Birmingham'
                 xl = [-88 -85.5];
                 yl = [33 34.5];
                 city_lon = -86.80;
                 city_lat = 33.52;
                 city_swaths = 2;
-                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Birmingham-Wind-Conditions-1900UTC-5layers.mat';
+                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Birmingham-Wind-Conditions-1900UTC-5layers-earthrel.mat';
             case 'Montgomery'
                 xl = [-87 -85];
                 yl = [31.5 33];
                 city_lon = -86.3;
                 city_lat = 32.37;
                 city_swaths = 2;
-                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Montgomery-Wind-Conditions-1900UTC-5layers.mat';
+                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Montgomery-Wind-Conditions-1900UTC-5layers-earthrel.mat';
             case 'SF'
                 xl = [-125 -119];
                 yl = [32 42];
                 city_lon = -122.42;
                 city_lat = 37.77;
                 city_swaths = [3,4];
-                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SF-Wind-Conditions-1900UTC-5layers-earthrel.mat';
+                windfile = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SF-Wind-Conditions-1900UTC-5layers-earthrel-earthrel.mat';
             otherwise
                 E.notimplemented('city = %s',city);
         end
@@ -963,11 +1002,27 @@ end
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%% LOAD DATA, CALCULATE QUANTITIES, AND PLOT %%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        base_file = return_data_file_info(source, city, timemode, res_base, apriori_base, date_in);
-        new_file = return_data_file_info(source, city, timemode, res_new, apriori_new, date_in);
+        if ~manual_dir
+            base_file = return_data_file_info(source, city, timemode, res_base, apriori_base, date_in);
+            new_file = return_data_file_info(source, city, timemode, res_new, apriori_new, date_in);
+        else
+            if strcmpi(source,'wrf')
+                E.notimplemented('Manual WRF directory - monthly names are different')
+            end
+            fname = sprintf('OMI_BEHR_%s.mat', datestr(date_in, 'yyyymmdd'));
+            base_file = fullfile(base_dir, fname);
+            new_file = fullfile(new_dir, fname);
+        end
         
         if strcmp(source,'wrf')
-            
+            % If we're not doing a difference, point both base and new to
+            % the same file. This skirts around an issue with loading the
+            % lat/lon
+            if strcmpi(diff_type,'d')
+                base_file = new_file;
+            elseif strcmpi(diff_type,'m')
+                new_file = base_file;
+            end
             
             XLONG = ncread(new_file, 'XLONG');
             XLAT = ncread(new_file, 'XLAT');
@@ -1032,10 +1087,10 @@ end
                 switch diff_type
                     case 'a'
                         del = daily_no2_columns - monthly_no2_columns;
-                        cmap = C.blue_red_cmap;
+                        cmap = blue_red_cmap;
                     case 'p'
                         del = (daily_no2_columns ./ monthly_no2_columns - 1)*100;
-                        cmap = C.blue_red_cmap;
+                        cmap = blue_red_cmap;
                     case 'd'
                         del = daily_no2_columns;
                         cmap = 'jet';
@@ -1169,10 +1224,10 @@ end
                 switch diff_type
                     case 'a'
                         del = daily_value{i} - monthly_value{i};
-                        cmap = C2.four_color_cmap;
+                        cmap = four_color_cmap;
                     case 'p'
                         del = (daily_value{i} ./ monthly_value{i} - 1) * 100;
-                        cmap = C2.four_color_cmap;
+                        cmap = four_color_cmap;
                     case 'd'
                         del = daily_value{i};
                         cmap = 'jet';
@@ -1249,8 +1304,8 @@ end
     end
 
     function plot_pseudo_diff_timeser()
-        allowed_diffs = {'hr-hy','hy-mn','hr-mn','hy-avg','avg-mn','all'};
-        diff_mode = ask_multichoice('Which difference to consider; hourly vs hybrid or hybrid vs monthly?', allowed_diffs);
+        allowed_diffs = {'hr-hy','hy-mn','hr-mn','hy-avg','avg-mn','all','Pick directories manually'};
+        diff_mode = ask_multichoice('Which difference to consider; hourly vs hybrid or hybrid vs monthly?', allowed_diffs,'list',true);
         if ~strcmpi(diff_mode,'all')
             allowed_modes = {'box','dist','scatter-dist','scatter-dist-wbox','scatter-angle','scatter-angle-wbox','pcolor','pcolor-med','pcolor-apri','pcolor-apri-stdp','combo'};
             plot_mode = ask_multichoice(sprintf('Which type of plot do you want:\n'), allowed_modes);
@@ -1262,40 +1317,60 @@ end
         city_lon = -84.39;
         city_lat = 33.775;
         
-        switch diff_mode
+        workdir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/';
+        switch lower(diff_mode)
             case 'hr-hy'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hourly - No clouds - No ghost - UTC 1800-2200');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hy-mn'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hy-avg'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'hr-mn'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Hourly - No clouds - No ghost - UTC 1800-2200');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'avg-mn'
-                new_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
+                new_dir = fullfile(workdir,'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
                 F_new = dir(fullfile(new_dir,'OMI*.mat'));
-                old_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                old_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
                 F_old = dir(fullfile(old_dir,'OMI*.mat'));
             case 'all'
-                hr_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                hr_dir = fullfile(workdir,'Atlanta BEHR Hourly - No clouds - No ghost - UTC 1800-2200');
                 F_hr = dir(fullfile(hr_dir,'OMI*.mat'));
-                hy_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                hy_dir = fullfile(workdir,'Atlanta BEHR Hybrid - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
                 F_hy = dir(fullfile(hy_dir,'OMI*.mat'));
-                mn_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                mn_dir = fullfile(workdir,'Atlanta BEHR Monthly - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
                 F_mn = dir(fullfile(mn_dir,'OMI*.mat'));
+            case 'pick directories manually'
+                if ~isDisplay
+                    E.notdisplay('Picking directories manually requires a display.')
+                end
+                fprintf('Two dialogue boxes will now open. Pick the new a priori first, the base a priori second.\n');
+                input('Press ENTER to continue', 's');
+                new_dir = uigetdir(workdir, 'Pick the new a priori');
+                old_dir = uigetdir(workdir, 'Pick the base a priori');
                 
+                if isnumeric(new_dir) || isnumeric(old_dir)
+                    E.userCancel;
+                elseif isempty(regexp(new_dir,'Atlanta','once')) || isempty(regexp(old_dir, 'Atlanta', 'once'))
+                    fprintf('One of the directories does not appear to be a pseudo-retrieval directory (does not contain "Atlanta" in the name)\n');
+                    if strcmpi(ask_multichoice('Continue?', {'y','n'}, 'default', 'n'),'n')
+                        E.userCancel;
+                    end
+                end
+                
+                F_new = dir(fullfile(new_dir,'OMI*.mat'));
+                F_old = dir(fullfile(old_dir,'OMI*.mat'));
         end
         if ~strcmpi(diff_mode,'all') && numel(F_new) ~= numel(F_old)
             E.callError('unequal_num_files','There are not equal numbers of hourly and hybrid files');
@@ -1440,7 +1515,7 @@ end
             cb.FontSize = 20;
             cmax = max(abs(cb.Limits));
             caxis([-cmax, cmax]);
-            colormap(C.blue_red_cmap);
+            colormap(blue_red_cmap);
             
             figure; 
             pcolor(squeeze(new.Data.Loncorn(1,:,:)),squeeze(new.Data.Latcorn(1,:,:)),delmatstd);
@@ -2154,8 +2229,7 @@ end
             maxval = ceil(maxval/10)*10;
             caxis([-maxval maxval]);
             
-            C = load('blue_red_cmap.mat');
-            colormap(C.blue_red_cmap);
+            colormap(blue_red_cmap);
             
             if strcmp(quantity,'amf')
                 if strcmp(plot_type,'p')
@@ -2175,6 +2249,22 @@ end
             title(sprintf('%s: %s km %s', date_to_comp, res_base, base_interp_str));
             cb.Label.String = 'AMF';
         end
+    end
+
+    function plot_behr_apriori_surface()
+        [filename, pathname] = uigetfile();
+        D=load(fullfile(pathname,filename),'Data');
+        Data = D.Data;
+        nswaths = numel(Data);
+        swath = ask_number(sprintf('Which swath to plot (1-%d)?', nswaths), 'testfxn', @(x) x > 0 && x <= nswaths, 'testmsg', sprintf('Value must be between 1 and %d', nswaths));
+        
+        lon = squeeze(Data(swath).Loncorn(1,:,:));
+        lat = squeeze(Data(swath).Latcorn(1,:,:));
+        apri_surf = behr_apriori_surface(Data(swath));
+        
+        figure; pcolor(lon,lat,apri_surf);
+        cb=colorbar;
+        cb.Label.String = '[NO_2] (mixing ratio)';
     end
 
     function avg_prof = plot_ens_apriori()
@@ -2787,6 +2877,7 @@ end
             city_logs_6e14 = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
             city_logs_20percent = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
             city_logs_quadsum = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
+            city_logs_quadsum2 = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
             city_npix = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
             city_npixclr = cellmat(1,numel(city_names),1,numel(dnums)); % cell array of matrices filled with 0s
             city_ndays_someclear = zeros(size(city_names));
@@ -2840,7 +2931,8 @@ end
                         city_logs{c}(d) = any(abs(absdiff(in)) >= 1e15);
                         city_logs_6e14{c}(d) = any(abs(absdiff(in)) >= 0.6e15); % boersma 04: DOAS uncertainty (0.4e15) plus slant column (0.45e15) added in quadrature
                         city_logs_20percent{c}(d) = any(abs(perdiff(in)) >= 20 & abs(absdiff(in)) >= 0.6e15); % bucsela 13: 20% estimated clear sky AMF error.
-                        city_logs_quadsum{c}(d) = any(abs(absdiff(in)) >= sqrt( 0.6e15^2 + (0.2 * vcd_base(in)).^2 ));
+                        city_logs_quadsum{c}(d) = any(abs(absdiff(in)) >= sqrt( 0.7e15^2 + 0.2e15^2 + (0.20 * vcd_base(in)).^2 ));
+                        city_logs_quadsum2{c}(d) = any(abs(absdiff(in)) >= sqrt( 1e15^2 + (0.25 * vcd_base(in)).^2 ));
                         % If all the pixels were bad, then this day is probably
                         % falling in the row anomaly, but it could be heavily
                         % clouded. In either case, it shouldn't be counted as
@@ -2900,21 +2992,24 @@ end
                     varnames{1,4} = 'PercentDaysDVCDGT20percentPLUS6e14';
                     tabcell{c,4} = sum(city_logs_quadsum{c})/city_ndays_someclear(c)*100;
                     
-                    varnames{1,5} = 'MinChange';
-                    tabcell{c,5} = city_minchange(c);
-                    varnames{1,6} = 'MinPercentChange';
-                    tabcell{c,6} = city_minperchange(c);
-                    varnames{1,7} = 'MaxChange';
-                    tabcell{c,7} = city_maxchange(c);
-                    varnames{1,8} = 'MaxPercentChange';
-                    tabcell{c,8} = city_maxperchange(c);
+                    varnames{1,5} = 'PercentDaysDVCDGT25percentPLUS1e15';
+                    tabcell{c,5} = sum(city_logs_quadsum2{c})/city_ndays_someclear(c)*100;
                     
-                    varnames{1,9} = 'NumDaysWithGT0percentClearPix';
-                    tabcell{c,9} = city_ndays_someclear(c);
-                    varnames{1,10} = 'FracDaysGT50percentClearChange';
-                    tabcell{c,10} = sum(fracclr > 0.5 & city_logs{c})/sum(fracclr > 0.5);
-                    varnames{1,11} = 'FracDaysGT80percentClearChange';
-                    tabcell{c,11} = sum(fracclr > 0.8 & city_logs{c})/sum(fracclr > 0.8);
+                    varnames{1,6} = 'MinChange';
+                    tabcell{c,6} = city_minchange(c);
+                    varnames{1,7} = 'MinPercentChange';
+                    tabcell{c,7} = city_minperchange(c);
+                    varnames{1,8} = 'MaxChange';
+                    tabcell{c,8} = city_maxchange(c);
+                    varnames{1,9} = 'MaxPercentChange';
+                    tabcell{c,9} = city_maxperchange(c);
+                    
+                    varnames{1,10} = 'NumDaysWithGT0percentClearPix';
+                    tabcell{c,10} = city_ndays_someclear(c);
+                    varnames{1,11} = 'FracDaysGT50percentClearChange';
+                    tabcell{c,11} = sum(fracclr > 0.5 & city_logs{c})/sum(fracclr > 0.5);
+                    varnames{1,12} = 'FracDaysGT80percentClearChange';
+                    tabcell{c,12} = sum(fracclr > 0.8 & city_logs{c})/sum(fracclr > 0.8);
                     
                     dVCDStats.dVCD_logical.(city_names{c}) = city_logs{c};
                     dVCDStats.npix.(city_names{c}) = city_npix{c};
@@ -3475,22 +3570,27 @@ for a=1:min(nargout,2) % if no second output is requested, don't ask for a "new"
         case 'full'
             switch apriori_type
                 case 'monthly'
-                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost - lw 13.5 overpass - 18-22 UTC';
+                    %this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Monthly - No ghost';
                 case 'hybrid'
                     this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hybrid - No ghost';
+                    warning('The hybrid case has not been updated to include UTC 1800 profiles');
                 case 'hourly'
-                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost';
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost - lw 13.5 overpass - 18-22 UTC';
+                    %this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/SE US BEHR Hourly - No ghost';
             end
         case 'pseudo'
             switch apriori_type
                 case 'monthly'
-                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost';
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Monthly - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200';
                 case 'hybrid'
-                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                    %this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost';
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hybrid - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200';
                 case 'hourly'
-                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost';
+                    this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Hourly - No clouds - No ghost - UTC 1800-2200';
                 case 'hybrid-avg'
                     this_path = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/Atlanta BEHR Avg Hybrid - No clouds - No ghost';
+                    warning('The hybrid-avg case has not been updated to include UTC 1800 profiles');
             end
     end
     if a==1
@@ -3545,13 +3645,16 @@ switch source
         monthly_file_name_spec = 'WRF_BEHR_monthly_%1$04d-%2$02d-%3$02d.nc';
         switch res
             case 'f'
-                daily_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR',wrf_coast),'hourly');
+                daily_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR',wrf_coast),'hourly-14.0-lonwt-1822UTC');
                 hybrid_path = NaN;
-                monthly_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR',wrf_coast),'monthly');
+                monthly_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR',wrf_coast),'monthly-13.5-lonwt-1822UTC');
             case 'c'
-                daily_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR_COARSE',wrf_coast),'hourly');
+                daily_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR_COARSE_13lonwt_1822UTC',wrf_coast),'hourly');
                 hybrid_path = NaN;
-                monthly_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR_COARSE',wrf_coast),'monthly');
+                monthly_path = fullfile(sharedir,'WRF',sprintf('%s_US_BEHR_COARSE_13lonwt_1822UTC',wrf_coast),'monthly');
+                if strcmpi(apriori, 'hourly')
+                    warning('The coarse hourly apriori using lonweight assuming OMI overpass at 1330 LST or profiles from 1800-2200 UTC has not been downloaded');
+                end
         end
     case 'behr'
         daily_file_name_spec = 'OMI_BEHR_%1$04d%2$02d%3$02d.mat';
@@ -3559,15 +3662,21 @@ switch source
         s = 2;
         switch res
             case 'f'
-                daily_path = fullfile(workdir,sprintf('%s US BEHR Hourly - No ghost',behr_coast));
+                daily_path = fullfile(workdir,sprintf('%s US BEHR Hourly - No ghost - lw 13.5 overpass - 18-22 UTC',behr_coast));
                 hybrid_path = fullfile(workdir,sprintf('%s US BEHR Hybrid - No ghost',behr_coast));
-                monthly_path = fullfile(workdir,sprintf('%s US BEHR Monthly - No ghost',behr_coast));
+                monthly_path = fullfile(workdir,sprintf('%s US BEHR Monthly - No ghost - lw 13.5 overpass - 18-22 UTC',behr_coast));
                 monthly_converg_path = fullfile(workdir,sprintf('%s US BEHR Monthly - Convergence',behr_coast));
                 monthly_sqrt_converg_path = fullfile(workdir,sprintf('%s US BEHR Monthly - Sqrt Convergence',behr_coast));
+                if any(strcmpi(apriori, {'hybrid','monthly-converg','monthly-sqrt-converg'}))
+                    warning('The %s apriori has not been updated to use lonweight assuming OMI overpass at 1330 LST or profiles from 1800-2200 UTC', apriori);
+                end
             case 'c'
                 daily_path = fullfile(workdir,sprintf('%s US BEHR Hourly - No ghost - Coarse WRF',behr_coast));
                 hybrid_path = fullfile(workdir,sprintf('%s US BEHR Hybrid - No ghost - Coarse WRF',behr_coast));
-                monthly_path = fullfile(workdir,sprintf('%s US BEHR Monthly - No ghost - Coarse WRF',behr_coast));
+                monthly_path = fullfile(workdir,sprintf('%s US BEHR Monthly - No ghost - Coarse WRF - lw 13.5 overpass - 18-22 UTC',behr_coast));
+                if any(strcmpi(apriori, {'hybrid','hourly'}))
+                    warning('The coarse %s apriori has not been updated to use lonweight assuming OMI overpass at 1330 LST or profiles from 1800-2200 UTC', apriori);
+                end
         end
     case 'pseudo-behr'
         if strcmpi(city,'SF')
@@ -3581,19 +3690,24 @@ switch source
         switch res
             case 'f'
                 if strcmpi(timemode,'avg')
-                    daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost');
-                    hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost');
+                    daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - UTC 1800-2200');
+                    hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
                     hybrid_avg_path = fullfile(workdir, 'Atlanta BEHR Avg Hybrid - No clouds - No ghost');
+                    if any(strcmpi(apriori,{'hybrid-avg'}))
+                        warning('The hour-averaged %s pseudo-retrieval apriori has not been updated to use lonweight assuming OMI overpass at 1330 LST or profiles from 1800-2200 UTC', apriori);
+                    end
                 else
                     daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Instantaneous');
                     hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Instantaneous');
+                    warning('The instantaneous pseudo-retrieval apriori have not been updated to use lonweight assuming OMI overpass at 1330 LST or profiles from 1800-2200 UTC');
                 end
-                monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost');
+                monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost - lonweight 13.5 overpass - UTC 1800-2200');
             case 'c'
                 daily_path = fullfile(workdir, 'Atlanta BEHR Hourly - No clouds - No ghost - Coarse WRF');
                 hybrid_path = fullfile(workdir, 'Atlanta BEHR Hybrid - No clouds - No ghost - Coarse WRF');
                 hybrid_avg_path = fullfile(workdir, 'Atlanta BEHR Avg Hybrid - No clouds - No ghost - Coarse WRF');
                 monthly_path = fullfile(workdir, 'Atlanta BEHR Monthly - No clouds - No ghost - Coarse WRF');
+                warning('The coarse pseudo-retrieval apriori have not been updated to use lonweight assuming OMI overpass at 1330 LST or profiles from 1800-2200 UTC');
         end
 end
 
@@ -3613,6 +3727,8 @@ switch apriori
         file_out = fullfile(hybrid_avg_path, daily_file_name);
     case 'hourly'
         file_out = fullfile(daily_path, daily_file_name);
+    case 'monthly-lonwt13.5'
+        file_out = fullfile(monthly_path_lonwt13, monthly_file_name);
     case 'monthly-converg'
         file_out = fullfile(monthly_converg_path, monthly_file_name);
     case 'monthly-sqrt-converg'

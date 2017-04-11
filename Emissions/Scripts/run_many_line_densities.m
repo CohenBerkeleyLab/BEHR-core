@@ -2,10 +2,10 @@ function run_many_line_densities
 % I'm not sitting around while these things run!
 
 %cities = {'Atlanta','Birmingham','Montgomery'};
-cities = {'Atlanta'};
+cities = {'Atlanta', 'Birmingham'};
 wind_crits = {3,4,5};%{'mean',3,5};
 box = [1.0 2.0 0.5 0.5];%[1.0 2.0 0.5 0.5];
-save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/50km-side-earthrel-no0to-112';
+save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/EMG fits/Autorun/FullDaily-NumObs/50km-side-earthrel-no0to-112-lonwt14-1822UTC';
 for a=1:numel(cities)
     for b=1:numel(wind_crits)
         if isnumeric(wind_crits{b})
@@ -43,9 +43,11 @@ homedir = getenv('HOME');
 behr_work_dir = fullfile(homedir,'Documents','MATLAB','BEHR','Workspaces','Wind speed');
 %hybrid_dir = 'SE US BEHR Hybrid - No ghost';
 wrf_dir = 'SE US WRF Hourly';
-hybrid_dir = 'SE US BEHR Hourly - No ghost';
-monthly_dir = 'SE US BEHR Monthly - No ghost';
-coarse_mn_dir = 'SE US BEHR Monthly - No ghost - Coarse WRF';
+hybrid_dir = 'SE US BEHR Hourly - No ghost - lw 14.0 overpass - 18-22 UTC';
+%monthly_dir = 'SE US BEHR Monthly - No ghost';
+monthly_dir = 'SE US BEHR Monthly - No ghost - lw 14.0 overpass - 18-22 UTC';
+%coarse_mn_dir = 'SE US BEHR Monthly - No ghost - Coarse WRF';
+coarse_mn_dir = 'SE US BEHR Monthly - No ghost - Coarse WRF - lw 14.0 overpass - 18-22 UTC';
 
 
 % loads theta and windvel plus city lat and lon
@@ -57,8 +59,13 @@ elseif ischar(wind_crit)
     E.badinput('wind_crit must be a number or the string ''mean''');
 end
 
-gtcrit = windvel >= wind_crit & (theta < -112.5 | theta > 0);
-ltcrit = windvel < wind_crit & (theta < -112.5 | theta > 0);
+if strcmpi(city, 'Atlanta')
+    gtcrit = windvel >= wind_crit & (theta < -112.5 | theta > 0);
+    ltcrit = windvel < wind_crit & (theta < -112.5 | theta > 0);
+else
+    gtcrit = windvel >= wind_crit;
+    ltcrit = windvel < wind_crit;
+end
 
 F = dir(fullfile(behr_work_dir, hybrid_dir, 'OMI_BEHR_*.mat'));
 
@@ -81,6 +88,8 @@ fprintf('\tFast coarse monthly\n')
 [S.no2x_mn108fast, S.no2ld_mn108fast, S.no2ldstd_mn108fast, S.lon_mn108fast, S.lat_mn108fast, S.no2cd_mn108fast, ~, S.num_obs_mn108fast, S.indiv_swaths_mn108fast, S.debug_cell_mn108fast] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',gtcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
 fprintf('\tSlow coarse monthly\n')
 [S.no2x_mn108slow, S.no2ld_mn108slow, S.no2ldstd_mn108slow, S.lon_mn108slow, S.lat_mn180slow, S.no2cd_mn108slow, ~, S.num_obs_mn108slow, S.indiv_swaths_mn108slow, S.debug_cell_mn108fast] = calc_line_density(fullfile(behr_work_dir, coarse_mn_dir),F,city_lon,city_lat,theta,'crit_logical',ltcrit,'rel_box_corners', box, 'interp', interp_bool, 'DEBUG_LEVEL',0);
+
+return
 
 F = dir(fullfile(behr_work_dir, wrf_dir, '*.mat'));
 fdnums = nan(size(F));

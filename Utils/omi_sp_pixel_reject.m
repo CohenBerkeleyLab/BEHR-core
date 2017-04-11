@@ -57,7 +57,7 @@ if ~exist('rows','var')
 end
 omi = omi_in;
 
-omi.Areaweight(omi.ColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
+%omi.Areaweight(omi.ColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
 
 if iscell(omi.vcdQualityFlags) % The flags may be a cell array or not, depending on whether this is for Data or OMI (gridded) structure
     for a=1:numel(omi.vcdQualityFlags);
@@ -80,7 +80,7 @@ else
 end
 
 
-omi.Areaweight(omi.ColumnAmountNO2Trop > 1E17) = 0; %Do not include the element if the NO2 column is too great.  These are known to be affected by the row anomaly (Bucsela 2013, Atmos. Meas. Tech. 2607)
+%omi.Areaweight(omi.ColumnAmountNO2Trop > 1E17) = 0; %Do not include the element if the NO2 column is too great.  These are known to be affected by the row anomaly (Bucsela 2013, Atmos. Meas. Tech. 2607)
 hh=find(isnan(omi.ColumnAmountNO2Trop)); omi.ColumnAmountNO2Trop(hh)=0; omi.Areaweight(hh)=0; %Set any column NaNs to 0 and do not include them in the average
 
 xx = omi_rowanomaly(omi,rowanomaly_mode); %Remove elements affected by the row anomaly.

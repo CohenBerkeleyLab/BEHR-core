@@ -267,7 +267,6 @@ for j=1:length(datenums)
                 cloudalbedo=0.8*ones(size(Data(d).CloudFraction)); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
                 dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
                 
-                
                 pTerr = surfPres;
                 pCld = cldPres;
                 if strcmpi(cloud_amf,'omi')
@@ -284,15 +283,14 @@ for j=1:length(datenums)
                 no2Profile2 = no2_bins;
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
-                noGhost=0; ak=1;
-                [amf, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels, ghost_fraction] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1, no2Profile2, noGhost, ak); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+                [amf, amfVis, ~, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
                 
                 sz = size(Data(d).Longitude);
                 len_vecs = size(scattering_weights,1);  % JLL 26 May 2015 - find out how many pressure levels there are. Will often be 30, but might change.
                 % Need this to properly reshape the scattering weights, AKs, pressure levels, and (soon) profiles
                 
                 Data(d).BEHRAMFTrop = reshape(amf,sz); %JLL 18 Mar 2014: Save the resulting AMF of the pixel
-                Data(d).BEHRGhostFraction = reshape(ghost_fraction,sz);
+                Data(d).BEHRAMFTropVisOnly = reshape(amfVis,sz);
                 Data(d).BEHRScatteringWeights = reshape(scattering_weights, [len_vecs, sz]);
                 Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
                 Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
@@ -307,9 +305,11 @@ for j=1:length(datenums)
                 continue
             else
                 Data(z).BEHRColumnAmountNO2Trop=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTrop;
+                Data(z).BEHRColumnAmountNO2TropVisOnly=Data(z).ColumnAmountNO2Trop.*Data(z).AMFTrop./Data(z).BEHRAMFTropVisOnly;
                 % make sure fill values in the original column or AMF are
                 % fill values in BEHR.
                 Data(z).BEHRColumnAmountNO2Trop(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AMFTrop < -30000) = nan; 
+                Data(z).BEHRColumnAmountNO2TropVisOnly(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AMFTrop < -30000) = nan; 
                 if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
             end
         end
@@ -347,14 +347,11 @@ for j=1:length(datenums)
         % Prepare the OMI data structure which will receive the gridded
         % data - this will be passed to the gridding functions to keep the
         % field names in the right order.
-        %         OMI=struct('Date','','Longitude', [], 'Latitude', [], 'Time', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'ViewingAzimuthAngle', [], 'SolarAzimuthAngle', [],...
-        %             'RelativeAzimuthAngle', [], 'AMFStrat', [], 'AMFTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
-        %             'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'ColumnAmountNO2TropStd',[],'ColumnAmountNO2Strat',[],'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'vcdQualityFlags',{{}},...
-        %             'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
-        %             'BEHRAMFTrop', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
-        OMI = struct('BEHRColumnAmountNO2Trop', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'AMFTrop', [], 'CloudFraction', [], 'CloudRadianceFraction', [],...
-            'CloudPressure', [], 'ColumnAmountNO2Trop', [], 'RelativeAzimuthAngle', [], 'MODISAlbedo', [], 'MODISCloud', [], 'GLOBETerpres', [], 'BEHRAMFTrop', [],...% 'OriginalBEHRAMF', [], 'OriginalBEHRColumn', [],...
-            'Latitude', [], 'Longitude', [], 'MapData', struct, 'Count', [], 'Area', [], 'Areaweight', [], 'vcdQualityFlags', {{}}, 'XTrackQualityFlags', {{}});
+        OMI=struct('Date','','Longitude', [], 'Latitude', [], 'Time', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'ViewingAzimuthAngle', [], 'SolarAzimuthAngle', [],...
+            'RelativeAzimuthAngle', [], 'AMFStrat', [], 'AMFTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
+            'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'ColumnAmountNO2TropStd',[],'ColumnAmountNO2Strat',[],'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'vcdQualityFlags',{{}},...
+            'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
+            'BEHRAMFTrop', [], 'BEHRColumnAmountNO2TropVisOnly', [], 'BEHRAMFTropVisOnly', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
         % Matlab treats structures as matrices, so we can duplicate our
         % structure to have the required number of entries just like a
         % matrix.
