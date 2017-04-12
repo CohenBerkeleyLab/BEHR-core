@@ -103,7 +103,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/Wind speed/W US BEHR Monthly - No ghost';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/LNOx-AMFs/BEHR_665LNOx';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -117,7 +117,7 @@ else
     %This is the directory where the NO2 profiles are stored. This will
     %need to be changed to match your machine and the files' location.
     %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
-    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/W_US_BEHR';
+    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/iccg_eq_2-fr_factor_1-mol_flash_665-fixedBC';
 end
 
 %Store paths to relevant files
@@ -277,13 +277,11 @@ parfor (j=1:length(datenums), n_workers)
                 
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
-                if DEBUG_LEVEL > 1; fprintf('   Reading NO2 profiles from %s\n', no2_profile_path); end
-                [no2_bins, apriori_bin_mode] = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, time, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
-                no2Profile1 = no2_bins;
-                no2Profile2 = no2_bins;
-                
+                if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
+                [no2Profile, apriori_bin_mode] = rProfile_WRF(datenums(j), loncorns, latcorns, time, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+               
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
-                [amf, amfVis, ~, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+                [amf, amfVis, ~, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
                 
                 sz = size(Data(d).Longitude);
                 len_vecs = size(scattering_weights,1);  % JLL 26 May 2015 - find out how many pressure levels there are. Will often be 30, but might change.
