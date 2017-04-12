@@ -1,4 +1,4 @@
-function [ no2_bins, bin_mode ] = rProfile_WRF( date_in, avg_mode, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+function [ no2_bins, bin_mode ] = rProfile_WRF( date_in, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -67,14 +67,6 @@ nearest = true;
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
-allowed_avg_modes = {'hourly','daily','monthly','hybrid'};
-avg_mode = lower(avg_mode);
-if ~ischar(avg_mode) || ~ismember(avg_mode, allowed_avg_modes);
-    E.badinput('avg_mode must be one of %s',strjoin(allowed_avg_modes,', '));
-end
-
-
-
 if size(loncorns,1) ~= 4 || size(latcorns,1) ~= 4
     E.badinput('loncorns and latcorns must have the corners along the first dimension (i.e. size(loncorns,1) == 4')
 elseif ndims(loncorns) ~= ndims(latcorns) || ~all(size(loncorns) == size(latcorns))
@@ -118,13 +110,9 @@ end
 %%%%% LOAD netCDF and READ VARIABLES %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if strcmpi(avg_mode,'hybrid')
-    [wrf_no2_m, wrf_pres_m, wrf_lon, wrf_lat, wrf_dx, wrf_dy] = load_wrf_vars('monthly');
-    [wrf_no2_h, wrf_pres, ~, ~, ~, ~, wrf_utchr] = load_wrf_vars('hourly');
-    wrf_no2 = combine_wrf_profiles(wrf_no2_h, wrf_pres, wrf_no2_m, wrf_pres_m);
-else
-    [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars(avg_mode);
-end
+
+[wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars();
+
 
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
@@ -155,7 +143,7 @@ if interp_bool && ~nearest
 elseif interp_bool && nearest
     bin_mode = sprintf('nearest:%s', wrf_utchr);
 else
-    bin_mode = sprintf('avg:%s', wrf_utchr);
+    bin_mode = sprintf('avg:%02d', wrf_utchr);
 end
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -274,38 +262,30 @@ end
         no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
     end
 
-    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, utc_hr] = load_wrf_vars(avg_mode)
-        % Redefine the path to the WRF data to include the averaging mode
-        wrf_output_mode_path = fullfile(wrf_output_path,avg_mode);
-        
-        % Find the file for this day or this month
+    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, utc_hr] = load_wrf_vars()
+        % Find the file for this day and the nearest hour May be "wrfout" or
+        % "wrfout_subset"
         year_in = year(date_num_in);
         month_in = month(date_num_in);
         day_in = day(date_num_in);
-        if strcmp(avg_mode,'monthly');
-            file_pat = sprintf('WRF_BEHR_%s_%04d-%02d-*.nc', avg_mode, year_in, month_in);
-        else
-            file_pat = sprintf('WRF_BEHR_%s_%04d-%02d-%02d.nc', avg_mode, year_in, month_in, day_in);
-        end
         
-        F = dir(fullfile(wrf_output_mode_path,file_pat));
+        omi_utc_mean = omi_time_conv(nanmean(omi_time(:)));
+        utc_hr = round(hour(omi_utc_mean));
+        file_pat = sprintf('wrfout_*_%04d-%02d-%02d_%02d-00-00', year_in, month_in, day_in, utc_hr);
+        
+        F = dir(fullfile(wrf_output_path,file_pat));
         if numel(F) < 1
             E.filenotfound(file_pat);
         elseif numel(F) > 1
             E.toomanyfiles(file_pat);
         else
-            wrf_info = ncinfo(fullfile(wrf_output_mode_path,F(1).name));
+            wrf_info = ncinfo(fullfile(wrf_output_path,F(1).name));
         end
-        
-        wrf_vars = {wrf_info.Variables.Name};
         
         % Get the a priori resolution to determine if we need to average or
         % interpolate profiles to the pixels
-        wrf_atts = {wrf_info.Attributes.Name};
-        dx_ind = strcmpi(wrf_atts, 'dx');
-        wrf_dx = wrf_info.Attributes(dx_ind).Value/1000; % convert m to km
-        dy_ind = strcmpi(wrf_atts, 'dy');
-        wrf_dy = wrf_info.Attributes(dy_ind).Value/1000; % convert m to km
+        wrf_dx = ncreadatt(wrf_info.Filename, '/', 'DX')/1000; % convert m to km
+        wrf_dy = ncreadatt(wrf_info.Filename, '/', 'DY')/1000; % convert m to km
 
         % Load NO2 and check what unit it is - we'll use that to convert to
         % parts-per-part later. Make the location of units as general as possible
@@ -318,23 +298,41 @@ end
                 rethrow(err);
             end
         end
-        ww = strcmp('no2',wrf_vars);
-        no2_attr = {wrf_info.Variables(ww).Attributes.Name};
-        aa = strcmp('units',no2_attr);
-        wrf_no2_units = wrf_info.Variables(ww).Attributes(aa).Value;
         
-        if isempty(wrf_no2_units)
-            if DEBUG_LEVEL > 1; fprintf('\tWRF NO2 unit not identified. Assuming ppm\n'); end
-            wrf_no2_units = 'ppm';
+        try
+            wrf_no2_units = ncreadatt(wrf_info.Filename, 'no2', 'units');
+        catch err
+            % If we cannot find the attribute "units" in the file for some
+            % reason
+            if strcmp(err.identifier, 'MATLAB:imagesci:netcdf:libraryFailure')
+                if DEBUG_LEVEL > 1; fprintf('\tWRF NO2 unit not identified. Assuming ppm\n'); end
+                wrf_no2_units = 'ppm';
+            else
+                rethrow(err);
+            end
         end
         
         % Convert to be an unscaled mixing ratio (parts-per-part)
         wrf_no2 = convert_units(wrf_no2, wrf_no2_units, 'ppp');
         
+        wrf_vars = {wrf_info.Variables.Name};
+        pres_precomputed = ismember('pres', wrf_vars);
+        
         % Load the remaining variables
         try
-            varname = 'pres';
-            wrf_pres = ncread(wrf_info.Filename, varname);
+            if pres_precomputed
+                varname = 'pres';
+                p_tmp = ncread(wrf_info.Filename, varname);
+                pb_tmp = 0; % Allows us to skip a second logical test later
+                p_units = ncreadatt(wrf_info.Filename, 'pres', 'units');
+                pb_units = p_units;
+            else
+                varname = 'P';
+                p_tmp = ncread(wrf_info.Filename, varname);
+                p_units = ncreadatt(wrf_info.Filename, 'P', 'units');
+                varname = 'PB';
+                pb_units = ncreadatt(wrf_info.Filename, 'PB', 'units');
+            end
             varname = 'XLONG';
             wrf_lon = ncread(wrf_info.Filename, varname);
             varname = 'XLAT';
@@ -347,75 +345,11 @@ end
             end
         end
         
-        % Finally, if the mode is "hourly" we need to take the correct WRF output
-        % time. We can use the utchr variable to do that.
-        
-        if strcmp(avg_mode,'hourly')
-            try
-                utchr = double(ncread(wrf_info.Filename, 'utchr'));
-            catch err
-                if strcmp(err.identifier, 'MATLAB:imagesci:netcdf:unknownLocation')
-                    E.callCustomError('ncvar_not_found','utchr',F(1).name);
-                else
-                    rethrow(err)
-                end
-            end
-            
-            % 14 - utc_offset will give 1400 local std. time in UTC, finding the
-            % minimum between that and utchr indicates which WRF profile is closest
-            % to overpass. If WRF output more than 1 file per hour, this will average 
-            % the profiles for that hour.
-            omi_utc_mean = omi_time_conv(nanmean(omi_time(:)));
-            omi_hh = str2double(datestr(omi_utc_mean,'HH')) + str2double(datestr(omi_utc_mean,'MM'))/60;
-            min_dt = min(abs(utchr - omi_hh));
-            uu = abs(abs(utchr - omi_hh) - min_dt) < 0.01;
-            % These two variables should have dimensions west_east, south_north,
-            % bottom_top, Time
-            wrf_no2 = wrf_no2(:,:,:,uu);
-            wrf_pres = wrf_pres(:,:,:,uu);
-            % These should have west_east, south_north, Time
-            wrf_lon = wrf_lon(:,:,uu);
-            wrf_lat = wrf_lat(:,:,uu);
-            
-            if sum(uu) > 0
-                wrf_no2 = nanmean(wrf_no2,4);
-                wrf_pres = nanmean(wrf_pres,4);
-                wrf_lon = nanmean(wrf_lon,3);
-                wrf_lat = nanmean(wrf_lat,3);
-                
-                utc_hr = mat2str(utchr(uu));
-            else
-                utc_hr = 'N/A';
-            end
-        else
-            utc_hr = avg_mode;
+        if ~strcmp(pb_units, p_units)
+            E.callError('unit_mismatch', 'Units for P and PB in %s do not match', wrf_info.Filename);
         end
+        wrf_pres = convert_units(p_tmp + pb_tmp, p_units, 'hPa'); % convert from units in the wrfout files to hPa
     end
 end
 
-function wrf_no2 = combine_wrf_profiles(wrf_no2_h, wrf_pres_h, wrf_no2_m, ~)
-% For now this will be very simple, it will just replace any part of the
-% hourly profile above 750 hPa with the monthly profile.  I chose 750 hPa
-% to start with because that seems to be the pressure where the NO2
-% profiles around Atlanta get into free troposphere NO2, with less
-% influence from surface winds (i.e. no longer an exponential decay with
-% altitude). This is purely qualitative and intended (currently) to test if
-% removing FT profile changes from the AMF calc will simplify the
-% relationship between AMF and wind around Atlanta.
-%
-% In the future, the better way might be to use the monthly average PBL
-% height from WRF-Chem..
-E = JLLErrors;
-
-if any(size(wrf_no2_h)~=size(wrf_no2_m))
-    E.sizeMismatch('wrf_no2_h','wrf_no2_m');
-elseif any(size(wrf_no2_h)~=size(wrf_pres_h))
-    E.sizeMismatch('wrf_no2_h','wrf_pres_h');
-end
-
-pp = wrf_pres_h < 750;
-wrf_no2 = wrf_no2_h;
-wrf_no2(pp) = wrf_no2_m(pp);
-
-end
 
