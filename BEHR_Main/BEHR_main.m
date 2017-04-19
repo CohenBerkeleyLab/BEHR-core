@@ -103,7 +103,7 @@ if onCluster
 else
     %This is the directory where the final .mat file will be saved. This will
     %need to be changed to match your machine and the files' location.
-    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/LNOx-AMFs/BEHR_665LNOx';
+    behr_mat_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/LNOx-AMFs/BEHR_noLNOx_newVisOnly';
     
     %This is the directory where the "OMI_SP_*.mat" files are saved. This will
     %need to be changed to match your machine and the files' location.
@@ -117,7 +117,7 @@ else
     %This is the directory where the NO2 profiles are stored. This will
     %need to be changed to match your machine and the files' location.
     %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
-    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/iccg_eq_2-fr_factor_1-mol_flash_665-fixedBC';
+    no2_profile_path = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/lnox_off-fixed_BCs';
 end
 
 %Store paths to relevant files
@@ -364,7 +364,7 @@ for j=1:length(datenums)
                 hh=hh+1;
                 % JLL 23 Jul 2015: temporary change to study wind effects.
                 % Return to add2grid_BEHR when done.
-                OMI(hh) = add2grid_BEHR_winds(Data(d),OMI(hh),resolution,resolution2,[lonmin, lonmax],[latmin, latmax]); %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
+                OMI(hh) = add2grid_BEHR(Data(d),OMI(hh),resolution,resolution2,[lonmin, lonmax],[latmin, latmax]); %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
             end
         end
         

@@ -197,7 +197,7 @@ end
 
 amf = cldRadFrac .* amfCldTotCol + (1-cldRadFrac).*amfClr;
 amf(~isnan(amf)) = max(amf(~isnan(amf)),1.e-6);   % clamp at min value (2008-06-20), but don't replace NaNs with the min value (2016-05-12)
-amfVis = cldRadFrac .* amfCldVisOnly + (1-cldRadFrac).*amfClr;
+amfVis = amf .* vcdGnd ./ (vcdCld .* cldRadFrac + vcdGnd .* (1 - cldRadFrac)); 
 amfVis(~isnan(amfVis)) = max(amfVis(~isnan(amfVis)),1.e-6);
 
 % Preallocation added 13 May 2015 - JLL.............................
