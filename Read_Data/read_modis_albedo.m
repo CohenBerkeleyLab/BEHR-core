@@ -100,7 +100,7 @@ band3_lats=band3_lats(in_lats,in_lons);
 band3_lons=band3_lons(in_lats,in_lons);
 s=size(data.Latitude);
 c=numel(data.Latitude);
-MODISAlbedo=zeros(s);
+MODISAlbedo=nan(s);
 
 %Now actually average the MODIS albedo for each OMI pixel
 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
@@ -109,6 +109,12 @@ for k=1:c;
     
     xall=[data.(loncorn_field)(:,k); data.(loncorn_field)(1,k)];
     yall=[data.(latcorn_field)(:,k); data.(latcorn_field)(1,k)];
+    
+    % If there is an invalid corner coordinate, skip because we cannot
+    % be sure the correct polygon will be used.
+    if any(isnan(xall)) || any(isnan(yall))
+        continue
+    end
     
     % should be able to speed this up by first restricting based on a
     % single lat and lon vector

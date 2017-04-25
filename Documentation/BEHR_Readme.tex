@@ -269,7 +269,7 @@ git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo
 	 \item \emph{Code sharing.} Conversely, if two (or more) people are both using BEHR, this makes it easier to synchronize code when and if you want.
 	\end{enumerate}
 	
-	\subsection{Best practices for version control}
+	\subsection{Best practices for version control}\label{sec:vers-con:best-practices}
 	\emph{Read this section before you start changing things!} As I'm writing this, the version control for BEHR is fairly straightforward as I'm the only user on the project. If multiple users are developing the code simultaneously, adhering to some good practices will help keep everyone sane.
 	
 	\begin{itemize}
@@ -282,6 +282,23 @@ git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo
 	\end{itemize}
 	
 	Along with having good practices for version control, be sure to update the file \path{Changelog.txt} under the Documentation folder of the BEHR repository.  This should contain itemized, human-readable descriptions of the change for each new version or revision.  To help this, you should keep a ``Development'' section at the top of it where you can record significant changes as you make them.  When this merges into the master branch, change the header from ``Development'' to the new version number.  Make sure to post the updated change log on the website (it is uploaded as a regular text file and linked under the ``Documentation'' section of the ``Download BEHR data'' page on the website.
+	
+	\subsection{Versioning scheme}\label{sec:versioning-scheme}
+	The BEHR versioning scheme combines the NASA SP version with an internal version:
+	
+	\begin{center}
+	X.Y[A,B,C,...](revN), e.g. 2.1Arev1
+	\end{center}
+	
+	\begin{itemize}
+	\item X.Y is the NASA Standard product version number. Note that the full NASA version number includes the OMNO2 collection number; we just use the standard product version.
+	\item [A,B,C,...] is a letter, i.e. A, B, C, etc. denoting the major BEHR version based on the NASA SP version. The first BEHR version based on NASA SP version 2.1 would be 2.1A, the second would be 2.1B, and so on.
+	\item Optionally, a BEHR revision number can be added to indicate a minor revision. If this is omitted, it is equivalent to revision 0, i.e. 2.1A and 2.1Arev0 are equivalent versions.
+	\end{itemize}
+	
+	When a new BEHR version changes the published data in a significant way, one that could potentially affect the science done with BEHR, the major BEHR version (the letter) should be incremented. Only minor changes should increment the revision number; this is primarily meant for formatting changes (changing fill value, adding metadata, etc.). The only changes to the data that may be considered revisions are bug fixes that impact a small number of pixels ($< 0.1\%$). If you have any doubt, make it a major version change.
+	
+	Whenever NASA updates, we reset to version A, so when NASA updated from version 2.1 to version 3 of their code, we changed from v2.1C to v3.0A.  Likewise, the revision number resets for each BEHR version.
 
 \section{Program structure}
 	This section describes the key files of code in BEHR to make it run.  Instructions for running it contained within this section are predicated on the idea that you're running BEHR on a desktop computer.  For instructions on running it on a cluster, see \S\ref{sec:Cluster}.
@@ -391,6 +408,24 @@ git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo
 	When doing temporal averaging, each grid cell has an areaweight associated with it; this is the sum of the reciprocal of the areas of each pixel that overlapped that grid cell. By weighting by the reciprocal of the area, it gives more weight to grid cells that got information from small, more representative, pixels.  Therefore, any temporal average should be weighted by this field.
 	
 	Plotting can be accomplished using the \lstinline$m_map$ package (which is used in the above functions, and which should be included in the BEHR Git repo). MATLAB also has built in mapping functions which can be used if desired. Generally a \lstinline$pcolor$ plot of some sort is the best option.
+	
+	\subsection{Unit testing}\label{sec:unit-testing}
+	``\href{https://en.wikipedia.org/wiki/Unit_testing}{Unit testing}'' is a software engineering technique where small units of code are tested to ensure that they are behaving correctly. We have implemented some unit testing functionality for BEHR that should be run \emph{at least} prior to releasing a new version.  
+	
+	Unit tests for BEHR are stored in the \lstinline$Production tests$ subfolder. There are currently two broad types of tests contained here.
+	\subsubsection{Standard unit tests---\lstinline$unit_test_driver.m$}
+	\lstinline$unit_test_driver.m$ is the primary function that should be run when a new version of the code is ready.  When run, this code will issue interactive prompts that allow you to determine its operation.
+	\begin{enumerate}
+	\item This code is capable of executing \lstinline$read_omno2_v_aug2012.m$ and \lstinline$BEHR_main.m$ itself for a few specified test days which are chosen to test the code for a number of standard days, plus days which have caused issues in the past.  The generated files are placed in a directory \path{Production Tests/UnitTestData/ProducedYYYYMMDD} where YYYYMMDD is the year, month, and day that the test is run on. It will also produce a file, \path{GitReport.txt} which contains information about the state of the code at the time the files were produced.
+	
+	\item Whether or not you generate the data files, it will next run \path{reading_priori_tests.m} and \path{behr_priori_tests.m}. These are not tests of the \emph{a priori} profiles necessarily; just tests that can be run without knowledge of any previous versions of BEHR. For example, one of the things that \path{reading_priori_tests.m} checks is that the corner coordinates of the pixels make sense, that they contain the pixel center. Generally, as you find bugs in the code \emph{or} if there's something that you're concerned about that comes up as you're coding, see if there's a test that can go here to ensure that the bug does not recur.
+	
+	\item Finally, it runs \path{behr_unit_test.m} on the Data structures produced by \path{read_omno2_v_aug2012.m} and/or \path{BEHR_main.m}. It checks the structures to determine if the same fields are present and have the same values in both old and new versions. Since you will most likely \emph{expect} some differences between versions, this will probably result in a failed unit test. \emph{However}, the important thing is to make sure that only differences that you are expecting occur.
+	\end{enumerate}
+	
+	\subsubsection{Detailed data tests---\lstinline$behr_prod_test.m$}
+	At present, \path{behr_prod_test.m} is a separate utility from \path{unit_test_driver.m}, though I may integrate it in the future.  This function is aimed at giving a statistical summary of the differences in certain fields between an old and new version of BEHR data. It will randomly sample a number of old and new files, look at the fields specified by the variable \lstinline$fields_to_check$, and generate statistics of the differences between them. It not only checks that differences in values themselves, but the occurrence of fill values.
+	
 	
 	\subsection{Publish}
 	Once a production quality version of BEHR is ready to go, it needs to be published to the website (see \S\ref{sec:website}). The data is published in three formats:
@@ -504,7 +539,8 @@ exit $MATLAB_EXIT
 		\item SLURM Documentation: \url{https://computing.llnl.gov/linux/slurm/documentation.html}
 		\item List of SLURM parameters (i.e., what can be set in the bash run script on the lines beginning with \texttt{\#SBATCH}: \url{https://computing.llnl.gov/linux/slurm/sbatch.html}
 	\end{enumerate}
-		
+
+
 	
 \section{Maintaining the website}\label{sec:website}
 	\subsection{Gaining administrative access}
@@ -542,33 +578,45 @@ exit $MATLAB_EXIT
 	
 	The files publicly available on the website are produced by \lstinline$BEHR_publishing_v2.m$ in the \path{HDF tools} folder in the BEHR repo. Note that starting with version 2.1Arev1, we include the version number in the file names (both for the published data and our internal .mat files) and as an attribute for each swath in the HDF files.  This version string is defined in the \lstinline$BEHR_version.m$ function in \path{Utils/Constants} in the BEHR repo. Make sure to update this version string before reproducing the full data record so that it is stored in all the proper places.
 	
-	If you add any new variables to the output files, you'll need to modify \lstinline$BEHR_publishing_v2.m$:
-	\begin{enumerate}
-	\item Any new variables should be added to the \lstinline$vars$ variable, defined in the \lstinline$set_variables$ subfunction.
-	\item If it should also be added to the gridded products, also add it to the \lstinline$gridded_vars$ variable in the \lstinline$remove_ungridded_variables$ subfunction.
-	\item Also within \lstinline$BEHR_publishing_v2.m$ is a table of attributes in the cleverly named \lstinline$add_attributes$ subfunction. Any new variables should have a line added here.
-	\end{enumerate}	 
 	
-	Once you're ready to update the publicly available produce, you'll need to:
-	
-	\begin{enumerate}
-	\item replace the files in the directories listed in Table \ref{tab:website2fileserver-paths} with the proper output files from \lstinline$BEHR_publishing_v2.m$
-	\item Upload the new changelog.txt to the website using the file manager (under the Admin button when logged in to the website)
-	\item Update any references to the version on the ``The BEHR Product'' and ``Download BEHR Data'' pages. This includes changing the blurb on the ``Download BEHR Data'' pages to describe the changes pertaining to the current version.
-	\item Check that the table of variables on ``The BEHR Product'' page is still accurate.
-	\end{enumerate}
-	
-	You should also ensure that the download computer (at \path{128.32.208.11}) has the updated version of the BEHR algorithm. That way it will keep BEHR up to date automatically. As long as you're using Git (and you \emph{are} using Git, right? Right?) this is fairly simple. First check two things:
-	
-	\begin{enumerate}
-	\item The scripts \lstinline$run_read_omno2.sh$, \lstinline$run_behr_main.sh$, and \lstinline$run_publishing.sh$ are still creating runscripts with the proper arguments for their respective functions (especially if you've changes the inputs or global variables in the BEHR Matlab functions).
-	
-	\item Double check that you updated the version string in \lstinline$BEHR_version.m$.
-	\end{enumerate}		
-	
-	Then it's a simple matter of making sure the new version has been merged into the \lstinline$master$ branch, then going into \path{/home/josh/Documents/MATLAB/BEHR} on the download computer and executing \lstinline$git pull$. 
-	
-	There is one additional file on the file server that must be updated.  It will be updated automatically the next time \lstinline$run_publishing.sh$ runs on the download computer. That is the \lstinline$behr_version.txt$ file under \path{/volume1/share-sat/SAT/BEHR/WEBSITE/webData}. It just contains the version string with no newline at the end.  This is used in the utility \lstinline$get_BEHR.sh$ for users to download BEHR in batch.
+\section{Checklist for releasing a new version}
+\begin{itemize}
+\item All development work should be done on a development branch of the repo, \emph{not master} (\S\ref{sec:vers-con:best-practices}).
+
+\item Once the code is ready, run \path{unit_test_driver.m} and, if prudent, \path{behr_prod_test.m} on the development branch (\S\ref{sec:unit-testing}). Ensure that it passes the priori tests and that only expected changes fail the old/new comparison.
+
+\item If there are others actively working on the BEHR project, set up a code review meeting. Go through the differences between the new code and the current master, as well as the results of the unit tests.  This both ensures that all developers are aware of the incoming changes to master (and how it will affect their development/research) and provides additional eyes to check for errors.
+
+\item Update \path{BEHR_version.m} to the new version number (\S\ref{sec:versioning-scheme}) and modify the changelog to reflect the changes made.
+
+\item Merge changes into master branch.
+
+\item Ensure that the prior version's \path{OMI_BEHR*.mat} files are backed up to Box.
+
+\item Reproduce the data record with the new version, probably best to use the cluster for this (\S\ref{sec:Cluster}).  This should generate new \path{OMI_SP*.mat} files, \path{OMI_BEHR*.mat} files, and the published files (\path{*.hdf}, \path{*.txt}).
+
+	\begin{itemize}
+	\item Double check in \path{BEHR_publishing_v2.m} that any new variables have been added to the \lstinline$vars$ variable in the \lstinline$set_variables$ subfunction.
+	\item Variables that should be included in the gridded products are listed under \lstinline$gridded_vars$ in the \lstinline$remove_ungridded_variables$ subfunction.
+	\item Add the variables to the attribute table in the \lstinline$add_attribute$ subfunction.
+	\end{itemize}
+
+\item Move these files to \path{share-sat} on the \path{128.32.208.13} file server. The published files (\path{*.txt}, \path{*.hdf}) should go in \path{/volume1/share-sat/SAT/BEHR/WEBSITE/staging} for now.  The \path{*.mat} files should go in staging directories as well, usually these staging directories are inside the folders those \path{*.mat} files are normally stored.
+
+\item Check with \path{behr_prod_test.m} that the published files have the expected changes. Also manually verify that the entire data record was reproduced (no files missing).
+
+\item If everything is ready, replace the old versions' files with the new files.  See Table \ref{tab:website2fileserver-paths} for the paths.
+
+\item Upload the new changelog to the website. Update the user guide if necessary, and upload too. Both are uploaded with the file manager on the website (under the Admin button).
+
+\item Update references to the version string on ``The BEHR Product'' and ``Download BEHR Data'' pages of the website.  This includes changing the blurb on the ``Download BEHR Data'' pages to describe the changes pertaining to the current version.  Check that the table of variables on ``The BEHR Product'' is still accurate.
+
+\item Tag this commit in the master branch of the Git repo with the version string.
+
+\item Update the satellite download computer to the new version of the code.
+\end{itemize}
+		
+	There is one additional file on the file server that must be updated.  It will be updated automatically the next time \lstinline$run_publishing.sh$ runs on the download computer. That is the \lstinline$behr_version.txt$ file under \path{/volume1/share-sat/SAT/BEHR/WEBSITE/webData}. It just contains the version string with no newline at the end.  This is used in the utility \lstinline$get_BEHR.sh$ for users to download BEHR in batch.	
 	
 \section{Additional utilities}
 	\subsection{Verification}
@@ -703,18 +751,7 @@ exit $MATLAB_EXIT
 		\item See \lstinline$fit_var_plotting.m$, subfunction \lstinline$plot_3_fits.m$ for how to compute emissions, lifetime, and uncertainties.
 		\end{enumerate}
 		
-		
-	\subsection{Production version comparison}
-		\subsubsection{Background}
-		When producing a new publicly available BEHR product, it's a good idea to make sure that it's behaving as you expect. I've written some functions that will randomly sample a number of the .txt, .hdf, or gridded .hdf files and report on the statistical differences.
-		
-		\subsubsection{Code base} 
-		All the functions can be found in the \path{BEHR/Production tests} folder, where \path{BEHR} is the BEHR repository.  The main function is \lstinline$behr_prod_test.m$ which actually carries out the tests. It can be run as a function with inputs, or the paths and fields to test can be modified in the USER INPUT section of the code. It will generate two structures, \lstinline$indiv_stats$ which breaks down the differences file-by-file, and \lstinline$overall_stats$, which gives a summary of the differences. These will be directly placed in the base workspace if no outputs are requested from the function.  This function can compare OMI\_BEHR .mat files, .hdf files, or .txt files. Currently it does not support cross comparing (i.e. .hdf to .txt)
-		
-		The other two .m files, \lstinline$prod_test_load_hdf.m$ and \lstinline$prod_test_load_txt.m$ are simply helper functions that read in the .hdf and .txt formatted files.
-		
-		\subsubsection{What should you look for?}
-		There's no hard and fast rule, it really depends on what you changed. In general though, you want to make sure that the BEHRColumnAmountNO2 field is not changed in ways you did not expect.
+	
 
 \section{Current development}
 	The current focus of work on BEHR is to give it daily (rather than monthly average) \emph{a priori} \ce{NO2} profiles. To do so, I've completely rewritten how the \ce{NO2} profiles are imported into \lstinline$BEHR_main.m$.

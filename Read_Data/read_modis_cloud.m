@@ -219,16 +219,21 @@ end
 %If there is no MODIS cloud data for this swath, fill the output with the
 %fill value used for BEHR fields Otherwise, find all the MODIS cloud pixels
 %in each OMI pixel and average them together.
-if isempty(all_cldfrac)
-    data.MODISCloud = behr_fill_val() .* ones(size(data.Latitude));
-else
-    data.MODISCloud = nan(size(data.Latitude));
+data.MODISCloud = nan(size(data.Latitude));
+if ~isempty(all_cldfrac)
     loncorn = data.(loncorn_field);
     latcorn = data.(latcorn_field);
     
     for a = 1:numel(data.Latitude);
         xall=[loncorn(: ,a); loncorn(1, a)];
         yall=[latcorn(:, a); latcorn(1, a)];
+        
+        % If there is an invalid corner coordinate, skip because we cannot
+        % be sure the correct polygon will be used.
+        if any(isnan(xall)) || any(isnan(yall))
+            continue
+        end
+        
         xx_cld = inpolygon(all_lat, all_lon, yall, xall);
         
         cld_vals=all_cldfrac(xx_cld);

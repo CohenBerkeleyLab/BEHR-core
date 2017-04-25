@@ -306,7 +306,7 @@ for j=1:length(datenums)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'Loncorn', 'Latcorn'};
+        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'IsZoomModeSwath', 'Loncorn', 'Latcorn'};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
     Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
@@ -355,6 +355,10 @@ for j=1:length(datenums)
         % within the domain of interest. Add the OMPIXCOR data
         pixcor_name = make_pixcorn_name_from_sp(this_sp_filename, fullfile(omi_pixcor_dir, this_year_str, this_month_str));
         this_data = read_omi_sp(pixcor_name, '/HDFEOS/SWATHS/OMI Ground Pixel Corners VIS', pixcor_variables, this_data, [lonmin, lonmax], [latmin, latmax]);
+        
+        % The OMNO2 and OMPIXCOR products place the zoom-mode pixels
+        % differently in the swath - fix that here.
+        this_data = align_zoom_mode_pixels(this_data);
         
         % Add a few pieces of additional information
         % Swath is given in the file name as a five digits number following
@@ -535,14 +539,104 @@ elseif numel(F) > 1
 end
 end
 
+function data = align_zoom_mode_pixels(data)
+% As of 21 Apr 2017, during zoom mode operation, OMNO2 places the 30
+% available pixels in rows 0-29. OMPIXCOR places them in rows 15-44. Yay
+% consistency. This subfunction fixes that so that the corner coordinates
+% lie in rows 0-29. 
+%
+% I will assume that any day with entire rows of NaNs in Latitude/Longitude
+% is a zoom mode day.
+
+E = JLLErrors;
+
+corner_fields = {'FoV75CornerLongitude', 'FoV75CornerLatitude';...
+                 'TiledCornerLongitude', 'TiledCornerLatitude'};
+area_fields = {'FoV75Area'; 'TiledArea'};
+
+if size(corner_fields, 2) ~= 2
+    E.callError('bad_field_def', 'corner_fields must be n-by-2, with the Longitude field in the field column, latitude field in the second');
+elseif size(corner_fields, 1) ~= size(area_fields,1)
+    E.notimplemented('corner fields without corresponding area fields or vice versa')
+end
+
+data.IsZoomModeSwath = false;
+pix_nans = all(isnan(data.Longitude),1) & all(isnan(data.Latitude),1);
+pix_nans_for_zoom = 31:60;
+corn_nans_for_zoom = [1:15, 46:60];
+if ~any(pix_nans)
+    return
+end
+
+data.IsZoomModeSwath = true;
+for a=1:size(corner_fields,1)
+    loncorn = data.(corner_fields{a,1});
+    latcorn = data.(corner_fields{a,2});
+    corn_nans = squeeze(all(all(isnan(loncorn),1),2) & all(all(isnan(latcorn),1),2));
+    pixarea = data.(area_fields{a});
+    area_nans = isnan(pixarea);
+    
+    if ~isequal(size(loncorn), [4, size(data.Longitude)]) || ~isequal(size(latcorn), [4, size(data.Latitude)])
+        E.callError('zoom_corners', 'The %s and %s fields are not 4 in the first dimension, and the same size as Longitude/Latitude in the second and third', corner_fields{a,1}, corner_fields{a,2});
+    end
+    
+    if ~isvector(pixarea)
+        E.callError('zoom_area', 'The %s field is expected to be a vector; it is not', area_fields{a});
+    elseif numel(pixarea) ~= size(data.Longitude,2)
+        E.callError('zoom_area', 'The %s field is not the same length as Longitude in the second dimension', area_fields{a})
+    end
+    
+    if isvecequal(find(corn_nans), corn_nans_for_zoom) && isvecequal(find(area_nans), corn_nans_for_zoom) && isvecequal(find(pix_nans), pix_nans_for_zoom)
+        % If all the NaNs are where we expect them to be for zoom mode,
+        % then assum this is a zoom mode swath and we need to move the
+        % corner coordinates to line up with the regular pixels.
+        data.IsZoomModeSwath = true;
+        
+        loncorn(:,:,~pix_nans) = loncorn(:,:,~corn_nans);
+        loncorn(:,:,pix_nans) = nan;
+        latcorn(:,:,~pix_nans) = latcorn(:,:,~corn_nans);
+        latcorn(:,:,pix_nans) = nan;
+        
+        pixarea(~pix_nans) = pixarea(~area_nans);
+        pixarea(pix_nans) = nan;
+    elseif all(~corn_nans(~pix_nans)) && all(~area_nans(~pix_nans))
+        % Otherwise, if everything that's not a nan in the regular product
+        % is also not a nan in the corner product fields, we must just have
+        % fill data in the regular product but not the pixel corner product
+        % for some reason. In this case, just make the corner nans match
+        % the regular product
+        loncorn(:,:,pix_nans) = nan;
+        latcorn(:,:,pix_nans) = nan;
+        pixarea(pix_nans) = nan;
+    else
+        E.notimplemented('NaNs in corner product that are not in the regular product')
+    end
+    
+    
+    
+    data.(corner_fields{a,1}) = loncorn;
+    data.(corner_fields{a,2}) = latcorn;
+    data.(area_fields{a}) = pixarea;
+end
+
+
+
+end
+
 function data = add_behr_corners(data, sp_filename)
 spacecraft_vars = {'Longitude', 'Latitude', 'SpacecraftAltitude', 'SpacecraftLatitude', 'SpacecraftLongitude'};
 spacecraft = make_empty_struct_from_cell(spacecraft_vars);
 spacecraft = read_omi_sp(sp_filename, '/HDFEOS/SWATHS/ColumnAmountNO2', spacecraft_vars, spacecraft, [-180 180], [-90 90]);
-subinds = find_submatrix2(data.Longitude, data.Latitude, spacecraft.Longitude, spacecraft.Latitude);
 
-corners = fxn_corner_coordinates(spacecraft.Latitude, spacecraft.Longitude, spacecraft.SpacecraftLatitude, spacecraft.SpacecraftLongitude, spacecraft.SpacecraftAltitude);
+% If dealing with a zoom mode day, then rows 30-59 will be NaNs in the
+% pixel coordinates. NaNs mess up find_submatrix2, so we need to identify
+% the non-NaN piece and work with that, then put the corners in the right
+% place.
+datanans = all(isnan(data.Longitude),1) & all(isnan(data.Latitude),1);
+scnans = all(isnan(spacecraft.Longitude),1) & all(isnan(spacecraft.Latitude),1);
+subinds = find_submatrix2(data.Longitude(:,~datanans), data.Latitude(:,~datanans), spacecraft.Longitude(:,~scnans), spacecraft.Latitude(:,~scnans));
 
+corners = fxn_corner_coordinates(spacecraft.Latitude(:,~scnans), spacecraft.Longitude(:,~scnans), spacecraft.SpacecraftLatitude, spacecraft.SpacecraftLongitude, spacecraft.SpacecraftAltitude);
 
 xx = subinds(1,1):subinds(1,2);
 yy = subinds(2,1):subinds(2,2);
@@ -551,7 +645,9 @@ loncorn = permute(loncorn, [3 1 2]);
 latcorn = squeeze(corners(xx,yy,2,1:4));
 latcorn = permute(latcorn, [3 1 2]);
 
-data.Loncorn = loncorn;
-data.Latcorn = latcorn;
+data.Loncorn = nan([4, size(data.Longitude)]);
+data.Latcorn = nan([4, size(data.Latitude)]);
+data.Loncorn(:,:,~datanans) = loncorn;
+data.Latcorn(:,:,~datanans) = latcorn;
 
 end

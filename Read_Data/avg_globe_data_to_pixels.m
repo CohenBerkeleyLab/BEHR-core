@@ -19,7 +19,7 @@ DEBUG_LEVEL = pout.DEBUG_LEVEL;
 loncorn_field = pout.LoncornField;
 latcorn_field = pout.LatcornField;
 
-GLOBETerpres = zeros(size(data.Latitude));
+GLOBETerpres = nan(size(data.Latitude));
 
 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
 %corner and terpres(end, end) is in the NE corner.
@@ -31,6 +31,12 @@ for a=1:numel(GLOBETerpres)
     
     xall=[data.(loncorn_field)(:,a); data.(loncorn_field)(1,a)];
     yall=[data.(latcorn_field)(:,a); data.(latcorn_field)(1,a)];
+    
+    % If there is an invalid corner coordinate, skip because we cannot
+    % be sure the correct polygon will be used.
+    if any(isnan(xall)) || any(isnan(yall))
+        continue
+    end
     
     %%%%SPEED IT UP%%%%
     % Since GLOBE data is on a grid where a row of
