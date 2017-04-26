@@ -82,7 +82,11 @@ end
             varargout{1} = air_data(data_log);
             varargout{2} = Match.data.pres(data_log);
             varargout{3} = wrf_data(data_log); % removed wrf_xx here because we want the sampling statistics to be the same in the output
-            varargout{4} = Match.wrf.pres(data_log);
+            if isfield(Match.wrf, 'pres')
+                varargout{4} = Match.wrf.pres(data_log);
+            else
+                varargout{4} = (Match.wrf.P + Match.wrf.PB)/100;
+            end
             varargout{5} = xstr;
         end
     end
