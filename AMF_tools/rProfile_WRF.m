@@ -331,6 +331,7 @@ end
                 p_tmp = ncread(wrf_info.Filename, varname);
                 p_units = ncreadatt(wrf_info.Filename, 'P', 'units');
                 varname = 'PB';
+                pb_tmp = ncread(wrf_info.Filename, varname);
                 pb_units = ncreadatt(wrf_info.Filename, 'PB', 'units');
             end
             varname = 'XLONG';
