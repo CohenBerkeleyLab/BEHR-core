@@ -15,20 +15,7 @@
 %  mixingRatio(i)   = input volume mixing ratios (no units)
 %  pressure(i)      = vector of input pressures from largest to smallest (hPa)
 %  pressureSurface  = surface pressure (where integration starts) (hPa)
-%
-% Keywords:
-%
-%  mixingRatioStd(i)= input vector of uncertainty (standard dev) in mixing ratio (cm-2)
-%  vcdStd           = output uncertainty in integrated column (cm-2)
-%  corrLength       = correlation length defined in log pressure space (no units).
-%                     If variation in mixing ratios between pressures p1 and p2
-%                     are correlated, then corrLength = ALOG(p1) - ALOG(p2).
-%                     A typical value is corrLength = 0.1 to 0.2.  If no value is given,
-%                     assume default corrLength near zero. Note: when mixing ratios
-%                     are obtained from binning normally distributed data, and uncertainties
-%                     are computed as the standard error in the bins, then the default
-%                     value of corrLength = 0 yields an integrated column uncertainty
-%                     that is independent of the bin width.
+%  interpPres       = pressures to interpolate the output profile to (hPa) ( added by JLL for BEHR scattering weights )
 %
 % Restrictions:
 %  Pressures must be greater than zero and monotonically decreasing
@@ -53,25 +40,26 @@
 %function vcd = integPr(mixingRatio, pressure, pressureSurface, mixingRatioStd, vcdStd, corrLength) %mixingRatioStd, vcdStd, corrLength = 0 or 1
 function [vcd, p_out, f_out] = integPr2(mixingRatio, pressure, pressureSurface, interpPres)
 
+E = JLLErrors;
+
 if nargin < 4;
     interpPres = [];
     if nargout > 1
-        error('integPr2:nargout','Without any interpPres values, p_out and f_out will not be set');
+        E.callError('nargout','Without any interpPres values, p_out and f_out will not be set');
     end
 else
+    % Make sure the interpolation pressure is not less than the 
     interpPres = max(interpPres,min(pressure));
 end
 
-
-corrLen = 0.1;
-%{
-if numel(corrLength) == 1;
-    corrLen = corrLength;
+if any(pressure<0)
+    E.badinput('PRESSURE must be all >= 0')
+elseif any(diff(pressure)>0);
+    E.badinput('PRESSURE must be monotonically decreasing')
 end
-%}
-presSurface = max(pressure);
-if numel(pressureSurface) == 1;
-    presSurface = pressureSurface;
+
+if ~isscalar(pressureSurface)
+    E.badinput('PRESSURESURFACE must be a scalar')
 end
 
 %   mean molecular mass (kg)  *  g (m/s2)  *  (Pa/hPa)   *   (m2/cm2)
@@ -82,32 +70,14 @@ fmin = 1E-30;
 vcd  = 0;
 f    = mixingRatio;
 p    = pressure;
-p0   = max(presSurface, min(pressure));
+p0   = max(pressureSurface, min(pressure));
 n    = numel(p);
 
 dvcd     = 0;
 deltaVcd = zeros(numel(f),1); % Changed to make these vectors on 9/26/2014 JLL
 df       = zeros(numel(f),1);
-%{
-if numel(mixingRatioStd) == n;
-    df = max(mixingRatioStd,0);
-end
-%}
-if any(diff(pressure)>0);
-    error('integPr2:pressure','Pressure must be monotonically decreasing')
-end
 
 
-% Set starting point at surface pressure...................................
-%
-% pp=find(p>=p0); if isempty(pp); pp=0; end
-% i0 = min(max((max(pp)),1),(n - 1));
-% f0 = interp1(log([p(i0),p(i0 + 1)]), [f(i0),f(i0 + 1)], log(p0),'linear','extrap');   %assume linear variation in surface layer
-%
-% b = (log(max(f(i0 + 1),fmin)) - log(max(f(i0),fmin))) ./ (log(p(i0 + 1)) - log(p(i0)));
-% if f(i0) >= 0 && f(i0 + 1) >= 0 && abs(b + 1) >= 0.01;
-%     f0 = f(i0) * ((p0./p(i0))^b);                                    %assume exponential variation in surface layer
-% end
 
 numIP = numel(interpPres);
 if numIP > 0
@@ -133,6 +103,10 @@ f(i0) = f0;
 
 
 % Integrate................................................................
+if isnan(pressureSurface)
+    vcd = nan;
+    return
+end
 
 for i = 1:n-1;
     deltaVcd(i) = (f(i) + f(i + 1)) .* (p(i) - p(i + 1)) ./ (2 * mg);  %assume const mixing ratio in each layer
@@ -148,29 +122,6 @@ if any(isnan(deltaVcd(i0:n-1))) && ~all(isnan(deltaVcd(i0:n-1)))
     warning('NaNs detected in partial columns. They will not be added into the total column density.')
 end
 vcd = nansum2(deltaVcd(i0:n-1));
-
-%{
-if numel(mixingRatioStd) == n;   % Do uncertainty calculation..............
-
- % Compute sig(i) = uncertainty in vcd due to mixing ratio i
-
-    sig   = zeros(numel(f));
-    for i=1:n;
-        sig(i) = df(i) .* (p(max((i-1),1)) - p(min((i+1),(n-1)))) ./ (2 .* mg);
-    end
-
- % Combine the sig(i) using correlation length
- 
-    vcdVar = 0;
-    for i = i0:n; %%%%not sure about these indicies
-        for j = i0:n;
-        vcdVar = vcdVar + sig(i) .* sig(j) .* exp(-((log(p(i)) - log(p(j))) ./ corrLen)^2);
-        end
-    end
-
-    vcdStd = sqrt(max(vcdVar,0));
-end
-%}
 
 
     function [f0] = interpolate_surface_pressure(p_in,f_in,p0_in)

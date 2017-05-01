@@ -100,14 +100,9 @@ if size(temperature,1) ~= length(pressure)
     error(E.callError('temperature_input','temperature must be a column vector.  Ensure size(temperature,1) == length(pressure)'));
 end
 
-minPressure = 200;  % defined tropopause pressure (hPa)
-
 alpha = 1 - 0.003 * (temperature - 220);   % temperature correction factor vector
 alpha_i=max(alpha,0.1);
 alpha = min(alpha_i,10);
-
-%vcdCld = 0;     amfClr = 0;     amfCldTotCol = 0;
-dAmfClr0 = dAmfClr;     dAmfCld0 = dAmfCld;
 
 
 % Integrate to get clear and cloudy AMFs....................................
@@ -200,15 +195,29 @@ amf(~isnan(amf)) = max(amf(~isnan(amf)),1.e-6);   % clamp at min value (2008-06-
 amfVis = cldRadFrac .* amfCldVisOnly + (1-cldRadFrac).*amfClr;
 amfVis(~isnan(amfVis)) = max(amfVis(~isnan(amfVis)),1.e-6);
 
+% There is an alternate way of calculating a visible-only AMF: calculate
+% the ratio of the total to ghost column as:
+%
+%   ratio = vcdGnd ./ ((1-cldFrac) .* vcdGnd + cldFrac .* vcdCld)
+%
+% where cldFrac is the geometric cloud fraction, then multiply amf .*
+% ratio. This produces an AMF that is essentially [(1-f_r)*S_gnd +
+% f_r*S_cld]/[(1-f_g)*V_gnd + f_g*V_cld], where f_r and f_g are the
+% radiance and geometric cloud fractions, respectively. This is perhaps a
+% more direct calculation of visible-only AMF, but I discussed this with
+% Jim Gleason, and his opinion is that both methods are valid.
+%   -- J. Laughner, 28 Apr 2017
+
 % Preallocation added 13 May 2015 - JLL.............................
 avgKernel = nan(size(swPlev));
 sc_weights = nan(size(swPlev));
-% ..................................................................
-% Now compute averaging kernel.............................................
-% This is only done for the total column, on the assumption that most modelers would 
-% want to compare total column against their modeled column.
+% .........................................................................
+%Now compute averaging kernel..............................................
+% This is only done for the total column, on the assumption that most
+% modelers would want to compare total column against their modeled column.
 
-% These 2 sets of lines are an approximation of what we do in the OMI NO2 algorithm
+% These 2 sets of lines are an approximation of what is done in the OMI NO2
+% algorithm
 for i=1:numel(pTerr)
    %...............................................................
    % JLL 19 May 2015 - pull out the i'th vector, this will allow us
@@ -227,24 +236,12 @@ for i=1:numel(pTerr)
    end
    %...............................................................
    
-   ii = find(swPlev_i > pTerr(i));
-   if min(ii) >= 1;
-       swClr_i(ii)=1E-30;
-   end
-   ii = find(swPlev_i > pCld(i));
-   if min(ii) >= 1;
-       swCld_i(ii)=1E-30;
-   end
+   ii = swPlev_i > pTerr(i) & ~isnan(swPlev_i);
+   swClr_i(ii)=1e-30;
+   
+   ii = swPlev_i > pCld(i) & ~isnan(swPlev_i);
+   swCld_i(ii)=1e-30;
 
-   % more temporary testing code - JLL 19 May 2015.................
-   ii = find(pressure > pTerr(i));
-   if min(ii) >= 1;
-       dAmfClr0(ii,i) = 1E-30;
-   end
-   ii = find(pressure > pCld(i));
-   if min(ii) >= 1;
-       dAmfCld0(ii,i) = 1E-30;
-   end
    %...............................................................
    % Added 14-15 May 2015 to handle outputting scattering weights
    % 
@@ -252,14 +249,3 @@ for i=1:numel(pTerr)
    %...............................................................
    avgKernel(:,i) = sc_weights(:,i) ./ amf(i); % JLL 19 May 2015 - changed to use the scattering weights we're already calculating.
 end
-
-% Integrate NO2 profile with and without averaging kernel .................
-%            ii           = find(pressure >= minPressure);
-%            vcd(i)          = integPr2(max(no2Profile2(i,ii), 1E-30), pressure(ii), pTerr(i));
-%            vcdAvgKernel(i) = integPr2(max(no2Profile2(i,ii).*avgKernel(i,ii), 1E-30), pressure(ii), pTerr(i));
-%        end
-%   end
-%end
-
-
-

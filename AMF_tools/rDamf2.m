@@ -16,7 +16,7 @@
 % Outputs (optional: Return these to avoid having to re-read fileDamf on each call):
 %  presSave = pressure grid (vector) from fileDamf
 %  szaSave  = solar zenith angle vector from fileDamf
-%  vzaSave  = viewing zenith angle vector from fileDamf 
+%  vzaSave  = viewing zenith angle vector from fileDamf
 %  phiSave  = relative azimuth angle vector from fileDamf
 %  albedoSave = albedo vector from fileDamf
 %  surfPresSave = surface pressure vector from fileDamf
@@ -30,56 +30,56 @@ E=JLLErrors;
 
 if any(diff(pressure) > 0);
     E.badinput('pressure must be a monotonically decreasing vector of pressures');
-else
-    if exist('dAmfSave','var')==0;
-
-        fid = fopen(fileDamf,'r');
-        
-        header = fgets(fid);
-
-        %nPresSave = 0;  nSzaSave = 0;  nVzaSave = 0;  nPhiSave = 0;  nAlbedoSave = 0;  nSurfPresSave = 0;
-        
-        n = fscanf(fid,'%g',[1 6]);
-        
-        nPresSave = n(1); nSzaSave = n(2); nVzaSave = n(3); nPhiSave = n(4); nAlbedoSave = n(5); nSurfPresSave = n(6);
-        
-        %presSave     = zeros(nPresSave,1);
-        %szaSave      = zeros(nSzaSave,1);
-        %vzaSave      = zeros(nVzaSave,1);
-        %phiSave      = zeros(nPhiSave,1);
-        %albedoSave   = zeros(nAlbedoSave,1);
-        %surfPresSave = zeros(nSurfPresSave,1);
-        %temperatureCoef = 0;  
-        %dAmfSave     = zeros(nPresSave, nSzaSave, nVzaSave, nPhiSave, nAlbedoSave, nSurfPresSave);
-        
-        presSave = fscanf(fid, '%g', [nPresSave 1]);
-        szaSave = fscanf(fid, '%g', [nSzaSave 1]);
-        vzaSave = fscanf(fid, '%g', [nVzaSave 1]);
-        phiSave = fscanf(fid, '%g', [nPhiSave 1]);
-        albedoSave = fscanf(fid, '%g', [nAlbedoSave 1]);
-        surfPresSave = fscanf(fid, '%g', [nSurfPresSave 1]);
-        
-        temperatureCoef = fscanf(fid, '%g', [1 1]);
-
-        [dAmfSave_vec,count] = fscanf(fid, '%g %g', inf);
-    
-        dAmfSave = reshape(dAmfSave_vec, [nPresSave nSzaSave nVzaSave nPhiSave nAlbedoSave nSurfPresSave]);
-    end
-
-    % Now interpolate onto the input values
-
-    nPresSave = numel(presSave);  nSzaSave = numel(szaSave);        nVzaSave = numel(vzaSave);
-    nPhiSave = numel(phiSave);    nAlbedoSave = numel(albedoSave);  nSurfPresSave = numel(surfPresSave);
-    dAmf1  = zeros(size(phi,1),size(phi,2),nPresSave);
-    for i=1:nPresSave;
-        dum = reshape(dAmfSave(i,:,:,:,:,:), [nSzaSave, nVzaSave,nPhiSave, nAlbedoSave, nSurfPresSave]);
-        %dAmf1(:,i) = interpn(szaSave, vzaSave, phiSave, albedoSave, surfPresSave, dum, sza, vza, phi, albedo, surfPres,'linear');
-        dAmf1(:,:,i) = interpn(szaSave, vzaSave, phiSave, albedoSave, surfPresSave, dum, sza, vza, phi, albedo, surfPres,'linear');
-    end
-    %dAmf = exp(interp1(log(presSave), log(dAmf1'), log(pressure),'linear','extrap'));
-    dAmfx=shiftdim(dAmf1,2);
-    dAmf = exp(interp1(log(presSave), log(dAmfx), log(pressure),'linear','extrap'));
 end
 
-status = fclose(fid);
+mat_test = [ismatrix(sza), ismatrix(vza), ismatrix(phi), ismatrix(albedo), ismatrix(surfPres)];
+mat_error = {'SZA', 'VZA', 'PHI', 'ALBEDO', 'SURFPRES'};
+if any(~mat_test)
+    E.badinput('The inputs %s must be 2D (matrices or vectors). The following are not: %s', strjoin(mat_error, ', '), strjoin(mat_error(~mat_test), ', '));
+end
+sz = size(sza);
+size_test = [isequal(sz, size(vza)), isequal(sz, size(phi)), isequal(sz, size(albedo)), isequal(sz, size(albedo))];
+if any(~size_test)
+    E.badinput('The inputs %s must be all the same size. The following are not the same size as SZA: %s', strjoin(mat_error, ', '), strjoin(mat_error(find(~size_test)+1), ', '));
+end
+
+
+if exist('dAmfSave','var')==0;
     
+    fid = fopen(fileDamf,'r');
+    
+    header = fgets(fid);
+    
+    n = fscanf(fid,'%g',[1 6]);
+    
+    nPresSave = n(1); nSzaSave = n(2); nVzaSave = n(3); nPhiSave = n(4); nAlbedoSave = n(5); nSurfPresSave = n(6);
+    
+    presSave = fscanf(fid, '%g', [nPresSave 1]);
+    szaSave = fscanf(fid, '%g', [nSzaSave 1]);
+    vzaSave = fscanf(fid, '%g', [nVzaSave 1]);
+    phiSave = fscanf(fid, '%g', [nPhiSave 1]);
+    albedoSave = fscanf(fid, '%g', [nAlbedoSave 1]);
+    surfPresSave = fscanf(fid, '%g', [nSurfPresSave 1]);
+    
+    temperatureCoef = fscanf(fid, '%g', [1 1]);
+    
+    [dAmfSave_vec,count] = fscanf(fid, '%g %g', inf);
+    
+    dAmfSave = reshape(dAmfSave_vec, [nPresSave nSzaSave nVzaSave nPhiSave nAlbedoSave nSurfPresSave]);
+end
+
+% Now interpolate onto the input values
+
+nPresSave = numel(presSave);  nSzaSave = numel(szaSave);        nVzaSave = numel(vzaSave);
+nPhiSave = numel(phiSave);    nAlbedoSave = numel(albedoSave);  nSurfPresSave = numel(surfPresSave);
+dAmf1  = zeros(size(phi,1),size(phi,2),nPresSave);
+for i=1:nPresSave;
+    dum = reshape(dAmfSave(i,:,:,:,:,:), [nSzaSave, nVzaSave,nPhiSave, nAlbedoSave, nSurfPresSave]);
+    dAmf1(:,:,i) = interpn(szaSave, vzaSave, phiSave, albedoSave, surfPresSave, dum, sza, vza, phi, albedo, surfPres,'linear');
+end
+
+dAmfx=shiftdim(dAmf1,2);
+dAmf = exp(interp1(log(presSave), log(dAmfx), log(pressure),'linear','extrap'));
+
+status = fclose(fid);
+end
