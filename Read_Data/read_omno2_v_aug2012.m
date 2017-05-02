@@ -306,7 +306,7 @@ for j=1:length(datenums)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'IsZoomModeSwath', 'Loncorn', 'Latcorn'};
+        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'IsZoomModeSwath'};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
     Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
@@ -375,24 +375,24 @@ for j=1:length(datenums)
         % read function produces identical files to the version 2 read
         % function is complete, since the MODIS and GLOBE variables rely on
         % the lat/lon corners to be averaged to the pixel.
-        this_data = add_behr_corners(this_data, this_sp_filename);
+        %this_data = add_behr_corners(this_data, this_sp_filename);
         
         % Add MODIS cloud info to the files 
         if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
         
         this_data = read_modis_cloud(modis_myd06_dir, this_dnum, this_data, omi_starttime, omi_next_starttime, [lonmin, lonmax], [latmin, latmax],...
-            'DEBUG_LEVEL', DEBUG_LEVEL, 'LoncornField', 'Loncorn', 'LatcornField', 'Latcorn');
+            'DEBUG_LEVEL', DEBUG_LEVEL);
         
         
         % Add MODIS albedo info to the files
         if DEBUG_LEVEL>0; fprintf('\n Adding MODIS albedo information \n'); end
-        this_data = read_modis_albedo(modis_mcd43_dir, this_dnum, this_data, 'DEBUG_LEVEL', DEBUG_LEVEL, 'LoncornField', 'Loncorn', 'LatcornField', 'Latcorn');
+        this_data = read_modis_albedo(modis_mcd43_dir, this_dnum, this_data, 'DEBUG_LEVEL', DEBUG_LEVEL);
         
         % Add GLOBE terrain pressure to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
         
         this_data = avg_globe_data_to_pixels(this_data, globe_elevations, globe_lon_matrix, globe_lat_matrix,...
-            'DEBUG_LEVEL', DEBUG_LEVEL, 'LatcornField', 'Latcorn', 'LoncornField', 'Loncorn');
+            'DEBUG_LEVEL', DEBUG_LEVEL);
         
         % Add the few attribute-like variables
         this_data.Date = datestr(this_dnum, 'yyyy/mm/dd');

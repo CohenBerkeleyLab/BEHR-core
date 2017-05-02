@@ -241,8 +241,8 @@ for j=1:length(datenums)
         %to column vectors to work with rNmcTmp2 and rDamf2
         lon = Data(d).Longitude(:);
         lat = Data(d).Latitude(:);
-        loncorns = Data(d).Loncorn;
-        latcorns = Data(d).Latcorn;
+        loncorns = Data(d).FoV75CornerLongitude;
+        latcorns = Data(d).FoV75CornerLatitude;
         
         sza = Data(d).SolarZenithAngle(:);
         vza = Data(d).ViewingZenithAngle(:);

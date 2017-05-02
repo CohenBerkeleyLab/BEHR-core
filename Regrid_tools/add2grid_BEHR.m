@@ -32,9 +32,9 @@ if numel(Data) > 1;
     error('add2grid:DataIn','Pass only one top-level element of Data to this function');
 end
 
-if ~isfield(Data,'Latcorn') || ~isfield(Data,'Loncorn');
+if ~isfield(Data,'FoV75CornerLatitude') || ~isfield(Data,'FoV75CornerLongitude');
     error('add2grid:DataIn','Data must contain fields "Latcorn" and "Loncorn"');
-elseif size(Data.Latcorn,1) > 4 || size(Data.Loncorn,1) > 4
+elseif size(Data.FoV75CornerLatitude,1) > 4 || size(Data.FoV75CornerLatitude,1) > 4
     error('add2grid:DataIn', 'Latcorn and loncorn must have the first dimension of length 4 represent the corners of the pixel')
 end
     
@@ -45,16 +45,16 @@ Dimensions=size(Data.ColumnAmountNO2);
 x=1:1:Dimensions(1)*Dimensions(2); 
 y=1;
 
-Lon1=Data.Loncorn(1,x);          Lat1=Data.Latcorn(1,x);
+Lon1=Data.FoV75CornerLongitude(1,x);          Lat1=Data.FoV75CornerLatitude(1,x);
 if isrow(Lon1); Lon1 = Lon1'; end;  if isrow(Lat1); Lat1 = Lat1'; end;
 
-Lon2=Data.Loncorn(2,x);          Lat2=Data.Latcorn(2,x);
+Lon2=Data.FoV75CornerLongitude(2,x);          Lat2=Data.FoV75CornerLatitude(2,x);
 if isrow(Lon2); Lon2 = Lon2'; end;  if isrow(Lat2); Lat2 = Lat2'; end;
 
-Lon3=Data.Loncorn(3,x);          Lat3=Data.Latcorn(3,x);
+Lon3=Data.FoV75CornerLongitude(3,x);          Lat3=Data.FoV75CornerLatitude(3,x);
 if isrow(Lon3); Lon3 = Lon3'; end;  if isrow(Lat3); Lat3 = Lat3'; end;
 
-Lon4=Data.Loncorn(4,x);          Lat4=Data.Latcorn(4,x);
+Lon4=Data.FoV75CornerLongitude(4,x);          Lat4=Data.FoV75CornerLatitude(4,x);
 if isrow(Lon4); Lon4 = Lon4'; end;  if isrow(Lat4); Lat4 = Lat4'; end;
 
 Lon5=Data.Longitude(x);          Lat5=Data.Latitude(x);
