@@ -20,12 +20,13 @@ function [ k_vol, k_geo ] = modis_brdf_kernels( sza, vza, raa )
 %   Wanner et al. J. Geophys. Res. (1995), 100, pp. 21077-21089 esp. sec.
 %   4.2 for K_geo
 %
-%   Roujean et al. (1992)
+%   Roujean et al. J. Geophys. Res. (1992), 97, pp. 20455-20468
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 8 Sept 2015
 
 % cos(xi) essentially describes the total angle between the incoming direct
-% and outgoing viewing paths.
+% and outgoing viewing paths. From Roujean et al. (1992). Xi needs to be in
+% radians for the k_vol eqn.
 xi = acos(cosd(sza) .* cosd(vza) + sind(sza) .* sind(vza) .* cosd(raa));
 
 % Calculate k_vol

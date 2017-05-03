@@ -2,8 +2,9 @@ function [ data ] = read_modis_albedo( modis_directory, date_in, data, varargin 
 %UNTITLED6 Summary of this function goes here
 %   Detailed explanation goes here
 
-% This function will likely change significantly when we merge the BRDF
-% albedo branch into the update branch
+% Important references for MODIS BRDF v006 product:
+%   V006 User Guide: https://www.umb.edu/spectralmass/terra_aqua_modis/v006
+%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% INPUT VALIDATION %%%%%
@@ -54,26 +55,28 @@ this_year = sprintf('%04d', year(date_in));
 alb_dir = fullfile(modis_directory, this_year);
 julian_day = modis_date_to_day(date_in);
 
-%Find the closest MCD file
-in=[0 1 -1 2 -2 3 -3 4 -4 5 -5 6 -6 7 -7 8 -8 9 -9 10 -10 11 -11 12 -12 13 -13 14 -14 15 -15 16 -16 17 -17 18 -18 19 -19 20 -20 21 -21];
-for a=1:length(in);
-    mcd_filename = sprintf('MCD43C3.A%04d%03d*.hdf', year(date_in), julian_day + in(a));
-    alb_filename = fullfile(alb_dir, mcd_filename);
-    alb_files = dir(alb_filename);
-    if DEBUG_LEVEL > 1; fprintf('Looking for %s \n', alb_filename); end
-    %if exist('alb_filename','file') == 2
-    if ~isempty(alb_files)
-        if DEBUG_LEVEL > 0; fprintf(' Found mcd43 file %s \n', alb_filename); end
-        alb_file_full = fullfile(alb_dir, alb_files(1).name);
-        break
-    elseif a==length(in)
-        error(E.filenotfound('MCD43C3 (Albedo) file within 21 days'));
-    end
-end
+% As of version 6 of MCD43C1, a 16-day average is produced every day, so
+% unlike version 5 of MCD43C3 where we had to look forward and back in time
+% from the current date, we should be able to just pick the file for this
+% day.
+
+mcd_filename = sprintf('MCD43C1.A%04d%03d*.hdf', year(date_in), julian_day);
+alb_filename = fullfile(alb_dir, mcd_filename);
+alb_files = dir(alb_filename);
+if numel(alb_files) < 1
+    E.filenotfound('MODIS BRDF file matching pattern %s.', alb_filename);
+elseif numel(alb_files) > 1
+    E.toomanyfiles('Multiple MODIS BRDF files found matching pattern %s.', alb_filename);
+end 
 
 mcd43_info = hdfinfo(fullfile(alb_dir,alb_files(1).name));
-band3 = hdfreadmodis(alb_file_full, hdfdsetname(mcd43_info, 1, 1, 'Albedo_BSA_Band3'));
-band3 = flipud(band3);
+band3_iso = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter1_Band3'));
+band3_vol = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter2_Band3'));
+band3_geo = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter3_Band3'));
+
+band3_iso = flipud(double(band3_iso));
+band3_vol = flipud(double(band3_vol));
+band3_geo = flipud(double(band3_geo));
 
 %MODIS albedo is given in 0.05 degree cells and a single file covers the
 %full globe, so figure out the lat/lon of the middle of the grid cells as:
@@ -95,9 +98,14 @@ lat_max = ceil(max(latcorn));
 
 in_lats = find(band3_lat>=lat_min & band3_lat<=lat_max);
 in_lons = find(band3_lon>=lon_min & band3_lon<=lon_max);
-band3=band3(in_lats,in_lons);
+
+band3_iso = band3_iso(in_lats,in_lons); 
+band3_vol = band3_vol(in_lats,in_lons);
+band3_geo = band3_geo(in_lats,in_lons);
+
 band3_lats=band3_lats(in_lats,in_lons);
 band3_lons=band3_lons(in_lats,in_lons);
+
 s=size(data.Latitude);
 c=numel(data.Latitude);
 MODISAlbedo=nan(s);
@@ -120,16 +128,14 @@ for k=1:c;
     % single lat and lon vector
     xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
     
-    band3_vals=band3(xx_alb);  band3_zeros=band3_vals==0;
-    band3_vals(band3_zeros)=NaN; band3_vals(isnan(band3_vals))=[];
-    band3_avg=mean(band3_vals);
+    band3_vals = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), data.RelativeAzimuthAngle(k));
+    band3_avg = nanmean(band3_vals(band3_vals>0));
     
     %put in ocean surface albedo from LUT
     if isnan(band3_avg)==1;
         sza_vec = [5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 89];
         alb_vec = [0.038 0.038 0.039 0.039 0.040 0.042 0.044 0.046 0.051 0.058 0.068 0.082 0.101 0.125 0.149 0.158 0.123 0.073];
-        alb = interp1(sza_vec, alb_vec, data.SolarZenithAngle(k));
-        band3_avg = alb;
+        band3_avg = interp1(sza_vec, alb_vec, data.SolarZenithAngle(k));
     end
     
     MODISAlbedo(k) = band3_avg;
@@ -137,7 +143,7 @@ for k=1:c;
 end
 
 data.MODISAlbedo = MODISAlbedo;
-data.MODISAlbedoFile = alb_file_full;
+data.MODISAlbedoFile = mcd43_info.Filename;
 
 end
 

@@ -49,10 +49,11 @@ end
 %%%%% DEPENDENCIES %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%
 if DEBUG_LEVEL > 1; fprintf('Adding folders\n'); end
-%Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
-%the Git repository for BEHR, this is the /Utils folder.
-mpath = fileparts(mfilename('fullpath'));
-addpath(genpath(fullfile(mpath,'..','Utils')));
+%Add the 'Utils' folder within the BEHR repo and all subfolders to MATLAB's
+%search path. Also do the same for the "Albedo" directory (except it
+%doesn't need to be recursive at the moment).
+addpath(genpath(fullfile(behr_repo_dir,'Utils')));
+addpath(fullfile(behr_repo_dir, 'Albedo'));
 
 
 % Add the paths needed for certain utility classes and functions
