@@ -265,6 +265,14 @@ onCluster_local = onCluster;
 
 datenums = datenum(date_start):datenum(date_end);
 
+currdir = cd(behr_repo_dir);
+[gitstat, githead] = system('git rev-parse HEAD');
+cd(currdir);
+
+if gitstat ~= 0
+    githead = 'Unknown';
+end
+
 %parfor(j=1:length(datenums), n_workers)
 for j=1:length(datenums)
     %Read the desired year, month, and day
@@ -307,7 +315,7 @@ for j=1:length(datenums)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'IsZoomModeSwath'};
+        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'IsZoomModeSwath', 'GitHead_Read'};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
     Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
@@ -355,7 +363,9 @@ for j=1:length(datenums)
         % If we've gotten here, then there are pixels in the swath that lie
         % within the domain of interest. Add the OMPIXCOR data
         pixcor_name = make_pixcorn_name_from_sp(this_sp_filename, fullfile(omi_pixcor_dir, this_year_str, this_month_str));
-        this_data = read_omi_sp(pixcor_name, '/HDFEOS/SWATHS/OMI Ground Pixel Corners VIS', pixcor_variables, this_data, [lonmin, lonmax], [latmin, latmax]);
+        this_data = read_omi_sp(pixcor_name, '/HDFEOS/SWATHS/OMI Ground Pixel Corners VIS', pixcor_variables, this_data, [lonmin, lonmax], [latmin, latmax], 'match_data', true);
+        
+        this_data = handle_corner_zeros(this_data, DEBUG_LEVEL);
         
         % The OMNO2 and OMPIXCOR products place the zoom-mode pixels
         % differently in the swath - fix that here.
@@ -399,6 +409,7 @@ for j=1:length(datenums)
         this_data.Date = datestr(this_dnum, 'yyyy/mm/dd');
         this_data.LonBdy = [lonmin, lonmax];
         this_data.LatBdy = [latmin, latmax];
+        this_data.GitHead_Read = githead;
         
         data_ind = data_ind + 1;
         Data(data_ind) = this_data;
@@ -569,7 +580,6 @@ if ~any(pix_nans)
     return
 end
 
-data.IsZoomModeSwath = true;
 for a=1:size(corner_fields,1)
     loncorn = data.(corner_fields{a,1});
     latcorn = data.(corner_fields{a,2});
@@ -600,17 +610,19 @@ for a=1:size(corner_fields,1)
         
         pixarea(~pix_nans) = pixarea(~area_nans);
         pixarea(pix_nans) = nan;
-    elseif all(~corn_nans(~pix_nans)) && all(~area_nans(~pix_nans))
-        % Otherwise, if everything that's not a nan in the regular product
-        % is also not a nan in the corner product fields, we must just have
-        % fill data in the regular product but not the pixel corner product
-        % for some reason. In this case, just make the corner nans match
-        % the regular product
+    else
+        % Otherwise, we may have pixels with valid center coordinates but
+        % not corners, or pixels with valid corners but not center
+        % coordinates. I decided to NaN the corners of pixels with invalid
+        % center coordinates but not the other way around b/c a failure of
+        % the corner algorithm does not mean the NO2 retrieval is bad
+        % (although it does preclude BEHR retrieval b/c we won't be able to
+        % average MODIS albedo and GLOBE terrain pressure to the pixel) but
+        % if the center coordinate is NaNed for some reason, I don't want
+        % to do anything to suggest that that pixel is good.
         loncorn(:,:,pix_nans) = nan;
         latcorn(:,:,pix_nans) = nan;
         pixarea(pix_nans) = nan;
-    else
-        E.notimplemented('NaNs in corner product that are not in the regular product')
     end
     
     
@@ -620,9 +632,22 @@ for a=1:size(corner_fields,1)
     data.(area_fields{a}) = pixarea;
 end
 
-
-
 end
+
+
+function data = handle_corner_zeros(data, DEBUG_LEVEL)
+fns = fieldnames(data);
+ff = ~iscellcontents(regexpi(fns, 'corner', 'once'), 'isempty');
+fns = fns(ff);
+for a=1:numel(fns)
+    xx = all(data.(fns{a}) == 0, 1);
+    if any(xx(:)) && DEBUG_LEVEL > 0
+        fprintf('    Pixels with all corners == 0 found for field %s, setting corners to NaN\n', fns{a});
+    end
+    data.(fns{a})(:,xx) = nan;
+end
+end
+
 
 function data = add_behr_corners(data, sp_filename)
 spacecraft_vars = {'Longitude', 'Latitude', 'SpacecraftAltitude', 'SpacecraftLatitude', 'SpacecraftLongitude'};

@@ -10,6 +10,12 @@ function [ data, there_are_points ] = read_omi_sp( sp_file, sp_group_path, sp_va
 %       dim_order - A string indicating how the dimensions should be
 %       ordered, default is 'olx'. 'x' indicates across track, 'l' along
 %       track, and 'o' other dimensions.
+%
+%       match_data - will match new data to the existing DATA structure
+%       based on the longitude and latitude points (specifically, uses
+%       find_submatrix2 to identify the subset of read in points that match
+%       to within a tolerance of the existing Longitude and Latitude fields
+%       in DATA
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% INPUT CHECKING %%%%%
@@ -18,10 +24,12 @@ function [ data, there_are_points ] = read_omi_sp( sp_file, sp_group_path, sp_va
 E = JLLErrors;
 p = inputParser;
 p.addParameter('dim_order', 'olx');
+p.addParameter('match_data', false);
 p.parse(varargin{:});
 pout = p.Results;
 
 dim_order = pout.dim_order;
+match_data = pout.match_data;
 
 if ~ischar(sp_file)
     E.badinput('SP_FILE must be a string')
@@ -35,6 +43,12 @@ end
 
 if ~ischar(dim_order) || any(~ismember('olx',dim_order)) || length(dim_order) ~= 3
     E.badinput('The parameter DIM_ORDER must be a string consisting of the characters o, l, and x only')
+end
+
+if ~isscalar(match_data) || (~isnumeric(match_data) && ~islogical(match_data))
+    E.badinput('The parameter MATCH_DATA must be a scalar boolean or number');
+elseif match_data && ((isscalar(data.Longitude) && data.Longitude == 0) || (isscalar(data.Latitude) && data.Latitude ==0))
+    warning('MATCH_DATA requested but latitude/longitude fields in DATA do not appear to be fully filled (are scalars and == 0)');
 end
 
 % By requiring that all fields are already present in the data structure,
@@ -56,15 +70,55 @@ hgrp_info = h5info(sp_file, sp_group_path);
 
 %Read in the full latitude data set; this will be used to determine
 %which pixels to read in later.
-lat = double(h5read(sp_file, find_dset(hgrp_info, 'Latitude')));
+lat = double(h5readomi(sp_file, find_dset(hgrp_info, 'Latitude')));
 lat = lat';
-lon = double(h5read(sp_file, find_dset(hgrp_info, 'Longitude')));
+lon = double(h5readomi(sp_file, find_dset(hgrp_info, 'Longitude')));
 lon = lon';
 
 %Restrict data to that which falls within the bounds specified by the lon
 %and lat limits
-xx = lon > lonlim(1) & lon < lonlim(2);
-yy = lat > latlim(1) & lat < latlim(2);
+if ~match_data
+    xx = lon > lonlim(1) & lon < lonlim(2);
+    yy = lat > latlim(1) & lat < latlim(2);
+else
+    % NaNs mess up find_submatrix2. So what we need to do is subset out the
+    % non-NaN components and find the submatrix just in there, then
+    % translate that back into the full matrix. To do this, we're going to
+    % assume that if any coordinates are NaNs, that an entire across-track
+    % row is NaNs, which happens when doing zoom-mode days. If this
+    % assumption is violated, or if there are differing numbers of NaNs,
+    % abort.
+    data_nans = all(isnan(data.Longitude),1);
+    if any(xor(isnan(data.Longitude(:)), isnan(data.Latitude(:))))
+        E.callError('nan_mismatch', 'Using match_data = true: data.Longitude and data.Latitude have different NaNs')
+    elseif ~isequal(any(isnan(data.Longitude),1), data_nans)
+        E.notimplemented('Using match_data = true: data.Longitude has a row that is only partially NaNs')
+    end
+    
+    new_nans = all(isnan(lon),1);
+    if any(xor(isnan(lon(:)), isnan(lat(:))))
+        E.callError('nan_mismatch', 'Using match_data = true: lon and lat have different NaNs')
+    end
+    
+    if sum(data_nans(:)) ~= sum(new_nans(:))
+        E.notimplemented('Using match_data = true: the number of NaNs in the longitude in the DATA structure and the file being read are different')
+    end
+    
+    [tmp_xx, tmp_yy] = find_submatrix2(data.Longitude(:,~data_nans), data.Latitude(:,~data_nans), lon(:,~new_nans), lat(:,~new_nans));
+    if isempty(tmp_xx) || isempty(tmp_yy)
+        E.callError('data_match_failure', 'Failed to find the existing data.Longitude/data.Latitude in the new files'' longitude/latitude.')
+    end
+    xx_sub = false(size(lon(:,~new_nans)));
+    yy_sub = false(size(lon(:,~new_nans)));
+    xx_sub(tmp_xx,:) = true;
+    yy_sub(:,tmp_yy) = true;
+    
+    xx = false(size(lon));
+    yy = false(size(lon));
+    xx(:,~new_nans) = xx_sub;
+    yy(:,~new_nans) = yy_sub;
+end
+
 %cut_alongtrack = any(xx & yy, 2);
 cut_alongtrack = any(xx,2) & any(yy,2);
 cut_acrosstrack = true(1,60); % keep all elements in the across track direction for now
