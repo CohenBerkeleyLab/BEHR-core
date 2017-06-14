@@ -15,6 +15,14 @@ function [ k_vol, k_geo ] = modis_brdf_kernels( sza, vza, raa )
 %   algorithm. This would need to be combined with MCD43C1 coefficients to
 %   get the actual reflectance.
 %
+%   IMPORTANT: I believe that these kernel equations expect the traditional
+%   description of relative azimuth angle, i.e. |saa - vaa| constrained to
+%   [0,180] because on p. 20457 of Roujean et al., it says "...f1 presents
+%   a local maximum in the BACKSCATTERING DIRECTION for VZA = SZA, RAA =
+%   0..." Therefore, I believe it is important to not use the relative
+%   azimuth angle required by the TOMRAD table, which has an extra factor
+%   of 180 deg due to the definition of RAA used in that table.
+%
 %   Further reading: MOD43 Theoretical Basis Document esp. pp. 13-15
 %
 %   Wanner et al. J. Geophys. Res. (1995), 100, pp. 21077-21089 esp. sec.
@@ -23,6 +31,8 @@ function [ k_vol, k_geo ] = modis_brdf_kernels( sza, vza, raa )
 %   Roujean et al. J. Geophys. Res. (1992), 97, pp. 20455-20468
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 8 Sept 2015
+
+DEBUG_LEVEL = 2;
 
 % cos(xi) essentially describes the total angle between the incoming direct
 % and outgoing viewing paths. From Roujean et al. (1992). Xi needs to be in
@@ -60,6 +70,14 @@ xi_prime = acos(cos(sza_prime) .* cos(vza_prime) + sin(sza_prime) .* sin(vza_pri
 % The following three quantities deal with the overlap of the objects in
 % the model.
 
+if DEBUG_LEVEL > 1
+    fprintf('sza_prime = %f\n', sza_prime)
+    fprintf('vza_prime = %f\n', vza_prime)
+    fprintf('raa = %f\n', raa)
+    fprintf('D2 first term = %f\n', tan(sza_prime).^2 + tan(vza_prime).^2)
+    fprintf('D2 second term = %f\n', 2 .* tan(sza_prime) .* tan(vza_prime) .* cosd(raa))
+end
+
 D2 = tan(sza_prime).^2 + tan(vza_prime).^2 - 2 .* tan(sza_prime) .* tan(vza_prime) .* cosd(raa);
 cos_t = h_b .* sqrt( (D2 + (tan(sza_prime) .* tan(vza_prime) .* sind(raa)).^2) ) ./ (sec(sza_prime) + sec(vza_prime));
 
@@ -96,7 +114,13 @@ O = 1/pi .* (t - sin(t) .* cos(t)) .* (sec(sza_prime) + sec(vza_prime));
 % Finally we can compute k_geo
 k_geo = O - sec(sza_prime) - sec(vza_prime) + 1/2 .* (1 + cos(xi_prime)) .* sec(sza_prime) .* sec(vza_prime);
 
-
+if DEBUG_LEVEL > 1
+    fprintf('xi_prime = %f\n', xi_prime);
+    fprintf('D2 = %f\n', D2);
+    fprintf('cos_t = %f\n', cos_t);
+    fprintf('t = %f\n', t);
+    fprintf('O = %f\n', O);
+end
 
 end
 
