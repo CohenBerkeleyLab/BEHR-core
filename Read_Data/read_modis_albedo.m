@@ -128,7 +128,10 @@ for k=1:c;
     % single lat and lon vector
     xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
     
-    band3_vals = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), data.RelativeAzimuthAngle(k));
+    % The 180-RAA should flip the RAA back to the standard definition (i.e.
+    % the supplemental angle of what's in the data product). See the help
+    % text for modis_brdf_kernels for why that matters.
+    band3_vals = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), 180-data.RelativeAzimuthAngle(k));
     band3_avg = nanmean(band3_vals(band3_vals>0));
     
     %put in ocean surface albedo from LUT

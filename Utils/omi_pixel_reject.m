@@ -51,14 +51,14 @@ end
 
 %omi.Areaweight(omi.BEHRColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
 
-if iscell(omi.vcdQualityFlags) % The flags may be a cell array or not, depending on whether this is for Data or OMI (gridded) structure
-    for a=1:numel(omi.vcdQualityFlags);
-        if any(mod([omi.vcdQualityFlags{a}],2)~=0)
+if iscell(omi.VcdQualityFlags) % The flags may be a cell array or not, depending on whether this is for Data or OMI (gridded) structure
+    for a=1:numel(omi.VcdQualityFlags);
+        if any(mod([omi.VcdQualityFlags{a}],2)~=0)
             omi.Areaweight(a) = 0; %If any of the vcdQualityFlags value is not even (least significant bit ~= 0), do not include this element
         end
     end
 else
-    omi.Areaweight(mod(omi.vcdQualityFlags,2)~=0) = 0;
+    omi.Areaweight(mod(omi.VcdQualityFlags,2)~=0) = 0;
 end
 
 if strcmpi(cloud_type,'rad'); %Do not include the element if the cloud fraction is greater than the allowable criteria
