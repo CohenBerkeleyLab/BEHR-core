@@ -38,6 +38,10 @@ switch lower(plttype)
             varargout = cell(1,6);
             [varargout{:}] = pres_binned_grand_profile(varargin{:});
         end
+    case 'make-hybrid'
+        [varargout{1}, varargout{2}] = make_hybrid_profiles(varargin{:});
+    case 'save-hybrid'
+        save_hybrid_profs();
     case 'amf-sens'
         if nargout > 0
             varargout{1} = amf_test(nargout);
@@ -50,6 +54,20 @@ switch lower(plttype)
         avg2gridcell_timeser
     case 'two-hist'
         two_histograms()
+    case 'flashcounts'
+        figs = compare_flashcounts(varargin{:});
+        if nargout > 0
+            varargout = {figs};
+        end
+    case 'make-lightning-met-profs'
+        make_lightning_met_profs();
+    case 'plot-lightning-met-profs'
+        figs = plot_lightning_temp_diffs(varargin{:});
+        if nargout > 0
+            varargout = {figs};
+        end
+    case 'bc-test'
+        compare_geos_moz_bcs()
 end
 
     function varargout = grand_scatterplot(Opts)
@@ -94,12 +112,15 @@ end
     function [air_data_bins, air_data_means, air_pres_bins, wrf_data_bins, wrf_data_means, wrf_pres_bins] = pres_binned_grand_profile(Opts)
         if ~exist('Opts','var')
             Opts = struct;
+            do_error_bars = ask_yn('Include error bars on the means?');
+        else
+            do_error_bars = false;
         end
         [air_data, air_pres, wrf_data, wrf_pres, xstr] = grand_scatterplot(Opts);
         [air_data_bins, air_pres_bins, air_quants] = bin_omisp_pressure(air_pres, air_data);
         [wrf_data_bins, wrf_pres_bins, wrf_quants] = bin_omisp_pressure(wrf_pres, wrf_data);
-        air_data_means = bin_omisp_pressure(air_pres, air_data, 'mean');
-        wrf_data_means = bin_omisp_pressure(wrf_pres, wrf_data, 'mean');
+        [air_data_means, ~, air_data_std] = bin_omisp_pressure(air_pres, air_data, 'mean');
+        [wrf_data_means, ~, wrf_data_std] = bin_omisp_pressure(wrf_pres, wrf_data, 'mean');
         
         if nargout == 0
             figure;
@@ -109,6 +130,11 @@ end
             l(3) = line(air_data_means, air_pres_bins, 'color', 'b', 'linestyle', '--', 'marker', 's');
             l(4) = line(wrf_data_means, wrf_pres_bins, 'color', 'r', 'linestyle', '--', 'marker', '^');
 
+            if do_error_bars
+                scatter_errorbars(air_data_means, air_pres_bins, air_data_std, 'color', 'b');
+                scatter_errorbars(wrf_data_means, wrf_pres_bins, wrf_data_std, 'color', 'r');
+            end
+            
             legend(l, {'Aircraft Data Med.', 'WRF Med.', 'Aircraft Mean','WRF Mean'});
             set(gca,'fontsize',16);
             xlabel(xstr);
@@ -117,24 +143,84 @@ end
         end
     end
 
-    function varargout = amf_test(req_var_out)
+    function save_hybrid_profs()
+        save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/LNOx-AMFs/Profiles';
+        match_files = {'DC3-Comparison-no_lnox-fixedBC-using_wrfgridcorners.mat',...
+            'DC3-Comparison-flashrate-1-molflash-500-iccg-2-newprofile-fixedBC-using_wrfgridcorners.mat',...
+            'DC3-Comparison-500mol-nudge-test.mat',...
+            'DC3-Comparison-flashrate-1-molflash-665-iccg-2-newprofile-fixedBC-using_wrfgridcorners.mat'};
+        save_files = {'DC3-WRF-0-Hybrid-Profiles.mat', 'DC3-WRF-500-Hybrid-Profiles.mat',...
+            'DC3-WRF-500-nudge-Hybrid-Profiles.mat', 'DC3-WRF-665-Hybrid-Profiles.mat'};
+        
+        Opts.quantity = 'NO2';
+        Opts.lats_filter = 'all';
+        Opts.strat_filter = false;
+        Opts.fresh_filter = false;
+        for a=1:numel(match_files)
+            Opts.match_file = match_files{a};
+            profs = make_hybrid_profiles(Opts);
+            save(fullfile(save_dir, save_files{a}), 'profs');
+        end
+    end
+
+    function [profs, iswrf] = make_hybrid_profiles(varargin)
+        [ ~, dc3_prof, dc3_pres, ~, wrf_prof, wrf_pres] = pres_binned_grand_profile(varargin{:});
+        profs.dc3_ft_wrf_bl = dc3_prof;
+        iswrf.dc3_ft_wrf_bl = false(size(dc3_prof));
+        iswrf.dc3_ft_wrf_bl(wrf_pres > 750) = true;
+        profs.dc3_ft_wrf_bl(dc3_pres > 750) = wrf_prof(iswrf.dc3_ft_wrf_bl);
+        
+        profs.wrf_ft_dc3_bl = wrf_prof;
+        iswrf.wrf_ft_dc3_bl = true(size(wrf_prof));
+        iswrf.wrf_ft_dc3_bl(dc3_pres > 750) = false;
+        profs.wrf_ft_dc3_bl(wrf_pres > 750) = dc3_prof(~iswrf.wrf_ft_dc3_bl);
+        
+        profs.dc3_mt_wrf_bl_ut = wrf_prof;
+        iswrf.dc3_mt_wrf_bl_ut = true(size(wrf_prof));
+        iswrf.dc3_mt_wrf_bl_ut(wrf_pres < 750 & wrf_pres > 375) = false;
+        profs.dc3_mt_wrf_bl_ut(~iswrf.dc3_mt_wrf_bl_ut) = dc3_prof(~iswrf.dc3_mt_wrf_bl_ut);
+        
+        profs.wrf_mt_dc3_bl_ut = dc3_prof;
+        iswrf.wrf_mt_dc3_bl_ut = false(size(dc3_prof));
+        iswrf.wrf_mt_dc3_bl_ut(dc3_pres < 750 & dc3_pres > 375) = true;
+        profs.wrf_mt_dc3_bl_ut(iswrf.wrf_mt_dc3_bl_ut) = wrf_prof(iswrf.wrf_mt_dc3_bl_ut);
+        
+        profs.dc3_rl_wrf_bl_ft = wrf_prof;
+        iswrf.dc3_rl_wrf_bl_ft = true(size(wrf_prof));
+        iswrf.dc3_rl_wrf_bl_ft(wrf_pres >= 700 & wrf_pres <= 875) = false;
+        profs.dc3_rl_wrf_bl_ft(~iswrf.dc3_rl_wrf_bl_ft) = dc3_prof(~iswrf.dc3_rl_wrf_bl_ft);
+        
+        profs.dc3_prof = dc3_prof;
+        profs.dc3_pres = dc3_pres;
+        profs.wrf_prof = wrf_prof;
+        profs.wrf_pres = wrf_pres;
+    end
+
+    function varargout = amf_test(req_var_out, varargin)
         % For a given run, this will compute the AMF for four cases:
         %  1) DC3 profile
         %  2) WRF profile
         %  3) DC3 boundary layer, WRF free trop
         %  4) WRF boundary layer, DC3 free trop
-        [ ~, dc3_prof, dc3_pres, ~, wrf_prof, wrf_pres] = pres_binned_grand_profile();
+        if numel(varargin) > 0
+            Opts = varargin{1};
+        end
+        Opts.quantity = 'NO2'; % For the AMF tests, we should ONLY be using the NO2 profile
+        
+        profs = make_hybrid_profiles(Opts);
+        % This were separate variables
+        dc3_prof = profs.dc3_prof;
+        dc3_pres = profs.dc3_pres;
+        wrf_prof = profs.wrf_prof;
+        wrf_pres = profs.wrf_pres;
+        dc3_ft_wrf_bl = profs.dc3_ft_wrf_bl;
+        wrf_ft_dc3_bl = profs.wrf_ft_dc3_bl;
+        dc3_mt_wrf_bl_ut = profs.dc3_mt_wrf_bl_ut;
+        dc3_rl_wrf_bl_ft = profs.dc3_rl_wrf_bl_ft;
+        
         if any(dc3_pres ~= wrf_pres)
             E.callError('different_pres','DC3 and WRF profiles on different pressure levels');
         end
-        dc3_ft_wrf_bl = dc3_prof;
-        dc3_ft_wrf_bl(dc3_pres > 750) = wrf_prof(wrf_pres > 750);
-        wrf_ft_dc3_bl = wrf_prof;
-        wrf_ft_dc3_bl(wrf_pres > 750) = dc3_prof(dc3_pres > 750);
-        dc3_mt_wrf_bl_ut = wrf_prof;
-        dc3_mt_wrf_bl_ut(wrf_pres < 750 & wrf_pres > 375) = dc3_prof(dc3_pres < 750 & dc3_pres > 375);
-        dc3_rl_wrf_bl_ft = wrf_prof;
-        dc3_rl_wrf_bl_ft(wrf_pres >= 700 & wrf_pres <= 875) = dc3_prof(dc3_pres >= 700 & dc3_pres <= 875);
         
         figure; subplot(3,2,1);
         line(wrf_prof, wrf_pres, 'color', 'r', 'marker', 'x');
@@ -352,6 +438,240 @@ end
         title(sprintf('%s between %f and %f hPa', chemstr, bottom_pres, top_pres));
     end
 
+    function compare_geos_moz_bcs()
+        gc_bc_dir = '/Volumes/share-wrf1/Tests/GeosBC-Test/GeosBCs';
+        moz_bc_dir = '/Volumes/share-wrf1/Tests/GeosBC-Test/MozBCs';
+        %moz_bc_dir = '/Volumes/share-wrf1/Tests/Cheyenne-Test-w-GeosBCs'; % use this as the "mozart" bc to test if cheyenne's WRF run is close to the yellowstone run
+        
+        GC = dir(fullfile(gc_bc_dir, 'wrfout*'));
+        MOZ = dir(fullfile(moz_bc_dir, 'wrfout*'));
+        wrf_sz = get_wrf_array_size(fullfile(gc_bc_dir, GC(1).name));
+        
+        gci = ncinfo(fullfile(gc_bc_dir, GC(1).name));
+        mozi = ncinfo(fullfile(moz_bc_dir, MOZ(1).name));
+        
+        gc_var = {gci.Variables.Name};
+        moz_var = {mozi.Variables.Name};
+        vv = find_common_elements(gc_var, moz_var);
+        var_dims = zeros(size(vv));
+        for a=1:numel(var_dims)
+            var_dims(a) = length(gci.Variables(vv(a)).Dimensions);
+        end
+        wrf_vars = gc_var(vv);
+        wrf_vars = wrf_vars(var_dims == 4);
+        
+        msg = sprintf('What level''s history should we examine? (1-%d)', wrf_sz(3));
+        err_msg = sprintf('Choose a single number between 1 and %s', wrf_sz(3));
+        lev = ask_number(msg, 'testfxn', @(x) isscalar(x) && x >= 1 && x <= wrf_sz(3), 'testmsg', err_msg);
+        
+        plot_var = ask_multichoice('Choose a variable to plot:', wrf_vars, 'list', true);
+        
+        nc_count = [Inf, Inf, 1, Inf];
+        nc_start = [1, 1, lev, 1];
+        
+        gc_dates = date_from_wrf_filenames(GC);
+        moz_dates = date_from_wrf_filenames(MOZ);
+        
+        [gc_xx, moz_xx] = find_common_elements(gc_dates, moz_dates);
+        n_times = numel(gc_xx);
+        
+        gc_vals = nan(wrf_sz(1), wrf_sz(2), n_times);
+        moz_vals = nan(wrf_sz(1), wrf_sz(2), n_times);
+        for a=1:n_times
+            fprintf('Reading file %d of %d\n', a, n_times);
+            
+            gc_file = fullfile(gc_bc_dir, GC(gc_xx(a)).name);
+            moz_file = fullfile(moz_bc_dir, MOZ(moz_xx(a)).name);
+            
+            if a==1
+                xlon = ncread(gc_file, 'XLONG');
+                xlat = ncread(gc_file, 'XLAT');
+            end
+            
+            gc_vals(:,:,a) = ncread(gc_file, plot_var, nc_start, nc_count);
+            moz_vals(:,:,a) = ncread(moz_file, plot_var, nc_start, nc_count);
+            unit_str = ncreadatt(moz_file, plot_var, 'units');
+        end
+        
+        % Make the GUI based plots
+        [slon, slat] = state_outlines('not', 'ak', 'hi');
+        plot_slice_gui(gc_vals, xlon, xlat, slon, slat, sprintf('%s with GC BCs, level %d (%s)', plot_var, lev, unit_str));
+        plot_slice_gui(moz_vals, xlon, xlat, slon, slat, sprintf('%s with MOZ BCs, level %d (%s)', plot_var, lev, unit_str));
+        plot_slice_gui(gc_vals - moz_vals, xlon, xlat, slon, slat, sprintf('%s, GC - MOZ, level %d (%s)', plot_var, lev, unit_str));
+        plot_slice_gui(reldiff(gc_vals, moz_vals, 'avg')*100, xlon, xlat, slon, slat, sprintf('%s, percent diff GC vs MOZ, level %d', plot_var, lev));
+    end
+
+    function make_lightning_met_profs(plotvar)
+        allowed_plotvars = {'TT','QVAPOR'};
+        if ~exist('plotvar','var')
+            plotvar = ask_multichoice('Which variable to plot?', allowed_plotvars, 'list',true);
+        else
+            if ~ismember(plotvar, allowed_plotvars)
+                E.badinput('PLOTVAR must be one of %s', strjoin(allowed_plotvars, ', '));
+            end
+        end
+        nudge_flash_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/flashcount-nudge';
+        nonudge_flash_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/flashcount-nonudge';
+        %nudge_tt_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/DC3-500_mol_flash-run_to_get_flashrates-nudge';
+        nudge_tt_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/DC3-500_mol_flash-2x_flashrate_nudge';
+        %nonudge_tt_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/DC3-500_mol_flash-run_to_get_flashrates-nonudge';
+        nonudge_tt_dir = '/Volumes/share2/USERS/LaughnerJ/WRF/DC3/DC3-500_mol_flash-1x_flashrate_nonudge';
+        if strcmpi(plotvar, 'TT')
+            save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/WRF/Lightning Temperature Profs';
+        elseif strcmpi(plotvar, 'QVAPOR')
+            save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/WRF/Lightning Qvapor Profs';
+        else
+            E.notimplemented('No save directory specified for plotvar = %s', plotvar);
+        end
+        F = dir(fullfile(nudge_tt_dir, 'wrfout*'));
+        F2 = dir(fullfile(nonudge_tt_dir, 'wrfout*'));
+        F3 = dir(fullfile(nudge_flash_dir, 'wrfout*'));
+        F4 = dir(fullfile(nonudge_flash_dir, 'wrfout*'));
+        nudge_names = {F.name};
+        ff2 = find_common_elements(nudge_names, {F2.name});
+        ff3 = find_common_elements(nudge_names, {F3.name});
+        ff4 = find_common_elements(nudge_names, {F4.name});
+        
+        if ~isequal(ff2, ff3)
+            E.callError('Different files in %s and %s', nonudge_tt_dir, nudge_flash_dir)
+        elseif ~isequal(ff2,ff4)
+            E.callError('Different files in %s and %s', nonudge_tt_dir, nonudge_flash_dir)
+        end
+        
+        F = F(ff2);
+        wrf_dates = date_from_wrf_filenames(nudge_names(ff2));
+        wrf_lon = ncread(fullfile(nudge_flash_dir, F(1).name), 'XLONG');
+        wrf_lat = ncread(fullfile(nudge_flash_dir, F(1).name), 'XLAT');
+        for a=1:numel(F)
+            fprintf('File %d of %d (%s)\n', a, numel(F), F(a).name);
+            nudge_ic_flash = ncread(fullfile(nudge_flash_dir, F(a).name), 'IC_FLASHCOUNT');
+            nudge_cg_flash = ncread(fullfile(nudge_flash_dir, F(a).name), 'CG_FLASHCOUNT');
+            nonudge_ic_flash = ncread(fullfile(nonudge_flash_dir, F(a).name), 'IC_FLASHCOUNT');
+            nonudge_cg_flash = ncread(fullfile(nonudge_flash_dir, F(a).name), 'CG_FLASHCOUNT');
+            if a == 1
+                % flash counts must be differenced, so need at least the
+                % second file
+                nudge_last_flashes = nudge_ic_flash + nudge_cg_flash;
+                nonudge_last_flashes = nonudge_ic_flash + nonudge_cg_flash;
+                continue
+            end
+                
+            nudge_flash_map = nudge_ic_flash + nudge_cg_flash - nudge_last_flashes;
+            nonudge_flash_map = nonudge_ic_flash + nonudge_cg_flash - nonudge_last_flashes;
+            nudge_last_flashes = nudge_ic_flash + nudge_cg_flash;
+            nonudge_last_flashes = nonudge_ic_flash + nonudge_cg_flash;
+            
+            xx = nonudge_flash_map > 0;
+            nudge_tt_profs = ncread(fullfile(nudge_tt_dir, F(a).name), plotvar);
+            nudge_tt_profs = permute(nudge_tt_profs, [3 1 2]);
+            nudge_tt_profs = nudge_tt_profs(:,xx);
+            
+            nonudge_tt_profs = ncread(fullfile(nonudge_tt_dir, F(a).name), plotvar);
+            nonudge_tt_profs = permute(nonudge_tt_profs, [3 1 2]);
+            nonudge_tt_profs = nonudge_tt_profs(:,xx);
+            
+            TT_Profs = struct('date', datestr(wrf_dates(a), 'yyyy-mm-dd HH:MM:SS'),...
+                              'nudge_flash_map', nudge_flash_map,...
+                              'nonudge_flash_map', nonudge_flash_map,...
+                              'map_lons', wrf_lon,...
+                              'map_lats', wrf_lat,...
+                              'flash_lons', wrf_lon(xx),...
+                              'flash_lats', wrf_lat(xx),...
+                              'nudge_tt_profs', nudge_tt_profs,...
+                              'nonudge_tt_profs', nonudge_tt_profs,...
+                              'nudge_flashes', nudge_flash_map(xx),...
+                              'nonudge_flashes', nonudge_flash_map(xx)...
+                              );
+            save_name = sprintf('Lightning_%s_%s.mat', plotvar, datestr(wrf_dates(a), 'yyyy-mm-dd_HH-MM-SS'));
+            save(fullfile(save_dir, save_name), 'TT_Profs');
+        end
+    end
+
+    function fig = plot_lightning_temp_diffs(plotvar)
+        allowed_plotvars = {'TT','QVAPOR'};
+        if ~exist('plotvar','var')
+            plotvar = ask_multichoice('Which variable to plot?', allowed_plotvars, 'list',true);
+        else
+            if ~ismember(plotvar, allowed_plotvars)
+                E.badinput('PLOTVAR must be one of %s', strjoin(allowed_plotvars, ', '));
+            end
+        end
+        if strcmpi(plotvar,'TT')
+            data_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/WRF/Lightning Temperature Profs';
+            unit_name = 'K';
+        elseif strcmpi(plotvar,'QVAPOR')
+            data_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/WRF/Lightning Qvapor Profs';
+            unit_name = 'kg/kg';
+        else
+            E.notimplemented('No data path given for plotvar = %s', plotvar);
+        end
+        F = dir(fullfile(data_dir, 'Lightning*.mat'));
+        mean_prof_nudge = nan(29,numel(F));
+        mean_prof_nonudge = nan(29,numel(F));
+        mean_prof_diffs = nan(29,numel(F));
+        mean_prof_reldiffs = nan(29,numel(F));
+        weights = nan(29,numel(F));
+        
+        fprintf('Loading files: ');
+        for a=1:numel(F)
+            if mod(a,100)==1
+                pdone = a/numel(F)*100;
+                fprintf('%.1f%% ',pdone);
+            end
+            D = load(fullfile(data_dir, F(a).name));
+            TT_Profs = D.TT_Profs;
+            mean_prof_nudge(:,a) = nanmean(TT_Profs.nudge_tt_profs,2);
+            mean_prof_nonudge(:,a) = nanmean(TT_Profs.nonudge_tt_profs,2);
+            mean_prof_diffs(:,a) = nanmean(TT_Profs.nonudge_tt_profs - TT_Profs.nudge_tt_profs,2);
+            mean_prof_reldiffs(:,a) = nanmean(reldiff(TT_Profs.nonudge_tt_profs, TT_Profs.nudge_tt_profs)*100, 2);
+            weights(:,a) = size(TT_Profs.nudge_tt_profs,2);
+        end
+        fprintf('\n');
+        
+        mean_nudge = nansum2(mean_prof_nudge .* weights, 2) ./ nansum2(weights,2);
+        std_nudge = sqrt(var(mean_prof_nudge, weights(1,:), 2));
+        mean_nonudge = nansum2(mean_prof_nonudge .* weights, 2) ./ nansum2(weights,2);
+        std_nonudge = sqrt(var(mean_prof_nonudge, weights(1,:), 2));
+        %mean_diff = nansum2(mean_prof_diffs .* weights,2) ./ nansum2(weights,2);
+        %std_diff = sqrt(var(mean_prof_diffs, weights(1,:), 2));
+        %mean_reldiff = nansum2(mean_prof_reldiffs .* weights,2) ./ nansum2(weights,2);
+        %std_reldiff = sqrt(var(mean_prof_reldiffs, weights(1,:), 2));
+        mean_diff = mean_nonudge - mean_nudge;
+        std_diff = sqrt(std_nonudge.^2 + std_nudge.^2);
+        [mean_reldiff, std_reldiff] = reldiff(mean_nonudge, mean_nudge, std_nonudge, std_nudge);
+        mean_reldiff = mean_reldiff * 100;
+        std_reldiff = std_reldiff * 100;
+        y = (1:numel(mean_diff))';
+        
+        fig(1) = figure;
+        plot(mean_nonudge, y, 'k-', 'linewidth', 2);
+        scatter_errorbars(mean_nonudge, y, std_nonudge, 'color', 'k', 'linewidth', 2, 'direction', 'x');
+        xlabel(sprintf('%s_{nonudge} (%s)', plotvar, unit_name));
+        ylabel('Model level');
+        title(sprintf('%s without nudging', plotvar));
+        
+        fig(2) = figure;
+        plot(mean_nudge, y, 'k-', 'linewidth', 2);
+        scatter_errorbars(mean_nudge, y, std_nudge, 'color', 'k', 'linewidth', 2, 'direction', 'x');
+        xlabel(sprintf('%s_{nudge} (%s)', plotvar, unit_name));
+        ylabel('Model level');
+        title(sprintf('%s with nudging', plotvar));
+        
+        fig(2) = figure;
+        plot(mean_diff, y, 'k-', 'linewidth', 2);
+        scatter_errorbars(mean_diff, y, std_diff, 'color', 'k', 'linewidth', 2, 'direction', 'x');
+        xlabel(sprintf('%1$s_{nonudge} - %1$s_{nudge} (%2$s)', plotvar, unit_name));
+        ylabel('Model level');
+        title(sprintf('%s difference', plotvar));
+        
+        fig(4) = figure;
+        plot(mean_reldiff, y, 'k-', 'linewidth', 2);
+        scatter_errorbars(mean_reldiff, y, std_reldiff, 'color', 'k', 'linewidth', 2, 'direction', 'x');
+        xlabel(sprintf('(%1$s_{nonudge} - %1$s_{nudge})/%1$s_{nudge} \\times 100%', plotvar));
+        ylabel('Model level');
+        title(sprintf('%s percent difference', plotvar));
+    end
+
 
 %%%% INTERNAL FUNCTIONS %%%%
 
@@ -394,6 +714,12 @@ end
         end
         if isfield(Match.wrf, 'PHOTR_NO2')
             comparisons{end+1} = 'NO2 Photolysis';
+        end
+        if isfield(Match.wrf, 'TT')
+            comparisons{end+1} = 'Temperature';
+        end
+        if isfield(Match.wrf, 'QVAPOR')
+            comparisons{end+1} = 'Water vapor mixing ratio';
         end
         if ~isfield(Opts,'quantity')
             quantity = ask_multichoice('Which species to compare?', comparisons, 'list', true);
@@ -440,6 +766,14 @@ end
                 air_data = Match.data.PHOTR_NO2;
                 wrf_data = Match.wrf.PHOTR_NO2;
                 xstr = 'jNO_2 (min^{-1})';
+            case 'temperature'
+                air_data = Match.data.TT;
+                wrf_data = Match.wrf.TT;
+                xstr = 'Temperature (K)';
+            case 'water vapor mixing ratio'
+                air_data = Match.data.QVAPOR;
+                wrf_data = Match.wrf.QVAPOR;
+                xstr = 'Water vapor mixing ratio (kg/kg)';
         end
         
         % Also make sure that NaNs in one vector are NaNs in the other
@@ -448,6 +782,88 @@ end
         wrf_data(nans) = nan;
     end
 
+    function figs = compare_flashcounts(nudge_case)
+        allowed_cases = {'Long run', 'Nudged DC3'};
+        if ~exist('nudge_case', 'var')
+            nudge_case = ask_multichoice('Which simulation to use for the nudged case?', allowed_cases, 'list', true);
+        else
+            if ~ismember(nudge_case, allowed_cases)
+                E.badinput('nudge_case must be one of %s', strjoin(allowed_cases, ', '));
+            end
+        end
+        nonudge_a = ncinfo('/Volumes/share2/USERS/LaughnerJ/WRF/DC3/flashcount-nonudge/wrfout_subset_d01_2012-05-13_00-00-00');
+        nonudge_b = ncinfo('/Volumes/share2/USERS/LaughnerJ/WRF/DC3/flashcount-nonudge/wrfout_subset_d01_2012-06-24_00-00-00');
+        switch lower(nudge_case)
+            case 'long run'
+                nudge_a = ncinfo('/Volumes/share-wrf1/Outputs/2012/05/wrfout_d01_2012-05-13_00-00-00');
+                nudge_b = ncinfo('/Volumes/share-wrf1/Outputs/2012/06/wrfout_d01_2012-06-24_00-00-00');
+                nudge_str = 'Long run domain, with nudging';
+            case 'nudged dc3'
+                nudge_a = ncinfo('/Volumes/share2/USERS/LaughnerJ/WRF/DC3/flashcount-nudge/wrfout_subset_d01_2012-05-13_00-00-00');
+                nudge_b = ncinfo('/Volumes/share2/USERS/LaughnerJ/WRF/DC3/flashcount-nudge/wrfout_subset_d01_2012-06-24_00-00-00');
+                nudge_str = 'DC3 domain, with nudging';
+            otherwise
+                E.notimplemented(nudge_case)
+        end
+        
+        nonudge_lon = ncread(nonudge_a.Filename, 'XLONG');
+        nonudge_lat = ncread(nonudge_a.Filename, 'XLAT');
+        nudge_lon = ncread(nudge_a.Filename, 'XLONG');
+        nudge_lat = ncread(nudge_a.Filename, 'XLAT');
+        
+        nonudge_a_fc = ncread(nonudge_a.Filename, 'IC_FLASHCOUNT') + ncread(nonudge_a.Filename, 'CG_FLASHCOUNT');
+        nonudge_b_fc = ncread(nonudge_b.Filename, 'IC_FLASHCOUNT') + ncread(nonudge_b.Filename, 'CG_FLASHCOUNT');
+        nonudge_del = nonudge_b_fc - nonudge_a_fc;
+        nudge_a_fc = ncread(nudge_a.Filename, 'IC_FLASHCOUNT') + ncread(nudge_a.Filename, 'CG_FLASHCOUNT');
+        nudge_b_fc = ncread(nudge_b.Filename, 'IC_FLASHCOUNT') + ncread(nudge_b.Filename, 'CG_FLASHCOUNT');
+        nudge_del = nudge_b_fc - nudge_a_fc;
+        if ~isequal(nudge_lon, nonudge_lon) || ~isequal(nudge_lat, nonudge_lat)
+            F = scatteredInterpolant(double(nudge_lon(:)), double(nudge_lat(:)), double(nudge_del(:)));
+            lrdel_interp = F(double(nonudge_lon), double(nonudge_lat));
+        else
+            lrdel_interp = nudge_del;
+        end
+        
+        figs(1) = figure;
+        pcolor(nonudge_lon, nonudge_lat, nonudge_del);
+        shading flat
+        caxis([0 6000]);
+        cb = colorbar;
+        cb.Label.String = 'Total flashes';
+        set(gca,'fontsize',16)
+        title('DC3 domain, no nudging');
+        state_outlines('k');
+        
+        figs(2) = figure;
+        pcolor(nudge_lon, nudge_lat, nudge_del);
+        shading flat
+        caxis([0 6000]);
+        cb = colorbar;
+        cb.Label.String = 'Total flashes';
+        set(gca,'fontsize',16)
+        title(nudge_str);
+        state_outlines('k');
+        
+        figs(3) = figure;
+        pcolor(nonudge_lon, nonudge_lat, lrdel_interp ./ nonudge_del);
+        shading flat
+        cb = colorbar;
+        cb.Label.String = 'flashcount ratio (nudge / no nudge)';
+        set(gca,'fontsize',16)
+        title('Ratio');
+        state_outlines('k');
+        
+        xx = nudge_lon > min(nonudge_lon(:)) & nudge_lon < max(nonudge_lon(:));
+        yy = nudge_lat > min(nonudge_lat(:)) & nudge_lat < max(nonudge_lat(:));
+        
+        boxvec = cat(1, nonudge_del(:), nudge_del(xx & yy));
+        gvec = cat(1,...
+                    repmat({'No nudging'},numel(nonudge_del),1),...
+                    repmat({'With nudging'},sum(xx(:)&yy(:)),1));
+        figs(4) = figure; 
+        boxplot(boxvec, gvec);
+        set(gca,'fontsize',16);
+    end
 end
 
 function lats_xx = subset_latitudes(Match, Opts)
