@@ -32,7 +32,7 @@ function [ k_vol, k_geo ] = modis_brdf_kernels( sza, vza, raa )
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 8 Sept 2015
 
-DEBUG_LEVEL = 2;
+DEBUG_LEVEL = 0;
 
 % cos(xi) essentially describes the total angle between the incoming direct
 % and outgoing viewing paths. From Roujean et al. (1992). Xi needs to be in

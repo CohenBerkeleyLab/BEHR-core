@@ -50,10 +50,11 @@ if ~exist('rows','var')
 end
 
 %omi.Areaweight(omi.BEHRColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
-
-if iscell(omi.VcdQualityFlags) % The flags may be a cell array or not, depending on whether this is for Data or OMI (gridded) structure
-    for a=1:numel(omi.VcdQualityFlags);
-        if any(mod([omi.VcdQualityFlags{a}],2)~=0)
+fns = fieldnames(omi);
+vcdq_field = fns{strcmpi('vcdqualityflags',fns)}; % I changed the capitalization in v3.0. It matches NASA now, but makes this function a bit annoying
+if iscell(omi.(vcdq_field)) % The flags may be a cell array or not, depending on whether this is for Data or OMI (gridded) structure
+    for a=1:numel(omi.(vcdq_field));
+        if any(mod([omi.(vcdq_field){a}],2)~=0)
             omi.Areaweight(a) = 0; %If any of the vcdQualityFlags value is not even (least significant bit ~= 0), do not include this element
         end
     end
