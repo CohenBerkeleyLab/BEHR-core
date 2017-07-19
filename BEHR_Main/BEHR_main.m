@@ -283,7 +283,7 @@ for j=1:length(datenums)
         
         
         if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
-        [amf, amfVis, ~, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+        [amf, amfVis, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
         amf(prof_i==1)=NaN;
         amfVis(prof_i==1)=NaN;
         scattering_weights(:,prof_i==1)=NaN;
