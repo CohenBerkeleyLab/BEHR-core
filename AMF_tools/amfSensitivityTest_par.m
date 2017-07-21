@@ -61,7 +61,7 @@ nRAA = 5;
 % albedo in a range appropriate to a ground type or clouds.
 if strcmpi(skytype,'clear')
     minAlb = 0;
-    maxAlb = 0.1;
+    maxAlb = 0.08;
 else
     minAlb = 0.7;
     maxAlb = 0.9;
@@ -71,13 +71,13 @@ nAlb = 10;
 % Surface pressure can vary between 1013 and 0.003 hPa; but like albedo,
 % you may reset the min and max.
 if strcmpi(skytype,'clear')
-    minSurfPres = 880;
+    minSurfPres = 795;
     maxSurfPres = 1013;
 else
-    minSurfPres = 400;
-    maxSurfPres = 800;
+    minSurfPres = 344;
+    maxSurfPres = 1003;
 end
-nSurfPres = 8;
+nSurfPres = 10;
 
 % set to 'OMI' (eventually perhaps 'GOME' will be an option) to determine
 % what pressure levels to use
