@@ -1,4 +1,4 @@
-function [cbhandle, GriddedColumn, longrid, latgrid, GriddedCount] = no2_column_map_2014( start_date_in, end_date_in, lon_bdy, lat_bdy, varargin )
+function [cbhandle, GriddedColumn, longrid, latgrid, GriddedCount, parsed_vars] = no2_column_map_2014( start_date_in, end_date_in, lon_bdy, lat_bdy, varargin )
 %NO2 Map Function - Uses the m_map package to draw maps of NO2 column density over the US (primarily). Returns the colorbar handle. Arguments:
 % Returns: colorbar handle, no2 grid, lon grid, lat grid.
 % REQUIRED:
