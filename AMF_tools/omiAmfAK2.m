@@ -189,10 +189,10 @@ end
 % effectively replacing the denominator with the modeled visible only VCD.
 
 amf = cldRadFrac .* amfCld + (1-cldRadFrac).*amfClr;
-amf(~isnan(amf)) = max(amf(~isnan(amf)),1.e-6);   % clamp at min value (2008-06-20), but don't replace NaNs with the min value (2016-05-12)
+amf(~isnan(amf)) = max(amf(~isnan(amf)), behr_min_amf_val());   % clamp at min value (2008-06-20), but don't replace NaNs with the min value (2016-05-12)
 
 amfVis = amf .* vcdGnd ./ (vcdCld .* cldFrac + vcdGnd .* (1 - cldFrac));
-amfVis(~isnan(amfVis)) = max(amfVis(~isnan(amfVis)),1.e-6);
+amfVis(~isnan(amfVis)) = max(amfVis(~isnan(amfVis)), behr_min_amf_val());
 
 % There is an alternate way of calculating a visible-only AMF: calculate a
 % cloudy visible-only AMF by dividing the cloud modeled SCD by an

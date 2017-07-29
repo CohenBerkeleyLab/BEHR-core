@@ -315,7 +315,8 @@ for j=1:length(datenums)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'IsZoomModeSwath', 'GitHead_Read'};
+        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres',...
+        'IsZoomModeSwath', 'AlbedoOceanFlag', 'GitHead_Read'};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
     Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
@@ -409,7 +410,7 @@ for j=1:length(datenums)
         this_data.Date = datestr(this_dnum, 'yyyy/mm/dd');
         this_data.LonBdy = [lonmin, lonmax];
         this_data.LatBdy = [latmin, latmax];
-        this_data.GitHead_Read = githead;
+        this_data.GitHead_Read = strtrim(githead);
         
         data_ind = data_ind + 1;
         Data(data_ind) = this_data;
