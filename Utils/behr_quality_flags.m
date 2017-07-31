@@ -51,7 +51,7 @@ behr_flags = uint32(zeros(size(behr_amfs)));
 %%%%%%%%%%%%%%%
 
 % Set an error flag if the AMF has been set to the minimum value
-behr_flags = set_flags(behr_flags, behr_amfs <= behr_min_amf_val() || behr_vis_amfs <= behr_min_amf_val(), 2, false);
+behr_flags = set_flags(behr_flags, behr_amfs <= behr_min_amf_val() | behr_vis_amfs <= behr_min_amf_val(), 2, false);
 
 % Set an error flag if the VcdQualityFlags field is not an even value (it's
 % own quality summary flag was set)
@@ -67,7 +67,7 @@ behr_flags = set_flags(behr_flags, xtrack_flags ~= 0, 4, false);
 %%%%%%%%%%%%%%%%%
 
 % Set a warning flag if we have to use an ocean model for the BRDF
-behr_flags = set_flags(behr_flags, modis_ocean_flag, 9, true);
+behr_flags = set_flags(behr_flags, modis_ocean_flag, 17, true);
 
 end
 

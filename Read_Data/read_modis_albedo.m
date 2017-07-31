@@ -116,7 +116,7 @@ if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
 
 % We will save the Mobley table if it is needed, the first time it is
 % needed, it will be read in.
-mobley_lut = nan;
+mobley_lut = [];
 
 for k=1:c;
     if DEBUG_LEVEL > 2; tic; end
@@ -142,7 +142,7 @@ for k=1:c;
     
     %put in ocean surface albedo from LUT from Mobley 2015
     if isnan(band3_avg);
-        if isnan(mobley_lut)
+        if isempty(mobley_lut)
             [band3_avg, mobley_lut] = mobley_sea_refl(data.SolarZenithAngle(k), data.ViewingZenithAngle(k), data.RelativeAzimuthAngle(k));
         else
             band3_avg = mobley_sea_refl(data.SolarZenithAngle(k), data.ViewingZenithAngle(k), data.RelativeAzimuthAngle(k), mobley_lut);

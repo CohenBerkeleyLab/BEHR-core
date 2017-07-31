@@ -265,13 +265,7 @@ onCluster_local = onCluster;
 
 datenums = datenum(date_start):datenum(date_end);
 
-currdir = cd(behr_repo_dir);
-[gitstat, githead] = system('git rev-parse HEAD');
-cd(currdir);
-
-if gitstat ~= 0
-    githead = 'Unknown';
-end
+githead = git_head_hash(behr_repo_dir);
 
 %parfor(j=1:length(datenums), n_workers)
 for j=1:length(datenums)
@@ -297,7 +291,8 @@ for j=1:length(datenums)
     % sufficient to make that happen as long as it is under the
     % /HDFEOS/SWATHS/ColumnAmountNO2 group and is spelled exactly how the
     % dataset is named.
-    sp_variables = {'Longitude', 'Latitude', 'Time', 'ViewingZenithAngle',...
+    sp_variables = {'Longitude', 'Latitude', 'SpacecraftAltitude', 'SpacecraftLatitude',...
+        'SpacecraftLongitude', 'Time', 'ViewingZenithAngle',...
         'SolarZenithAngle', 'ViewingAzimuthAngle', 'SolarAzimuthAngle',...
         'AmfStrat', 'AmfTrop', 'CloudFraction', 'CloudRadianceFraction',...
         'TerrainHeight', 'TerrainPressure', 'TerrainReflectivity',...
@@ -410,7 +405,7 @@ for j=1:length(datenums)
         this_data.Date = datestr(this_dnum, 'yyyy/mm/dd');
         this_data.LonBdy = [lonmin, lonmax];
         this_data.LatBdy = [latmin, latmax];
-        this_data.GitHead_Read = strtrim(githead);
+        this_data.GitHead_Read = githead;
         
         data_ind = data_ind + 1;
         Data(data_ind) = this_data;

@@ -1,12 +1,57 @@
-function [  ] = BEHR_publishing_v2(output_type, pixel_type, options, start_date, end_date)
+function [  ] = BEHR_publishing_v2(varargin)
 %BEHR_publishing_v2 Create the HDF files for BEHR products
-%   Detailed explanation goes here
+%   BEHR_Publishing_v2 can accept a number of input parameters to alter its
+%   behavior. All of these have default values that are set up so that
+%   calling it without parameters will lead to standard behavior. The
+%   parameters are:
 %
-%   Non-built in dependencies (updated 22 Sept 2015):
-%       Classes/JLLErrors.m
-%       Utils/bitopmat.m
-%       Utils/iscellcontents.m
-%       Utils/make_empty_struct_from_cell.m
+%       'start': the first date to process, as a date number or a string
+%       implicitly understood by datenum(). Default is '2005-01-01'
+%
+%       'end': the last date to process; same format requirements as
+%       'start'. Default is today.
+%
+%       'output_type': one of the strings 'hdf' or 'txt', determines which
+%       output format will be used. 'hdf' will produce HDF version 5 files.
+%       Default is 'hdf'
+%
+%       'pixel_type': one of the strings 'native' or 'gridded', determines
+%       whether the native pixels (i.e. the 'Data' structure) or the
+%       gridded pixel (i.e. the 'OMI' structure) will be saved. Default is
+%       'native'.
+%
+%       'reprocessed': a boolean (true or false). If true, this tells the
+%       publishing algorithm to include fields that used in situ
+%       measurements from the DISCOVER-AQ campaign as a priori profiles.
+%       That is a specialized product that hasn't been updated in years.
+%       Default is false.
+%
+%       'mat_dir': the directory from which to load the Matlab files with
+%       BEHR output saved in the. Default is the value returned by
+%       BEHR_paths('behr_mat_dir').
+%
+%       'save_dir': the directory to which to save the resulting HDF or CSV
+%       files. Default is the value returned by
+%       BEHR_paths('website_staging_dir').
+%
+%       'organize': a boolean that indicates whether the output should go
+%       directly in the save directory (false) or in a subdirectory named
+%       behr_<pixel_type>-<output_type>-<behr version>, e.g.
+%       "behr_native-hdf-v2-1C". Default is true.
+%
+%       'overwrite': controls the behavior of this function if one of the
+%       files it is trying to output already exists. This is a number, a
+%       negative value will cause it to ask you on at least the first file,
+%       whether it continues to ask on successive files depends on your
+%       response. 0 means do not overwrite, and a positive value means
+%       always overwrite. Default is -1, i.e. ask the user.
+%
+%       'DEBUG_LEVEL': a scalar number that controls the verbosity of this
+%       function. 0 is minimum verbosity, higher numbers print more to the
+%       screen.
+%
+%   This function can also be parallelized using the global variables
+%   numThreads and onCluster.
 
 global onCluster
 if isempty(onCluster)
@@ -22,39 +67,96 @@ if onCluster
 end
 
 E = JLLErrors;
-global DEBUG_LEVEL
-DEBUG_LEVEL = 1;
 
+p = inputParser;
+p.addParameter('output_type', 'hdf');
+p.addParameter('pixel_type', 'native');
+p.addParameter('start', '2005-01-01');
+p.addParameter('end', datestr(today, 'yyyy-mm-dd'));
+p.addParameter('reprocessed', false);
+p.addParameter('mat_dir', BEHR_paths('behr_mat_dir'));
+p.addParameter('save_dir', BEHR_paths('website_staging_dir'));
+p.addParameter('organize', true);
+p.addParameter('overwrite', -1);
+p.addParameter('DEBUG_LEVEL', 1);
+
+p.parse(varargin{:});
+pout = p.Results;
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%%%% SET OPTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%
 
+% Start and end date
+start_date = pout.start;
+end_date = pout.end;
+
 % Output type should be 'txt' or 'hdf'.  Text (csv) files are for native
 % resolution only.
-if ~exist('output_type','var')
-    output_type = 'txt';
-else
-    allowed_outtype = {'txt','hdf'};
-    if ~ismember(output_type,allowed_outtype)
-        E.badinput('output_type must be one of %s',strjoin(allowed_outtype,', '));
-    end
+output_type = pout.output_type;
+
+allowed_outtype = {'txt','hdf'};
+if ~ismember(output_type,allowed_outtype)
+    E.badinput('output_type must be one of %s',strjoin(allowed_outtype,', '));
 end
+
 
 % Set to 'native' to save the native OMI resolution pixels. Set to
 % 'gridded' to save the 0.05 x 0.05 gridded data
-if ~exist('pixel_type','var')
-    pixel_type = 'native';
-else
-    allowed_pixtype = {'native','gridded'};
-    if ~ismember(pixel_type,allowed_pixtype)
-        E.badinput('pixel_type must be one of %s',strjoin(allowed_pixtype,', '));
-    end
+pixel_type = pout.pixel_type;
+
+allowed_pixtype = {'native','gridded'};
+if ~ismember(pixel_type,allowed_pixtype)
+    E.badinput('pixel_type must be one of %s',strjoin(allowed_pixtype,', '));
 end
 
-% options - add 'reprocessed' here if doing in situ files
-if ~exist('options','var')
-    options = {};
+% Other options - reprocessed should be TRUE to include in situ fields
+is_reprocessed = pout.reprocessed;
+if ~isscalar(is_reprocessed) || ~islogical(is_reprocessed)
+    E.badinput('REPROCESSED must be a scalar logical')
+end
+
+% Whether subdirectories should be created within the save directory,
+% organized by pixel type, output type, and BEHR version.
+organized_subdir = pout.organize;
+if ~isscalar(organized_subdir) || ~islogical(organized_subdir)
+    E.badinput('ORGANIZE must be a scalar logical')
+end
+
+% How to handle overwriting. 1 = overwrite, 0 = don't overwrite, -1 = ask.
+overwrite = pout.overwrite;
+
+DEBUG_LEVEL = pout.DEBUG_LEVEL;
+if ~isscalar(DEBUG_LEVEL) || ~isnumeric(DEBUG_LEVEL)
+    E.badinput('DEBUG_LEVEL must be a scalar number')
+end
+
+% File locations
+
+mat_file_dir = pout.mat_dir;
+save_dir = pout.save_dir;
+
+% Check that the directories exist like this so that a single error message
+% describes if both directories don't exist - handy for running on the
+% cluster so that you don't wait forever for the job to start, only to have
+% it fail b/c you forgot to make the output directory.
+dirs_dne = {};
+if ~exist(mat_file_dir,'dir')
+    dirs_dne{end+1} = 'mat_file_dir';
+end
+if ~exist(save_dir,'dir')
+    dirs_dne{end+1} = 'save_dir';
+end
+if ~isempty(dirs_dne)
+    E.dir_dne(dirs_dne);
+end
+
+if organized_subdir
+    save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,BEHR_version);
+    save_dir = fullfile(save_dir, save_subdir);
+    if ~exist(save_dir, 'dir')
+        mkdir(save_dir);
+    end
 end
 
 % Make the list of variables to put in the HDF files. Std. variables will
@@ -62,36 +164,12 @@ end
 % options. The pixel type needs to be passed so that it knows whether to
 % keep the pixel specific variables or not.
 
-[vars, savename] = set_variables(pixel_type, output_type, options{:});
+[vars, savename] = set_variables(pixel_type, output_type, is_reprocessed);
 attr = add_attributes(vars);
 
-% The dates to process, location of the files, and where to save the files.
-% If you want to process all files in a directory, set the start and end
-% dates to something silly.
-if ~exist('start_date','var') || ~exist('end_date','var')
-    start_date = '2008-02-18';
-    end_date = '2016-01-01';
-end
-
-global mat_file_dir
-global save_dir
 global numThreads
-if ~onCluster
-    mat_file_dir = BEHR_paths('behr_mat_dir');
-    save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,BEHR_version);
-    save_dir = fullfile(BEHR_paths('website_staging_dir'),save_subdir);
-    if ~exist(save_dir,'dir')
-        mkdir(save_dir)
-    end
-else
+if onCluster
     % Check that all global variables are set
-    global_unset = {};
-    if isempty(mat_file_dir)
-        global_unset{end+1} = 'mat_file_dir';
-    end
-    if isempty(save_dir)
-        global_unset{end+1} = 'save_dir';
-    end
     if isempty(numThreads)
         global_unset{end+1} = 'numThreads';
     end
@@ -104,19 +182,11 @@ else
     if ~isnumeric(numThreads) || ~isscalar(numThreads)
         E.badinput('numThreads should be a scalar number; this is a global setting, check the calling runscript')
     end
-    
-    dirs_dne = {};
-    if ~exist(mat_file_dir,'dir')
-        dirs_dne{end+1} = 'mat_file_dir';
-    end
-    if ~exist(save_dir,'dir')
-        dirs_dne{end+1} = 'save_dir';
-    end
-    if ~isempty(dirs_dne)
-        E.dir_dne(dirs_dne);
-    end
-   
 end
+    
+
+   
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -143,6 +213,8 @@ if ~exist(save_dir,'dir')
     E.badinput('save_dir must be a directory');
 end
 
+git_head = git_head_hash(behr_repo_dir);
+
 %%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN LOOP %%%%%
 %%%%%%%%%%%%%%%%%%%%%
@@ -154,7 +226,6 @@ end
 
 FILES = dir(fullfile(mat_file_dir,'OMI_BEHR*.mat'));
 if ~onCluster
-    ask_to_overwrite = true;
     for a=1:numel(FILES)
         % Find the date part of the file
         d_ind = regexp(FILES(a).name,'\d\d\d\d\d\d\d\d');
@@ -180,9 +251,9 @@ if ~onCluster
             end
 
             if strcmpi(output_type,'hdf')
-                ask_to_overwrite = make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
+                overwrite = make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_head, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
-                ask_to_overwrite = make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,ask_to_overwrite);
+                overwrite = make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,overwrite,DEBUG_LEVEL);
             end
         end
     end
@@ -190,7 +261,6 @@ else
     if onCluster && isempty(gcp('nocreate'))
         parpool(numThreads);
     end
-    ask_to_overwrite = false;
     parfor a=1:numel(FILES)
         % Find the date part of the file
         d_ind = regexp(FILES(a).name,'\d\d\d\d\d\d\d\d');
@@ -216,9 +286,9 @@ else
             end
 
             if strcmpi(output_type,'hdf')
-                make_hdf_file(Data_to_save,vars,attr,date_string,save_dir,savename,pixel_type,ask_to_overwrite);
+                make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_head, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
-                make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,ask_to_overwrite);
+                make_txt_file(Data_to_save, vars, attr, date_string, save_dir, savename, overwrite, DEBUG_LEVEL);
             end
         end
     end
@@ -226,7 +296,11 @@ end
 
 end
 
-function [vars, savename] = set_variables(varargin)
+%%%%%%%%%%%%%%%%
+% SUBFUNCTIONS %
+%%%%%%%%%%%%%%%%
+
+function [vars, savename] = set_variables(pixel_type, output_type, reprocessed)
 % Make a list of variables that should be added to the product. All the
 % standard variables will be added always. Pass any or all of the following
 % strings to add certain variables
@@ -237,14 +311,15 @@ function [vars, savename] = set_variables(varargin)
 % The standard variables to be included (listed in
 % http://behr.cchem.berkeley.edu/TheBEHRProduct.aspx)
 
-vars = {'AMFStrat','AMFTrop','BEHRAMFTrop','BEHRAMFTropVisOnly','BEHRColumnAmountNO2Trop','BEHRColumnAmountNO2TropVisOnly',...
+vars = {'AmfStrat','AmfTrop','BEHRAMFTrop','BEHRAMFTropVisOnly','BEHRColumnAmountNO2Trop','BEHRColumnAmountNO2TropVisOnly',...
     'BEHRPressureLevels','CloudFraction','CloudPressure','CloudRadianceFraction','ColumnAmountNO2',...
-    'ColumnAmountNO2Trop','ColumnAmountNO2TropStd','ColumnAmountNO2Strat','GLOBETerpres',...
-    'Latcorn','Latitude','Loncorn','Longitude','MODISAlbedo','MODISCloud',...
-    'RelativeAzimuthAngle','Row','SlantColumnAmountNO2','SolarAzimuthAngle',...
-    'SolarZenithAngle','Swath','TerrainHeight','TerrainPressure','TerrainReflectivity',...
-    'Time','ViewingAzimuthAngle','ViewingZenithAngle','XTrackQualityFlags','vcdQualityFlags',...
-    'BEHRScatteringWeights','BEHRAvgKernels','BEHRNO2apriori'};
+    'ColumnAmountNO2Trop','ColumnAmountNO2TropStd','ColumnAmountNO2Strat','FoV75Area', 'FoV75CornerLatitude',...
+    'FoV75CornerLongitude','GLOBETerpres','Latitude','Longitude','MODISAlbedo','MODISCloud',...
+    'RelativeAzimuthAngle','Row','SlantColumnAmountNO2','SolarAzimuthAngle','SolarZenithAngle',...
+    'SpacecraftAltitude', 'SpacecraftLatitude', 'SpacecraftLongitude','Swath',...
+    'TerrainHeight','TerrainPressure','TerrainReflectivity','TiledArea','TiledCornerLatitude','TiledCornerLongitude',...
+    'Time','ViewingAzimuthAngle','ViewingZenithAngle','XTrackQualityFlags','VcdQualityFlags',...
+    'BEHRScatteringWeights','BEHRAvgKernels','BEHRNO2apriori', 'BEHRQualityFlags'};
 
 
 
@@ -262,7 +337,7 @@ savename = sprintf('OMI_BEHR_%s_',BEHR_version);
 % product, and description.
 
 % The reprocessing related fields
-if ismember('reprocessed',varargin)
+if reprocessed
     repro_vars = {'InSituAMF','BEHR_R_ColumnAmountNO2Trop','ProfileCount','InSituFlags'};
     vars = cat(2,vars,repro_vars);
     savename = strcat(savename,'InSitu_');
@@ -271,14 +346,14 @@ end
 % Remove pixel specific variables (like AMF, VZA, etc.) if the pixel type
 % is "gridded". Also add in some variables that are only included in the
 % gridded product.
-if ismember('gridded', varargin)
+if strcmpi('gridded', pixel_type)
     vars = remove_ungridded_variables(vars);
     vars{end+1} = 'Areaweight';
 end
 
 % Remove variables that cannot be put into a CSV text file because multiple
 % values are required per pixel
-if ismember('txt', varargin)
+if strcmpi('txt', output_type)
     vars = remove_vector_variables(vars);
 end
 
@@ -328,11 +403,12 @@ attr = make_empty_struct_from_cell(vars);
 % (SP or BEHR) and description in that order.
 longfill = single(-1.267650600228229401496703205376e30);
 shortfill = single(-32767);
+pixcorfill = single(-1.00000001504747e+30);
 behrfill = single(behr_fill_val());
 nofill = NaN;
 
-attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric AMF';...
-                'AMFTrop', 'unitless', [0, Inf], nofill, 'SP', 'Tropospheric AMF (standard product)';...
+attr_table = {  'AmfStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric AMF';...
+                'AmfTrop', 'unitless', [0, Inf], nofill, 'SP', 'Tropospheric AMF (standard product)';...
                 'Areaweight', 'unitless', [0, Inf], behrfill, 'BEHR', 'Reciprocal of pixel area; use to weight a temporal average of grids to account for pixel representativeness';...
                 'BEHRAMFTrop', 'unitless', [0, Inf], behrfill, 'BEHR', 'Tropospheric AMF (BEHR) for total NO2 (including ghost column), calculated with MODIS Albedo, GLOBE Terr. Pres., and 12 km NO2 profiles';...
                 'BEHRAMFTropVisOnly', 'unitless', [0, Inf], behrfill, 'BEHR', 'Tropospheric AMF (BEHR) for visible NO2 only, calculated with MODIS Albedo, GLOBE Terr. Pres., and 12 km NO2 profiles';...
@@ -341,6 +417,7 @@ attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric A
                 'BEHRScatteringWeights', 'unitless', [0, Inf], behrfill, 'BEHR', 'Scattering weights derived from the MODIS albedo and GLOBE surface pressure. Includes NO2 cross section temperature correction.';...
                 'BEHRAvgKernels', 'unitless', [0, Inf], behrfill, 'BEHR', 'Averaging kernels computed for the weighted average of cloudy and clear conditions';...
                 'BEHRPressureLevels', 'hPa', [0, Inf], behrfill, 'BEHR', 'Pressure levels that correspond to the scattering weight, averaging kernel, and NO2 a priori vectors';...
+                'BEHRQualityFlags', 'bit array flag', [0 (2^32)-1], nofill, 'BEHR', 'Quality flags field summarizing NASA and BEHR flags. Do not use pixel if least significant bit != 0 (i.e. if value is odd)';...
                 'CloudFraction', 'unitless', [0, 1], shortfill, 'SP', 'OMI geometric cloud fraction';...
                 'CloudPressure', 'hPa', [0, Inf], shortfill, 'SP', 'OMI cloud top pressure';...
                 'CloudRadianceFraction', 'unitless', [0, 1], shortfill, 'SP', 'OMI cloud radiance (top of atmosphere light fraction)';...
@@ -349,9 +426,10 @@ attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric A
                 'ColumnAmountNO2TropStd', 'molec./cm^2', [0, Inf], nofill, 'SP', 'Standard deviation of SP NO2 tropospheric VCD';...
                 'ColumnAmountNO2Strat', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Stratospheric NO2 VCD';...
                 'GLOBETerpres', 'hPa', [0, Inf], behrfill, 'BEHR', 'Terrain pressure derived from GLOBE (1 x 1 km) topography using standard scale height relation, avg. to OMI pixel';...
-                'Latcorn', 'deg', [-90, 90], nofill, 'BEHR', 'Calculated corner latitude of pixels';...
+                'FoV75Area', 'km^2', [0, Inf], pixcorfill,'PIXCOR', 'Area of pixel based on the part of the Earth from which 75% of the observed radiance is received';...
+                'FoV75CornerLatitude', 'deg', [-90, 90], pixcorfill, 'PIXCOR', 'Latitude corners of pixel based on the part of the Earth from which 75% of the observed radiance is received';...
+                'FoV75CornerLongitude', 'deg', [-180, 180], pixcorfill, 'PIXCOR', 'Longitude corners of pixel based on the part of the Earth from which 75% of the observed radiance is received';...
                 'Latitude', 'deg', [-90, 90], nofill, 'SP', 'Center latitude of pixels';...
-                'Loncorn', 'deg', [-180, 180], nofill, 'BEHR', 'Calculated corner longitude of pixels';...
                 'Longitude', 'deg', [-180, 180], nofill, 'SP', 'Center longitude of pixels';...
                 'MODISAlbedo', 'unitless', [0, 1], behrfill, 'BEHR', 'MODIS MCD43C3 16-day avg. window every 8 days, avg. to OMI pixel';...
                 'MODISCloud', 'unitless', [0, 1], behrfill, 'BEHR', 'MODIS MYD06_L2 5 x 5 km cloud fraction, avg. to OMI pixel';...
@@ -360,15 +438,21 @@ attr_table = {  'AMFStrat', 'unitless', [0, Inf], nofill, 'SP', 'Stratospheric A
                 'SlantColumnAmountNO2', 'molec./cm^2', [0, Inf], longfill, 'SP', 'Total NO2 SCD';...
                 'SolarAzimuthAngle', 'deg', [-180, 180], nofill, 'SP', 'Solar azimuth angle';...
                 'SolarZenithAngle', 'deg', [0 90], nofill, 'SP', 'Solar zenith angle';...
+                'SpacecraftAltitude', 'm', [0, Inf], longfill, 'SP', 'Spacecraft (Aura satellite) altitude above WGS84 ellipsoid';...
+                'SpacecraftLatitude', 'deg', [-90, 90], longfill, 'SP', 'Spacecraft (Aura satellite) latitude above WGS84 ellipsoid';...
+                'SpacecraftLongitude', 'deg', [-180, 180], longfill, 'SP', 'Spacecraft (Aura satellite) longitude above WGS84 ellipsoid';...
                 'Swath', 'unitless', [0, Inf], nofill, 'SP', 'Swath number since OMI launch';...
                 'TerrainHeight', 'm', [-Inf, Inf], nofill, 'SP', 'Terrain height';...
                 'TerrainPressure', 'hPa', [0, Inf], nofill 'SP', 'Terrain pressure';...
                 'TerrainReflectivity', 'unitless', [0, 1], shortfill, 'SP', 'Terrain albedo (OMI albedo product)';...
+                'TiledArea', 'km^2', [0, Inf], pixcorfill, 'PIXCOR', 'Pixel area assuming that pixels are perfectly tiled (do not overlap)';...
+                'TiledCornerLatitude', 'km^2', [-90, 90], pixcorfill, 'PIXCOR', 'Latitude corners of pixel assuming that pixels are perfectly tiled (do not overlap)';...
+                'TiledCornerLongitude', 'km^2', [-180, 180], pixcorfill, 'PIXCOR', 'Longitude corners of pixel assuming that pixels are perfectly tiled (do not overlap)';...
                 'Time', 's', [0, Inf], nofill, 'SP', 'Time at start of scan (TAI93: seconds since Jan 1, 1993)';...
                 'ViewingAzimuthAngle', 'deg', [-180, 180], nofill, 'SP', 'Viewing azimuth angle';...
                 'ViewingZenithAngle', 'deg', [0, 90], nofill, 'SP', 'Viewing zenith angle';...
                 'XTrackQualityFlags', 'bit array flag', 'N/A', nofill, 'SP', 'Across track quality flag (for row anomaly)';...
-                'vcdQualityFlags', 'bit array flag', 'N/A', nofill, 'SP', 'Ground pixel quality flags';...
+                'VcdQualityFlags', 'bit array flag', 'N/A', nofill, 'SP', 'Ground pixel quality flags';...
                 'InSituAMF', 'unitless', [0, Inf], behrfill, 'BEHR-InSitu', 'AMF calculated using co-located in situ NO2 profile';...
                 'BEHR_R_ColumnAmountNO2Trop', 'molec./cm^2', [0, Inf], behrfill, 'BEHR-InSitu', 'BEHR Tropospheric NO2 VCD calculated with the in situ AMF';...
                 'ProfileCount', 'unitless', [0, Inf], behrfill, 'BEHR-InSitu', 'Number of aircraft profiles averaged to create the in situ a priori NO2 profile';...
@@ -397,13 +481,8 @@ end
 end
 
 
-function ask_to_overwrite = make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename, pixel_type, ask_to_overwrite)
+function overwrite = make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, current_git_head, DEBUG_LEVEL)
 E = JLLErrors;
-
-global DEBUG_LEVEL
-if isempty(DEBUG_LEVEL)
-    DEBUG_LEVEL = 0;
-end
 
 if ~strcmp(savename(end),'_')
     savename = strcat(savename,'_');
@@ -411,30 +490,15 @@ end
 hdf_filename = strcat(savename, date_string, '.hdf');
 hdf_fullfilename = fullfile(save_dir, hdf_filename);
 
-% Check if the file exists. Give the user 3 options if it does: abort,
-% overwrite, overwrite all.
+% Check if the file exists. We may be already set to automatically
+% overwrite or not, otherwise we have to ask the user what to do.
 
 if exist(hdf_fullfilename,'file')
-    if ask_to_overwrite
-        user_ans = input(sprintf('File %s exists.\n[O]verwrite, [A]bort, or Overwrite and [d]on''t ask again? ',hdf_fullfilename),'s');
-        user_ans = lower(user_ans);
-        switch user_ans
-            case 'o'
-                delete(hdf_fullfilename);
-            case 'd'
-                delete(hdf_fullfilename);
-                ask_to_overwrite = false;
-            otherwise
-                E.userCancel;
-        end
-    else
-        delete(hdf_fullfilename);
-        %fprintf('%s exists, skipping\n', hdf_fullfilename);
-        %return
+    [overwrite, do_i_return] = do_i_overwrite(overwrite, hdf_fullfilename);
+    if do_i_return
+        return
     end
 end
-
-
 
 % Iterate through each swath and save it as under the group
 % /Data/Swath#####.
@@ -503,7 +567,7 @@ for d=1:numel(Data_in)
     end
     
     % Write an attribute to the swath group describing if it is gridded or
-    % native. Also include the version string
+    % native. Also include the version string and the Git head hashes
     switch lower(pixel_type)
         case 'native'
             swath_attr = 'OMI SP and BEHR data at native OMI resolution';
@@ -512,21 +576,18 @@ for d=1:numel(Data_in)
         otherwise
             E.badinput('"pixel_type" not recognized');
     end
-    h5writeatt(hdf_fullfilename,group_name,'Description',swath_attr);
-    h5writeatt(hdf_fullfilename,group_name,'Version',BEHR_version());
+    h5writeatt(hdf_fullfilename, group_name, 'Description', swath_attr);
+    h5writeatt(hdf_fullfilename, group_name, 'Version', BEHR_version());
+    h5writeatt(hdf_fullfilename, group_name, 'ReadGitHead', Data_in(d).GitHead_Read);
+    h5writeatt(hdf_fullfilename, group_name, 'MainGitHead', Data_in(d).GitHead_Main);
+    h5writeatt(hdf_fullfilename, group_name, 'PubGitHead', current_git_head);
     if DEBUG_LEVEL > 2; toc; end
 end
 end
 
 
 
-function ask_to_overwrite = make_txt_file(Data_in, vars, attr, date_string, save_dir, savename, ask_to_overwrite)
-E = JLLErrors;
-
-global DEBUG_LEVEL
-if isempty(DEBUG_LEVEL)
-    DEBUG_LEVEL = 0;
-end
+function ask_to_overwrite = make_txt_file(Data_in, vars, attr, date_string, save_dir, savename, ask_to_overwrite, DEBUG_LEVEL) %#ok<INUSD>
 
 if ~strcmp(savename(end),'_')
     savename = strcat(savename,'_');
@@ -538,20 +599,9 @@ txt_fullfilename = fullfile(save_dir, txt_filename);
 % overwrite, overwrite all.
 
 if exist(txt_fullfilename,'file')
-    if ask_to_overwrite
-        user_ans = input(sprintf('File %s exists.\n[O]verwrite, [A]bort, or Overwrite and [d]on''t ask again? ',txt_fullfilename),'s');
-        user_ans = lower(user_ans);
-        switch user_ans
-            case 'o'
-                delete(txt_fullfilename);
-            case 'd'
-                delete(txt_fullfilename);
-                ask_to_overwrite = false;
-            otherwise
-                E.userCancel;
-        end
-    else
-        delete(txt_fullfilename);
+    [ask_to_overwrite, do_i_return] = do_i_overwrite(ask_to_overwrite, txt_fullfilename);
+    if do_i_return
+        return;
     end
 end
 
@@ -666,8 +716,39 @@ fclose(fid);
 
 end
 
+function [overwrite, do_return] = do_i_overwrite(overwrite, full_file_name)
+E = JLLErrors;
+
+do_return = false;
+if overwrite < 0
+    user_ans = ask_multichoice(sprintf('File %s exists.\nOverwrite, skip, abort, overwrite all, or overwrite none?', full_file_name), {'o','s','a','oa','on'});
+    user_ans = lower(user_ans);
+    switch user_ans
+        case 'o'
+            delete(full_file_name);
+        case 'oa'
+            delete(full_file_name);
+            overwrite = 1;
+        case 's'
+            do_return = true;
+        case 'on'
+            overwrite = 0;
+            do_return = true;
+        case 'a'
+            E.userCancel;
+        otherwise
+            E.notimplemented('User answer %s', user_ans);
+    end
+elseif overwrite > 0
+    delete(full_file_name);
+else
+    fprintf('%s exists, skipping\n', full_file_name);
+    do_return = true;
+end
+end
+
 function mycleanup()
-err=lasterror;
+err=lasterror; %#ok<LERR>
 if ~isempty(err.message)
     fprintf('MATLAB exiting due to problem: %s\n', err.message);
     if ~isempty(gcp('nocreate'))
