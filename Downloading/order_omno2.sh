@@ -28,7 +28,9 @@ eday=$(date +'%d')
 
 username="jlaughner"
 
-url="http://aurapar2.gesdisc.eosdis.nasa.gov/daac-bin/s4pa/s4pa_m2m_cgi.pl?user=${username}&dataset=OMNO2&version=003&startTime=${syr}-${smn}-${sday}%2000:00:00&endTime=${eyr}-${emn}-${eday}%2000:00:00"
+#url="http://aurapar2.gesdisc.eosdis.nasa.gov/daac-bin/s4pa/s4pa_m2m_cgi.pl?user=${username}&dataset=OMNO2&version=003&startTime=${syr}-${smn}-${sday}%2000:00:00&endTime=${eyr}-${emn}-${eday}%2000:00:00"
+#url="https://aurapar2.gesdisc.eosdis.nasa.gov/daac-bin/s4pa/s4pa_m2m_cgi.pl?user=${username}&dataset=OMNO2&version=003&startTime=${syr}-${smn}-${sday}%2000:00:00&endTime=${eyr}-${emn}-${eday}%2000:00:00"
+url="https://aura.gesdisc.eosdis.nasa.gov/daac-bin/s4pa/s4pa_m2m_cgi.pl?user=${username}&dataset=OMNO2&version=003&startTime=${syr}-${smn}-${sday}%2000:00:00&endTime=${eyr}-${emn}-${eday}%2000:00:00"
 echo $url
 
 status=$(wget -O - "$url")

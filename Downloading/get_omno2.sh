@@ -51,11 +51,10 @@ do
     fi
 done
 
-# Once it exists, loop through the files listed in it. Skip any ending in XML
-# (unneeded metadata) for the rest, test that they do not exist first, then
-# download.  Note that this will be running in the download_staging folder, so
-# .. points to a directory containing subfolders by year, each of which is
-# organized into monthly subfolders.
+# Once it exists, loop through the files listed in it.
+# Test that they do not exist first, then download.  Note that this will be 
+# running in the download_staging folder, so .. points to a directory containing 
+# subfolders by year, each of which is organized into monthly subfolders.
 
 # This will ensure that the cookies file is always fresh so that if something got
 # messed up before it'll be cleared
@@ -67,11 +66,6 @@ do
     fname=$(basename $f)
     y=${fname:18:4}
     m=${fname:23:2}
-
-    if [[ $fname == *.xml ]]
-    then
-        continue
-    fi
 
     
     if [[ ! -d ../${y}/${m} ]]
