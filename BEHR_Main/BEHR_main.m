@@ -72,6 +72,7 @@ p.addParameter('sp_mat_dir', '');
 p.addParameter('amf_tools_path', '');
 p.addParameter('no2_profile_path', '');
 p.addParameter('overwrite', false);
+p.addParameter('profile_mode', 'monthly');
 
 p.parse(varargin{:});
 pout = p.Results;
@@ -83,8 +84,11 @@ sp_mat_dir = pout.sp_mat_dir;
 amf_tools_path = pout.amf_tools_path;
 no2_profile_path = pout.no2_profile_path;
 overwrite = pout.overwrite;
+prof_mode = pout.profile_mode;
 
 %%% Validation %%%
+allowed_prof_modes = {'hourly','daily','monthly','hybrid'};
+
 date_start = validate_date(date_start);
 date_end = validate_date(date_end);
 
@@ -98,6 +102,8 @@ elseif ~ischar(no2_profile_path)
     E.badinput('Parameter "no2_profile_path" must be a string');
 elseif (~islogical(overwrite) && ~isnumeric(overwrite)) || ~isscalar(overwrite)
     E.badinput('Parameter "overwrite" must be a scalar logical or number')
+elseif ~ismember(prof_mode,allowed_prof_modes)
+   	E.badinput('prof_mode (if given) must be one of %s', strjoin(allowed_prof_modes,', '));
 end
 
 %This is the directory where the final .mat file will be saved. This will
@@ -162,7 +168,6 @@ if isempty(date_start) || isempty(date_end)
     date_end='2013/08/06';
     fprintf('BEHR_main: Used hard-coded start and end dates (%s, %s)\n', date_start, date_end);
 end
-%****************************%
 
 %****************************%
 % Which cloud product to use to calculate the AMF: OMI or MODIS
@@ -175,8 +180,13 @@ cloud_amf = 'omi';
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Create a parallel pool if one doesn't exist and we are on a cluster
-if onCluster && isempty(gcp('nocreate'))
-    parpool(numThreads);
+if onCluster    
+    if isempty(gcp('nocreate'))
+        parpool(numThreads);
+    end    
+    n_workers = Inf;
+else
+    n_workers = 0;
 end
 
 if onCluster
@@ -268,10 +278,7 @@ for j=1:length(datenums)
         dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
         
         if DEBUG_LEVEL > 1; fprintf('   Reading NO2 profiles\n'); end
-        [no2_bins] = rProfile_US(PROFILE, loncorns, latcorns, c); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
-        no2_bins = reshape(no2_bins,length(pressure),size(vza,1),size(vza,2));
-        no2Profile = no2_bins ./ (10^6); % NO2 from WRF is in ppm in these files
-        prof_i = isnan(squeeze(no2Profile(1, :, :))); %JLL 18 Mar 2014: prof_i is a matrix of 0 or 1s that is 1 wherever the bottom of NO2 profile is NaN
+        [no2Profile, apriori_bin_mode] = rProfile_WRF(datenums(j), loncorns, latcorns, time, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
         
         pTerr = surfPres;
         pCld = cldPres;
@@ -302,6 +309,7 @@ for j=1:length(datenums)
         Data(d).BEHRScatteringWeights = reshape(scattering_weights, [len_vecs, sz]);
         Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
         Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
+        Data(d).BEHRaprioriMode = apriori_bin_mode;
         Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
         Data(d).BEHRQualityFlags = behr_quality_flags(Data(d).BEHRAMFTrop, Data(d).BEHRAMFTropVisOnly,...
             Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag); % the false value for the MODIS flags is only temporary until I get the ocean model in.

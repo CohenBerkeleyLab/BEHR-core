@@ -39,7 +39,7 @@ elseif size(Data.FoV75CornerLatitude,1) > 4 || size(Data.FoV75CornerLatitude,1) 
 end
     
 
-Dimensions=size(Data.ColumnAmountNO2);
+Dimensions=size(Data.ColumnAmountNO2Trop);
 %swath=d;
 
 x=1:1:Dimensions(1)*Dimensions(2); 
