@@ -41,8 +41,9 @@ function [ no2_bins, wrf_file ] = rProfile_WRF( date_in, profile_mode, loncorns,
 %       dimension has size 4 (i.e. loncorn(:,a) would give all 4 corners
 %       for pixel a).
 %
-%       omi_time: the starting time of the OMI swath in UTC. Used to match
-%       up daily profiles to the OMI swath.
+%       omi_time: the starting time of the OMI swath in TAI93 (the time 
+%       format given in the OMNO2 files). Used to match up daily profiles 
+%       to the OMI swath.
 %
 %       surfPres: a 1- or 2-D array containing the GLOBE surface pressures
 %       for the pixels. This will be used to ensure enough bins are
@@ -236,7 +237,7 @@ end
         if strcmpi(profile_mode, 'daily')
             file_name = sprintf('wrfout_*_%04d-%02d-%02d_%02d-00-00', year_in, month_in, day_in, utc_hr);
         elseif strcmpi(profile_mode, 'monthly')
-            file_name = sprintf('WRF_BEHR_monthly_%04d-%02d.nc', year_in, month_in);
+            file_name = sprintf('WRF_BEHR_monthly_%02d.nc', month_in);
         end
         
         F = dir(fullfile(wrf_output_path,file_name));
