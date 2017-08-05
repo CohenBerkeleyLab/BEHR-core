@@ -61,7 +61,8 @@ make_paths_file();
         % WRF data is spread across multiple volumes locally. It's just too
         % big.
         paths.wrf_profiles.comment = sprintf('Add all paths that contain WRF profiles. These should be folders that are organized by year and month, with wrfout_d01 files in them. These will be found on the file server at %s, all volumes must be mounted on your computer.', wrf_file_server);
-        paths.wrf_profiles.default = sprintf('{%s, %s}', fullfile('share-wrf1', 'Output'), fullfile('share-wrf2', 'Output'));
+        paths.wrf_profiles.default = sprintf('{''%s'', ''%s''}', fullfile('share-wrf1', 'Output'), fullfile('share-wrf2', 'Output'));
+        paths.wrf_profiles.no_quote = true;
         
         %%%%%%%%%%%%%%%%%%
         % Write the file %
@@ -77,7 +78,27 @@ make_paths_file();
         for a=1:numel(fns)
             fprintf(fid,'%%\t\t%s\n',fns{a});
         end
+        fprintf(fid,'%%\n%%\tEach of these paths are stored in this class as constant properties\n%%\tthat can be accessed directly from the class without an instance.\n');
         fprintf(fid,'%%\n%%\tNote that this function should not be added to the BEHR git repo, as\n%%\tit must be specific to each person''s computer\n\n');
+        
+        % A little introductory comment block
+        intro_comment = ['Each of the following paths needs to be a local path on your computer. ',...
+                         'For the code repositories, you will want to clone those from the file ',...
+                         'server onto your computer and point the path to that cloned repository. ',...
+                         'For the data directories that are on the file server, you will need to ',...
+                         'mount the file server as a network drive on your computer and point the ',...
+                         'paths below to that mounted path. Network drives mapped on windows have ',...
+                         'the drive letter you assign when you map it; on Macs, they are usually ',...
+                         'found under the /Volumes path. If you are working on a Linux computer ',...
+                         'you''ll usually create mount points under /mnt or similar - that is how ',...
+                         'the satellite download computer is set up.'];
+        intro_comment_2 = ['If you''re working with BEHR on a cluster, you likely won''t need to deal ',...
+                           'with networked drives, and everything will have a straightforward path.'];
+                     
+        fprintf(fid, wrap_comment(intro_comment, 0));
+        fprintf(fid, '%%\n');
+        fprintf(fid, wrap_comment(intro_comment_2, 0));
+        fprintf(fid, '%%\n');
         
         % The properties block with will hold each path
         fprintf(fid,'\tproperties(Constant=true)\n');
@@ -87,14 +108,19 @@ make_paths_file();
             else
                 this_comment = wrap_comment(fns{a}, 2);
             end
-            fprintf(fid, '%s', this_comment);
+            fprintf(fid, this_comment);
             
             if isfield(paths.(fns{a}), 'default')
                 this_default = paths.(fns{a}).default;
             else
                 this_default = '';
             end
-            fprintf(fid, '\t\t%s = ''%s'';\n\n', fns{a}, this_default);
+            
+            if isfield(paths.(fns{a}), 'no_quote')
+                fprintf(fid, '\t\t%s = %s;\n\n', fns{a}, this_default);
+            else
+                fprintf(fid, '\t\t%s = ''%s'';\n\n', fns{a}, this_default);
+            end
         end
         fprintf(fid, '\tend\n');
         fprintf(fid, 'end');
@@ -110,8 +136,9 @@ function str_out = wrap_comment(comment, indent_level)
 % Assume each line is 76 characters long, allow 4 spaces for tabs and 2
 % characters for the "% " at the beginning
 nchars = 76 - 4*indent_level - 2;
+tabs = repmat('\t', 1, indent_level);
 i = 1;
-str_out = {};
+str_out = '';
 while i < length(comment)
     % Find the last space before the end of the line
     if length(comment) - i > nchars
@@ -121,7 +148,8 @@ while i < length(comment)
     else
         j = length(comment) - i + 1;
     end
-    str_out{end+1} = sprintf('%% %s\n',strtrim(comment(i:i+j-1)));
+    str_out = [str_out, tabs, '%% ', strtrim(comment(i:i+j-1)), '\n'];
+    %str_out{end+1} = sprintf('%% %s\n',strtrim(comment(i:i+j-1)));
     i = i+j;
 end
 end
