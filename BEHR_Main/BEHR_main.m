@@ -51,8 +51,8 @@ addpath(genpath(fullfile(mpath,'..','Utils')));
 
 % Add the paths needed to run on the cluster. Modify these manually if
 % needed.
-addpath(genpath(BEHR_paths('classes')));
-addpath(genpath(BEHR_paths('utils')));
+addpath(genpath(behr_paths.classes));
+addpath(genpath(behr_paths.utils));
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INITIALIZATION %%%%%
@@ -109,27 +109,27 @@ end
 %This is the directory where the final .mat file will be saved. This will
 %need to be changed to match your machine and the files' location.
 if isempty(behr_mat_dir)
-    behr_mat_dir = BEHR_paths('behr_mat_dir');
+    behr_mat_dir = behr_paths.behr_mat_dir;
 end
 
 %This is the directory where the "OMI_SP_*.mat" files are saved. This will
 %need to be changed to match your machine and the files' location.
 if isempty(sp_mat_dir)
-    sp_mat_dir = BEHR_paths('sp_mat_dir');
+    sp_mat_dir = behr_paths.sp_mat_dir;
 end
 
 %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
 %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
 %is the 'AMF_tools' folder.
 if isempty(amf_tools_path)
-    amf_tools_path = BEHR_paths('amf_tools_dir');
+    amf_tools_path = behr_paths.amf_tools_dir;
 end
 
 %This is the directory where the NO2 profiles are stored. This will
 %need to be changed to match your machine and the files' location.
 %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
 if isempty(no2_profile_path)
-    no2_profile_path = BEHR_paths('no2_profile_path');
+    no2_profile_path = behr_paths.no2_profile_path;
 end
 
 % Verify the paths integrity.

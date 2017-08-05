@@ -1,7 +1,7 @@
 function [  ] = find_and_replace_cloud_fill( start_date, end_date )
 %UNTITLED4 Summary of this function goes here
 %   Detailed explanation goes here
-sp_path = BEHR_paths('sp_mat_dir');
+sp_path = behr_paths.sp_mat_dir;
 save_path = fullfile(sp_path,'Staging');
 for d=datenum(start_date):datenum(end_date)
     fname = sprintf('OMI_SP_%s.mat',datestr(d,'yyyymmdd'));

@@ -26,7 +26,7 @@ end
         diff_type = ask_multichoice('Absolute or percent difference?',{'abs','per'});
 
         OMI_BRDF = cat_sat_data(brdf_dir, {'MODISAlbedoBRDF'},'prefix','OMI_BEHR','startdate','2005-06-01','enddate','2005-06-30','newdim',true,'varname','OMI','DEBUG_LEVEL',1);
-        OMI_blacksky = cat_sat_data(BEHR_paths('behr_mat_dir'), {'MODISAlbedo'},'startdate','2005-06-01','enddate','2005-06-30','newdim',true,'varname','OMI','DEBUG_LEVEL',1);
+        OMI_blacksky = cat_sat_data(behr_paths.behr_mat_dir, {'MODISAlbedo'},'startdate','2005-06-01','enddate','2005-06-30','newdim',true,'varname','OMI','DEBUG_LEVEL',1);
         % Load one to get the latitude/longitude
         F = dir(fullfile(brdf_dir,'OMI*.mat'));
         D = load(fullfile(brdf_dir, F(1).name),'OMI');
@@ -69,7 +69,7 @@ end
         diff_type = ask_multichoice('Absolute or percent difference?',{'abs','per'});
 
         OMI_BRDF = cat_sat_data(brdf_dir, {'MODISAlbedoBRDF'},'prefix','OMI_BEHR','startdate','2005-06-01','enddate','2005-06-30','varname','Data','DEBUG_LEVEL',1);
-        OMI_blacksky = cat_sat_data(BEHR_paths('behr_mat_dir'), {'MODISAlbedo'},'startdate','2005-06-01','enddate','2005-06-30','varname','Data','DEBUG_LEVEL',1);
+        OMI_blacksky = cat_sat_data(behr_paths.behr_mat_dir, {'MODISAlbedo'},'startdate','2005-06-01','enddate','2005-06-30','varname','Data','DEBUG_LEVEL',1);
 
         if strcmpi(diff_type,'abs')
             del = OMI_BRDF - OMI_blacksky;
@@ -212,7 +212,7 @@ end
             fname = sprintf('OMI_BEHR_%s_%s.mat', BEHR_version, datestr(dvec(d),'yyyymmdd'));
             fprintf('Loading %s\n',fname);
             BRDF = load(fullfile(brdf_dir, fname), varname);
-            BS = load(fullfile(BEHR_paths('behr_mat_dir'),fname), varname);
+            BS = load(fullfile(behr_paths.behr_mat_dir,fname), varname);
             BRDF = BRDF.(varname);
             BS = BS.(varname);
 

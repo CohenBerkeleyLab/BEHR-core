@@ -57,8 +57,8 @@ addpath(fullfile(behr_repo_dir, 'Albedo'));
 
 
 % Add the paths needed for certain utility classes and functions
-addpath(genpath(BEHR_paths('classes')));
-addpath(genpath(BEHR_paths('utils')));
+addpath(genpath(behr_paths.classes));
+addpath(genpath(behr_paths.utils));
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -158,47 +158,47 @@ estimated_num_swaths = 5;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % These are the directories to save or load data from. By default, they are
-% taken from the BEHR_paths function, which can be created by running
-% BEHR_path_setup in the Utils folder of this repo. Alternately, paths can
-% be specified as parameter inputs to this function (useful on the cluster
-% where this should be called from a run script or in unit tests where the
-% default save directories need to be overwritten).
+% taken from the behr_paths class, which can be created by running
+% BEHR_initial_setup in the root folder of this repo. Alternately, paths
+% can be specified as parameter inputs to this function (useful on the
+% cluster where this should be called from a run script or in unit tests
+% where the default save directories need to be overwritten).
 
 %This is the directory where the final .mat file will be saved.
 if isempty(sp_mat_dir)
-    sp_mat_dir = BEHR_paths('sp_mat_dir');
+    sp_mat_dir = behr_paths.sp_mat_dir;
 end
 
 %This is the directory where the OMI NASA SP (OMNO2) he5 files are
 %saved. It should include subfolders organized by year, which in turn
 %are organized by month.
 if isempty(omi_he5_dir)
-    omi_he5_dir = BEHR_paths('omno2_dir');
+    omi_he5_dir = behr_paths.omno2_dir;
 end
 
 %This is the directory where the OMPIXCOR he5 files are saved. It
 %should include subfolders organized by year, which in turn are
 %organized by month.
 if isempty(omi_pixcor_dir)
-    omi_pixcor_dir = BEHR_paths('ompixcor_dir');
+    omi_pixcor_dir = behr_paths.ompixcor_dir;
 end
 
 %This is the directory where the MODIS myd06_L2*.hdf files are saved.
 %It should include subfolders organized by year.
 if isempty(modis_myd06_dir)
-    modis_myd06_dir = BEHR_paths('myd06_dir');
+    modis_myd06_dir = behr_paths.myd06_dir;
 end
 
 %This is the directory where the MODIS MCD43C3*.hdf files are saved. It
 %should include subfolders organized by year.
 if isempty(modis_mcd43_dir)
-    modis_mcd43_dir = BEHR_paths('mcd43c3_dir');
+    modis_mcd43_dir = behr_paths.mcd43c3_dir;
 end
 
 %This is the directory where the GLOBE data files and their headers
 %(.hdr files) are saved.
 if isempty(globe_dir)
-    globe_dir = BEHR_paths('globe_dir');
+    globe_dir = behr_paths.globe_dir;
 end
 
 % Verify the paths integrity.

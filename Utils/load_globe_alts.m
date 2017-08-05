@@ -17,7 +17,7 @@ if nargin < 3;
     scalefactor = 1;
 end
 
-globe_dir = BEHR_paths('globe_dir');
+globe_dir = behr_paths.globe_dir;
 % Load the terrain data
 [terpres, refvec] = globedem(globe_dir,scalefactor,[min(latlim), max(latlim)],[min(lonlim), max(lonlim)]);
     %refvec will contain (1) number of cells per degree, (2)

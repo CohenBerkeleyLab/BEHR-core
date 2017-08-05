@@ -1,7 +1,7 @@
 function [  ] = find_days_to_fix( start_date, end_date )
 %UNTITLED4 Summary of this function goes here
 %   Detailed explanation goes here
-data_path = BEHR_paths('behr_mat_dir');
+data_path = behr_paths.behr_mat_dir;
 out_path = '.';
 %dnums=1:29;
 dnums = datenum(start_date):datenum(end_date);

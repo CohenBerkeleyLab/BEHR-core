@@ -3,7 +3,7 @@ function [ varargout ] = load_behr_file( file_date )
 %   Detailed explanation goes here
 
 
-behr_file = fullfile(BEHR_paths('behr_mat_dir'), behr_filename(file_date));
+behr_file = fullfile(behr_paths.behr_mat_dir, behr_filename(file_date));
 D = load(behr_file);
 if nargout == 0
     Data = D.Data;

@@ -28,11 +28,11 @@ function [  ] = BEHR_publishing_v2(varargin)
 %
 %       'mat_dir': the directory from which to load the Matlab files with
 %       BEHR output saved in the. Default is the value returned by
-%       BEHR_paths('behr_mat_dir').
+%       behr_paths.behr_mat_dir.
 %
 %       'save_dir': the directory to which to save the resulting HDF or CSV
 %       files. Default is the value returned by
-%       BEHR_paths('website_staging_dir').
+%       behr_paths.website_staging_dir.
 %
 %       'organize': a boolean that indicates whether the output should go
 %       directly in the save directory (false) or in a subdirectory named
@@ -74,8 +74,8 @@ p.addParameter('pixel_type', 'native');
 p.addParameter('start', '2005-01-01');
 p.addParameter('end', datestr(today, 'yyyy-mm-dd'));
 p.addParameter('reprocessed', false);
-p.addParameter('mat_dir', BEHR_paths('behr_mat_dir'));
-p.addParameter('save_dir', BEHR_paths('website_staging_dir'));
+p.addParameter('mat_dir', behr_paths.behr_mat_dir);
+p.addParameter('save_dir', behr_paths.website_staging_dir);
 p.addParameter('organize', true);
 p.addParameter('overwrite', -1);
 p.addParameter('DEBUG_LEVEL', 1);
