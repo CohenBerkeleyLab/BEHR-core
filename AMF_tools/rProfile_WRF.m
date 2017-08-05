@@ -1,4 +1,4 @@
-function [ no2_bins, bin_mode ] = rProfile_WRF( date_in, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+function [ no2_bins, wrf_file ] = rProfile_WRF( date_in, profile_mode, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -33,14 +33,16 @@ function [ no2_bins, bin_mode ] = rProfile_WRF( date_in, loncorns, latcorns, omi
 %   The inputs to this function are:
 %       date_in: The date being processed, used to find the right file.
 %
-%       avg_mode: Should be 'hourly', 'daily', or 'monthly'. Chooses which
-%       level of averaging to be used. See read_wrf_output.sh and
-%       lonweight.nco in the WRF_Utils folder for the averaging process.
+%       profile_mode: Should be 'daily' or 'monthly'. Chooses which WRF
+%       profiles are used, the daily or monthly outputs.
 %
 %       loncorns & latcorns: arrays containing the longitude and latitude
 %       corners of the pixels. Can be 2- or 3-D, so long as the first
 %       dimension has size 4 (i.e. loncorn(:,a) would give all 4 corners
 %       for pixel a).
+%
+%       omi_time: the starting time of the OMI swath in UTC. Used to match
+%       up daily profiles to the OMI swath.
 %
 %       surfPres: a 1- or 2-D array containing the GLOBE surface pressures
 %       for the pixels. This will be used to ensure enough bins are
@@ -49,6 +51,11 @@ function [ no2_bins, bin_mode ] = rProfile_WRF( date_in, loncorns, latcorns, omi
 %
 %       pressure: the vector of pressures that the NO2 profiles should be
 %       interpolated to.
+%
+%       wrf_output_path: optional, if provided, overrides which directory
+%       this function will look for WRF output in. If passed an empty
+%       string, the proper WRF directory will be found, just as if this
+%       input was omitted.
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 22 Jul 2015
 
@@ -60,8 +67,6 @@ E = JLLErrors;
 % what likely went wrong. The error will take two additional arguments when
 % called: the variable name and the file name.
 E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %s. Likely this file was not processed with (slurm)run_wrf_output.sh, or the processing failed before writing the calculated quantites.');
-
-nearest = true;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
@@ -99,11 +104,16 @@ catch err
     end
 end
 
-% Verify that the path to the WRF profiles exists
-if ~ischar(wrf_output_path)
-    E.badinput('wrf_output_path must be a string');
-elseif ~exist(wrf_output_path,'dir')
-    E.badinput('wrf_output_path (%s) does not appear to be a directory',wrf_output_path);
+% Get the WRF output path - this function will itself throw an error if the
+% profile mode is wrong or the path does not exist.
+if ~exist('wrf_output_path', 'var') || isempty(wrf_output_path)
+    wrf_output_path = find_wrf_path(profile_mode, date_in);
+else
+    if ~ischar(wrf_output_path)
+        E.badinput('WRF_OUTPUT_PATH must be a string');
+    elseif ~exist(wrf_output_path, 'dir')
+        E.dir_dne(wrf_output_path);
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -111,7 +121,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-[wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, wrf_utchr] = load_wrf_vars();
+[wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_file] = load_wrf_vars();
 
 
 num_profs = numel(wrf_lon);
@@ -119,13 +129,6 @@ prof_length = size(wrf_no2,3);
 
 num_pix = numel(surfPres);
 no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
-
-if isempty(wrf_no2)
-    % If there are no profiles, then it can be assumed that the swath lies
-    % outside the expected times and we have no profiles for it.
-    bin_mode = 'none';
-    return
-end
 
 if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
     error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
@@ -137,14 +140,7 @@ wrf_lat_bnds = [wrf_lat(1,1), wrf_lat(1,end), wrf_lat(end,end), wrf_lat(end,1)];
 % If the WRF profiles are spaced at intervals larger than the smallest dimension
 % of OMI pixels, interpolate instead of averaging b/c we will likely have at least
 % some pixels with no profiles within them.
-interp_bool = wrf_dx > 13 || wrf_dy > 13;
-if interp_bool && ~nearest
-    bin_mode = sprintf('interp:%s', wrf_utchr);
-elseif interp_bool && nearest
-    bin_mode = sprintf('nearest:%s', wrf_utchr);
-else
-    bin_mode = sprintf('avg:%02d', wrf_utchr);
-end
+
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% BIN PROFILES TO PIXELS %%%%%
@@ -153,27 +149,19 @@ end
 % Reshape the NO2 profiles and pressures such that the profiles are along
 % the first dimension
 
+% Reorder dimensions. This will make the perm_vec be [3, 1, 2, (4:end)]
+perm_vec = 1:ndims(wrf_no2);
+perm_vec(3) = [];
+perm_vec = [3, perm_vec];
 
-if interp_bool && ~nearest
-    wrf_lon = repmat(wrf_lon,1,1,prof_length);
-    wrf_lat = repmat(wrf_lat,1,1,prof_length);
-    wrf_z = repmat(permute(1:prof_length,[1 3 2]),size(wrf_lon,1),size(wrf_lon,2),1);
-    wrf_no2_F = scatteredInterpolant(double(wrf_lon(:)), double(wrf_lat(:)), double(wrf_z(:)), double(wrf_no2(:)));
-    wrf_pres_F = scatteredInterpolant(double(wrf_lon(:)), double(wrf_lat(:)), double(wrf_z(:)), double(wrf_pres(:)));
-else
-    % Reorder dimensions. This will make the perm_vec be [3, 1, 2, (4:end)]
-    perm_vec = 1:ndims(wrf_no2);
-    perm_vec(3) = [];
-    perm_vec = [3, perm_vec];
+wrf_no2 = permute(wrf_no2, perm_vec);
+wrf_pres = permute(wrf_pres, perm_vec);
 
-    wrf_no2 = permute(wrf_no2, perm_vec);
-    wrf_pres = permute(wrf_pres, perm_vec);
+wrf_no2 = reshape(wrf_no2, prof_length, num_profs);
+wrf_pres = reshape(wrf_pres, prof_length, num_profs);
+wrf_lon = reshape(wrf_lon, 1, num_profs);
+wrf_lat = reshape(wrf_lat, 1, num_profs);
 
-    wrf_no2 = reshape(wrf_no2, prof_length, num_profs);
-    wrf_pres = reshape(wrf_pres, prof_length, num_profs);
-    wrf_lon = reshape(wrf_lon, 1, num_profs);
-    wrf_lat = reshape(wrf_lat, 1, num_profs);
-end
 
 lons = squeeze(nanmean(loncorns,1));
 lats = squeeze(nanmean(latcorns,1));
@@ -181,13 +169,8 @@ for p=1:num_pix
     if ~inpolygon(lons(p), lats(p), wrf_lon_bnds, wrf_lat_bnds)
         continue
     end
-    if interp_bool && ~nearest
-        no2_bins(:,p) = interp_apriori();
-    elseif interp_bool && nearest
-        no2_bins(:,p) = nearest_apriori();
-    else
-        no2_bins(:,p) = avg_apriori();
-    end
+
+    no2_bins(:,p) = avg_apriori();
 end
 
     function no2_vec = avg_apriori()
@@ -241,28 +224,7 @@ end
         no2_vec = nanmean(interp_no2,2);
     end
 
-    function no2_vec = interp_apriori()
-        interp_no2 = nan(prof_length,1);
-        interp_pres = nan(prof_length,1);
-        for i=1:prof_length
-            interp_no2(i) = wrf_no2_F(lons(p), lats(p),i);
-            interp_pres(i) = wrf_pres_F(lons(p), lats(p),i);   
-        end
-        interp_no2 = exp(interp1(log(interp_pres), log(interp_no2), log(pressures),'linear','extrap'));
-        last_below_surf = find(pressures > surfPres(p),1,'last');
-        no2_vec = nan(size(pressures));
-        no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
-    end
-    
-    function no2_vec = nearest_apriori()
-        [~,I] = min(sqrt((lons(p)-wrf_lon).^2 + (lats(p)-wrf_lat).^2));
-        interp_no2 = exp(interp1(log(wrf_pres(:,I)), log(wrf_no2(:,I)), log(pressures),'linear','extrap'));
-        last_below_surf = find(pressures > surfPres(p),1,'last');
-        no2_vec = nan(size(pressures));
-        no2_vec(last_below_surf:end) = interp_no2(last_below_surf:end);
-    end
-
-    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_dx, wrf_dy, utc_hr] = load_wrf_vars()
+    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat, file_name] = load_wrf_vars()
         % Find the file for this day and the nearest hour May be "wrfout" or
         % "wrfout_subset"
         year_in = year(date_num_in);
@@ -271,21 +233,20 @@ end
         
         omi_utc_mean = omi_time_conv(nanmean(omi_time(:)));
         utc_hr = round(hour(omi_utc_mean));
-        file_pat = sprintf('wrfout_*_%04d-%02d-%02d_%02d-00-00', year_in, month_in, day_in, utc_hr);
+        if strcmpi(profile_mode, 'daily')
+            file_name = sprintf('wrfout_*_%04d-%02d-%02d_%02d-00-00', year_in, month_in, day_in, utc_hr);
+        elseif strcmpi(profile_mode, 'monthly')
+            file_name = sprintf('WRF_BEHR_monthly_%04d-%02d.nc', year_in, month_in);
+        end
         
-        F = dir(fullfile(wrf_output_path,file_pat));
+        F = dir(fullfile(wrf_output_path,file_name));
         if numel(F) < 1
-            E.filenotfound(file_pat);
+            E.filenotfound(file_name);
         elseif numel(F) > 1
-            E.toomanyfiles(file_pat);
+            E.toomanyfiles(file_name);
         else
             wrf_info = ncinfo(fullfile(wrf_output_path,F(1).name));
         end
-        
-        % Get the a priori resolution to determine if we need to average or
-        % interpolate profiles to the pixels
-        wrf_dx = ncreadatt(wrf_info.Filename, '/', 'DX')/1000; % convert m to km
-        wrf_dy = ncreadatt(wrf_info.Filename, '/', 'DY')/1000; % convert m to km
 
         % Load NO2 and check what unit it is - we'll use that to convert to
         % parts-per-part later. Make the location of units as general as possible
@@ -320,7 +281,7 @@ end
         
         % Load the remaining variables
         try
-            if pres_precomputed
+            if pres_precomputed % P and PB are already combined into the 'pres' variable in the monthly files
                 varname = 'pres';
                 p_tmp = ncread(wrf_info.Filename, varname);
                 pb_tmp = 0; % Allows us to skip a second logical test later

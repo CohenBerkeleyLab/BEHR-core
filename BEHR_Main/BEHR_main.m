@@ -1,47 +1,59 @@
 function BEHR_main(varargin)
+% BEHR_MAIN: primary BEHR algorithm
+%
+%   This function is the primary BEHR algorith, it takes the OMI, MODIS,
+%   and GLOBE data read in by read_omno2_v_aug2012.m and uses it to
+%   recalculated the BEHR AMFs and VCDs. There are a number of input
+%   parameters that control it's operation; the defaults are set such that
+%   it should run if you simply execute this script, but in most cases you
+%   will want to change at least the start and end dates.
+%
+%   Parameters:
+%       'start' - the first date to process as a date number or date string
+%       that Matlab recognized implicitly. If not given, defaults to
+%       2005-01-01.
+%
+%       'end' - the last date to process, same format requirements as
+%       starting date. If not given, defaults to today.
+%
+%       'behr_mat_dir' - the directory that the final .mat file should be
+%       saved in. If not given, it defaults to the path stored in
+%       behr_paths.m
+%
+%       'sp_mat_dir' - the directory that the .mat files resulting from
+%       read_omno2_v_aug2012.m are stored in. If not given, it defaults to
+%       the path stored in behr_paths.m
+%
+%       'amf_tools_path' - the directory that contains the files
+%       nmcTmpYr.txt and damf.txt. If not given, defaults to the path
+%       stored in behr_paths.m
+%
+%       'no2_profile_path' - the directory to look for WRF output files in.
+%       If not given, or given as an empty string, this is determined
+%       automatically.
+%
+%       'overwrite' - a boolean that controls whether existing files in the
+%       behr_mat_dir should be overwritten or not. Defaults to false (if a
+%       file exists for a given day, that day will not be reprocessed).
+%
+%       'profile_mode' - must be the string 'daily' or 'monthly' (defaults
+%       to 'monthly'). Controls whether daily or monthly profiles will be
+%       used, which also controls whether rProfile_WRF.m looks for files
+%       named 'WRF_BEHR_monthly_yyyy-mm.nc' (monthly) or
+%       'wrfout_*_yyyy-mm-dd_hh-00-00' (daily).
+%
+%       'DEBUG_LEVEL' - level of progress messaged printed to the console.
+%       0 = none, 1 = minimal, 2 = all, 3 = processing times are added.
+%       Default is 2.
+%
 %Josh Laughner <joshlaugh5@gmail.com>
+
 %Based on BEHR_nwus by Ashley Russell (02/09/2012)
-%Takes "OMI_SP_yyyymmdd.m" files produced by read_omno2_v_aug2012.m as it's
-%main input.
 
-%****************************%
-% CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
-% Allows for quick control over the amount of output to the console.
-% Choose a higher level to keep track of what the script is doing.
-DEBUG_LEVEL = 2;
-%****************************%
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% PARALLELIZATION OPTIONS %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Specifies whether the script is executing on a cluster; this must be set
-% (globally) in the calling script.  This allows for the execution of code
-% needed on the cluster (i.e. adding necessary folders to the Matlab path,
-% opening a parallel pool) without running them on the local machine.  If
-% onCluster hasn't been defined yet, set it to false.
-global onCluster;
-if isempty(onCluster);
-    if DEBUG_LEVEL > 0; fprintf('Assuming onCluster is false\n'); end
-    onCluster = false;
-end
-
-% Defined the number of threads to run, this will be used to open a
-% parallel pool. numThreads should be set in the calling run script,
-% otherwise it will default to 1.
-global numThreads;
-if isempty(numThreads)
-    numThreads = 1;
-end
-
-% Cleanup object will safely exit if there's a problem
-if onCluster
-    cleanupobj = onCleanup(@() mycleanup());
-end
-
-%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% DEPENDENCIES %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% INITIALIZATION %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
 %the Git repository for BEHR, this is the /Utils folder.
@@ -54,25 +66,24 @@ addpath(genpath(fullfile(mpath,'..','Utils')));
 addpath(genpath(behr_paths.classes));
 addpath(genpath(behr_paths.utils));
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% INITIALIZATION %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 E = JLLErrors;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INITIALIZATION AND INPUT VALIDATION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+% You may change the default values here if you just want to be able to
+% click 'Run', but it's usually better to pass these as parameters.
 p = inputParser;
-p.addParameter('start', '');
-p.addParameter('end', '');
-p.addParameter('behr_mat_dir', '');
-p.addParameter('sp_mat_dir', '');
-p.addParameter('amf_tools_path', '');
+p.addParameter('start', '2005-01-01');
+p.addParameter('end', today);
+p.addParameter('behr_mat_dir', behr_paths.behr_mat_dir);
+p.addParameter('sp_mat_dir', behr_paths.sp_mat_dir);
+p.addParameter('amf_tools_path', behr_paths.amf_tools_dir);
 p.addParameter('no2_profile_path', '');
 p.addParameter('overwrite', false);
 p.addParameter('profile_mode', 'monthly');
+p.addParameter('DEBUG_LEVEL', 2);
 
 p.parse(varargin{:});
 pout = p.Results;
@@ -85,6 +96,7 @@ amf_tools_path = pout.amf_tools_path;
 no2_profile_path = pout.no2_profile_path;
 overwrite = pout.overwrite;
 prof_mode = pout.profile_mode;
+DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 %%% Validation %%%
 allowed_prof_modes = {'hourly','daily','monthly','hybrid'};
@@ -106,32 +118,6 @@ elseif ~ismember(prof_mode,allowed_prof_modes)
    	E.badinput('prof_mode (if given) must be one of %s', strjoin(allowed_prof_modes,', '));
 end
 
-%This is the directory where the final .mat file will be saved. This will
-%need to be changed to match your machine and the files' location.
-if isempty(behr_mat_dir)
-    behr_mat_dir = behr_paths.behr_mat_dir;
-end
-
-%This is the directory where the "OMI_SP_*.mat" files are saved. This will
-%need to be changed to match your machine and the files' location.
-if isempty(sp_mat_dir)
-    sp_mat_dir = behr_paths.sp_mat_dir;
-end
-
-%Add the path to the AMF_tools folder which contains rNmcTmp2.m,
-%omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
-%is the 'AMF_tools' folder.
-if isempty(amf_tools_path)
-    amf_tools_path = behr_paths.amf_tools_dir;
-end
-
-%This is the directory where the NO2 profiles are stored. This will
-%need to be changed to match your machine and the files' location.
-%no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
-if isempty(no2_profile_path)
-    no2_profile_path = behr_paths.no2_profile_path;
-end
-
 % Verify the paths integrity.
 nonexistant = {};
 
@@ -144,7 +130,7 @@ end
 if ~exist(amf_tools_path,'dir')
     nonexistant{end+1} = 'amf_tools_path';
 end
-if ~exist(no2_profile_path,'dir')
+if ~isempty(no2_profile_path) && ~exist(no2_profile_path,'dir')
     nonexistant{end+1} = 'no2_profile_path';
 end
 
@@ -158,22 +144,35 @@ end
 addpath(amf_tools_path)
 fileTmp = fullfile(amf_tools_path,'nmcTmpYr.txt');
 fileDamf = fullfile(amf_tools_path,'damf.txt');
-%****************************%
 
-%****************************%
-%Process all files between these dates, in yyyy/mm/dd format
-%****************************%
-if isempty(date_start) || isempty(date_end)
-    date_start='2013/08/01';
-    date_end='2013/08/06';
-    fprintf('BEHR_main: Used hard-coded start and end dates (%s, %s)\n', date_start, date_end);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% PARALLELIZATION OPTIONS %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Specifies whether the script is executing on a cluster; this must be set
+% (globally) in the calling script.  This allows for the execution of code
+% needed on the cluster (i.e. adding necessary folders to the Matlab path,
+% opening a parallel pool) without running them on the local machine.  If
+% onCluster hasn't been defined yet, set it to false.
+global onCluster;
+if isempty(onCluster);
+    fprintf('Assuming onCluster is false\n');
+    onCluster = false;
 end
 
-%****************************%
-% Which cloud product to use to calculate the AMF: OMI or MODIS
-%****************************%
-cloud_amf = 'omi';
-%****************************%
+% Defined the number of threads to run, this will be used to open a
+% parallel pool. numThreads should be set in the calling run script,
+% otherwise it will default to 1.
+global numThreads;
+if isempty(numThreads)
+    numThreads = 1;
+end
+
+% Cleanup object will safely exit if there's a problem
+if onCluster
+    cleanupobj = onCleanup(@() mycleanup());
+end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN FUNCTION %%%%%
@@ -224,18 +223,11 @@ for j=1:length(datenums)
         if DEBUG_LEVEL > 0; disp('No SP file exists for given day'); end
         continue
     end
+    
     if DEBUG_LEVEL > 1; fprintf('\t ...Found.\n'); end
-    S=load(fullfile(sp_mat_dir,sp_mat_name)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
+    S=load(fullfile(sp_mat_dir,sp_mat_name));
     Data=S.Data;
     
-    if ~exist('profile_file','var') || ~strcmp(profile_file(2:3),month_str)
-        month_str=datestr(datenums(j),'mm');
-        profile_file=['m',month_str,'_NO2_profile'];
-        
-        if DEBUG_LEVEL > 1; disp(['Loading ',fullfile(no2_profile_path,profile_file)]); end
-        S=load(fullfile(no2_profile_path,profile_file));
-        PROFILE = S.PROFILE;
-    end
     for d=1:length(Data);
         % Data is initialized in read_omno2_v_aug2012 with a single 0
         % in the Longitude field.  Since points outside the lat/lons of
@@ -278,16 +270,11 @@ for j=1:length(datenums)
         dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
         
         if DEBUG_LEVEL > 1; fprintf('   Reading NO2 profiles\n'); end
-        [no2Profile, apriori_bin_mode] = rProfile_WRF(datenums(j), loncorns, latcorns, time, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+        [no2Profile, wrf_profile_file] = rProfile_WRF(datenums(j), prof_mode, loncorns, latcorns, time, pTerr, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
         
         pTerr = surfPres;
         pCld = cldPres;
-        if strcmpi(cloud_amf,'omi')
-            cldFrac = Data(d).CloudFraction(:);
-        else
-            cldFrac = Data(d).MODISCloud(:);
-        end
-        
+        cldFrac = Data(d).CloudFraction(:);
         cldRadFrac = Data(d).CloudRadianceFraction(:);
         
         
@@ -309,7 +296,7 @@ for j=1:length(datenums)
         Data(d).BEHRScatteringWeights = reshape(scattering_weights, [len_vecs, sz]);
         Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
         Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
-        Data(d).BEHRaprioriMode = apriori_bin_mode;
+        Data(d).BEHRWRFFile = wrf_profile_file;
         Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
         Data(d).BEHRQualityFlags = behr_quality_flags(Data(d).BEHRAMFTrop, Data(d).BEHRAMFTropVisOnly,...
             Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag); % the false value for the MODIS flags is only temporary until I get the ocean model in.

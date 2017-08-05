@@ -27,7 +27,9 @@ make_paths_file();
         % subfield is the explanatory comment, and the 'default' subfield
         % is what the default will be. If either field is omitted, that is
         % fine. A generic comment will be inserted and a blank path will be
-        % inserted.
+        % inserted. Including the subfield "no_quote" at all will cause it
+        % not to automatically quote the default path, which is useful if
+        % you need to allow for multiple paths in a cell array.
         
         sat_file_server = '128.32.208.13';
         wrf_file_server = 'cohenwrfnas.dyn.berkeley.edu';
@@ -60,6 +62,9 @@ make_paths_file();
         
         % WRF data is spread across multiple volumes locally. It's just too
         % big.
+        paths.wrf_monthly_profiles.comment = sprintf('The path that contains the WRF_BEHR*.nc monthly profile files. This should be on the file server at %s.', wrf_file_server);
+        paths.wrf_monthly_profiles.default = fullfile('share-wrf1','MonthlyProfiles');
+        
         paths.wrf_profiles.comment = sprintf('Add all paths that contain WRF profiles. These should be folders that are organized by year and month, with wrfout_d01 files in them. These will be found on the file server at %s, all volumes must be mounted on your computer.', wrf_file_server);
         paths.wrf_profiles.default = sprintf('{''%s'', ''%s''}', fullfile('share-wrf1', 'Output'), fullfile('share-wrf2', 'Output'));
         paths.wrf_profiles.no_quote = true;
