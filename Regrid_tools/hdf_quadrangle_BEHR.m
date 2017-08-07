@@ -54,6 +54,7 @@ Swath=fill_val * ones(maxx,maxy);
 AmfTrop=fill_val * ones(maxx,maxy);
 AmfStrat=fill_val * ones(maxx,maxy);
 TropopausePressure=fill_val * ones(maxx,maxy);
+RootMeanSquareErrorOfFit=fill_val * ones(maxx, maxy);
 
 Count = zeros(maxx, maxy);
 Area = nan(maxx, maxy);
@@ -169,6 +170,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
     TropopausePressure_val = Data.TropopausePressure(x);
     VcdQualityFlags_val = Data.VcdQualityFlags(x);
     XTrackQualityFlags_val = Data.XTrackQualityFlags(x);
+    RootMeanSquareErrorOfFit_val = Data.RootMeanSquareErrorOfFit(x);
     
     
     
@@ -260,7 +262,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     AmfTrop(x_quad, y_quad) = sum([AmfTrop(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFTrop_val])/Count(x_quad,y_quad);
                     AmfStrat(x_quad, y_quad) = sum([AmfStrat(x_quad, y_quad)*(Count(x_quad, y_quad)-1), AMFStrat_val])/Count(x_quad,y_quad);
                     TropopausePressure(x_quad, y_quad) = sum([TropopausePressure(x_quad, y_quad)*(Count(x_quad, y_quad)-1), TropopausePressure_val])/Count(x_quad,y_quad);
-                    
+                    RootMeanSquareErrorOfFit(x_quad, y_quad) = sum([RootMeanSquareErrorOfFit(x_quad, y_quad)*(Count(x_quad, y_quad)-1), RootMeanSquareErrorOfFit_val)/Count(x_quad, y_quad);
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell
                     
@@ -312,6 +314,7 @@ for x=1:1:Dimensions(1)*Dimensions(2); %JLL 18 Mar 2014: Loop over each NO2 colu
                     AmfTrop(x_quad, y_quad) = AMFTrop_val;
                     AmfStrat(x_quad, y_quad) = AMFStrat_val;
                     TropopausePressure(x_quad, y_quad) = TropopausePressure_val;
+                    RootMeanSquareErrorOfFit(x_quad, y_quad) = RootMeanSquareErrorOfFit_val;
                     
                     % Flag fields will append the flag value to a matrix in
                     % a cell corresponding to this grid cell

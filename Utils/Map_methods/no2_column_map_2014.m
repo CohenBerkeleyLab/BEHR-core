@@ -52,6 +52,9 @@ function [cbhandle, GriddedColumn, longrid, latgrid, GriddedCount, parsed_vars] 
 %       angle dependence. Input should be a 1x2 vector that gives the min
 %       and max row. Remember row indicies are 0 based, and go from 0 to
 %       59.
+%   sza = maximum allowed solar zenith angle to use, in degrees. Defaults to
+%       180, i.e. all angles will be used.  
+%   rmserror = maximum allowed RMS error of fit. Defaults to Inf. 
 %   makefig = true or false; whether to make a figure or not. Defaults to
 %       true. Errors if set to false but only 1 output requested, as this
 %       means that the NO2 column data would not be saved.
@@ -73,6 +76,8 @@ p.addParameter('clouds','omi',@isstr);
 p.addParameter('cloudfraccrit',-1,@isscalar)
 p.addParameter('rowanomaly','XTrackFlags',@(x) any(strcmpi(x,{'AlwaysByRow','RowsByTime','XTrackFlags','XTrackFlagsLight'}))) %Ensure that the rowanomaly value is one of the allowed 4
 p.addParameter('rows',[],@(x) (isnumeric(x) && (numel(x) == 0 || numel(x) == 2)));
+p.addParameter('sza',180,@(x) (isnumeric(x) && isscalar(x) && x >= 0))
+p.addParameter('rmserror', Inf, @(x) (isnumeric(x) && isscalar(x) && x >= 0));
 p.addParameter('makefig', true, @(x) (isscalar(x) && (isnumeric(x) || islogical(x))));
 
 p.parse(varargin{:});
@@ -160,9 +165,15 @@ if strcmpi(cloud_type,'omi') && cloud_frac < 0
     cloud_frac = 0.2; %Set the cloud fraction criteria to 20% unscaled if OMI clouds used and no other value given
 elseif strcmpi(cloud_type,'modis') && cloud_frac < 0
     cloud_frac = 0;
-elseif strcmpi(cloud_type, 'omi') || strcmpi(cloud_type, 'modis') %Check that the cloud type is recognized, if the value of cloud_frac is valid
+elseif strcmpi(cloud_type,'rad') && cloud_frac < 0
+    cloud_frac = 0.5;
+elseif strcmpi(cloud_type, 'omi') || strcmpi(cloud_type, 'modis') || strcmpi(cloud_type, 'rad') %Check that the cloud type is recognized, if the value of cloud_frac is valid
 else
-    error('no2_col_map:cloud_type','Cloud type must be "OMI" or "MODIS"')
+    error('no2_col_map:cloud_type','Cloud type must be "OMI", "MODIS", or "RAD"')
+end
+
+if cloud_frac < 0 || cloud_frac > 1
+    error('no2_col_map:cloud_frac','Cloud fraction criterion must be between 0 and 1')
 end
 
 %Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
@@ -226,7 +237,7 @@ for period = 1:per %Loop over each temporal period you wish to average
                 end
             end
             
-            [this_WeightedColumn, this_Weight, this_Count] = BEHR_day_no2(OMI,'mapfield', mapfield, 'cloud_prod', cloud_type, 'cloud_frac_max', cloud_frac, 'row_anomaly', parsed_vars.rowanomaly, 'rows', parsed_vars.rows);
+            [this_WeightedColumn, this_Weight, this_Count] = BEHR_day_no2(OMI,'mapfield', mapfield, 'cloud_prod', cloud_type, 'cloud_frac_max', cloud_frac, 'row_anomaly', parsed_vars.rowanomaly, 'rows', parsed_vars.rows, 'sza', parsed_vars.sza, 'rmserror', parsed_vars.rmserror);
             SumWeightedColumn = SumWeightedColumn + this_WeightedColumn;
             SumWeight = SumWeight + this_Weight;
             Count = Count + this_Count;
