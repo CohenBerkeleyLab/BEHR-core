@@ -65,6 +65,7 @@ addpath(genpath(fullfile(mpath,'..','Utils')));
 % needed.
 addpath(genpath(behr_paths.classes));
 addpath(genpath(behr_paths.utils));
+addpath(behr_paths.psm_dir);
 
 E = JLLErrors;
 
