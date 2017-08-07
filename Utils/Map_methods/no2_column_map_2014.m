@@ -54,7 +54,6 @@ function [cbhandle, GriddedColumn, longrid, latgrid, GriddedCount, parsed_vars] 
 %       59.
 %   sza = maximum allowed solar zenith angle to use, in degrees. Defaults to
 %       180, i.e. all angles will be used.  
-%   rmserror = maximum allowed RMS error of fit. Defaults to Inf. 
 %   makefig = true or false; whether to make a figure or not. Defaults to
 %       true. Errors if set to false but only 1 output requested, as this
 %       means that the NO2 column data would not be saved.
@@ -77,7 +76,6 @@ p.addParameter('cloudfraccrit',-1,@isscalar)
 p.addParameter('rowanomaly','XTrackFlags',@(x) any(strcmpi(x,{'AlwaysByRow','RowsByTime','XTrackFlags','XTrackFlagsLight'}))) %Ensure that the rowanomaly value is one of the allowed 4
 p.addParameter('rows',[],@(x) (isnumeric(x) && (numel(x) == 0 || numel(x) == 2)));
 p.addParameter('sza',180,@(x) (isnumeric(x) && isscalar(x) && x >= 0))
-p.addParameter('rmserror', Inf, @(x) (isnumeric(x) && isscalar(x) && x >= 0));
 p.addParameter('makefig', true, @(x) (isscalar(x) && (isnumeric(x) || islogical(x))));
 
 p.parse(varargin{:});
@@ -237,7 +235,7 @@ for period = 1:per %Loop over each temporal period you wish to average
                 end
             end
             
-            [this_WeightedColumn, this_Weight, this_Count] = BEHR_day_no2(OMI,'mapfield', mapfield, 'cloud_prod', cloud_type, 'cloud_frac_max', cloud_frac, 'row_anomaly', parsed_vars.rowanomaly, 'rows', parsed_vars.rows, 'sza', parsed_vars.sza, 'rmserror', parsed_vars.rmserror);
+            [this_WeightedColumn, this_Weight, this_Count] = BEHR_day_no2(OMI,'mapfield', mapfield, 'cloud_prod', cloud_type, 'cloud_frac_max', cloud_frac, 'row_anomaly', parsed_vars.rowanomaly, 'rows', parsed_vars.rows, 'sza', parsed_vars.sza);
             SumWeightedColumn = SumWeightedColumn + this_WeightedColumn;
             SumWeight = SumWeight + this_Weight;
             Count = Count + this_Count;
