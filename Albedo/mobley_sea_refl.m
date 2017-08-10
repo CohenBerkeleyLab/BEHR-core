@@ -125,8 +125,14 @@ fclose(fid);
 % not actually mean anything in that case). We want to replicate the RAA =
 % 0 values to fill those nans
 
-vza_eq_0 = refl_table(1,:,1,1);
-refl_table(1,:,1,2:end) = repmat(vza_eq_0(:), 1, length(raa_dim)-1); 
+% Verified that this copies the values for RAA = 0 VZA = 0 to all values of
+% RAA for VZA = 0 properly with (let refl_table_old be refl_table before
+% the subsitution)
+%   notnans = ~isnan(refl_table_old);
+%   isequal(refl_table(notnans), refl_table_old(notnans)) % true
+%   sum(diff(refl_table(:,:,1,:),[],4),4) % all values are 0
+vza_eq_0 = refl_table(:,:,1,1);
+refl_table(:,:,1,2:end) = repmat(vza_eq_0, 1, 1, length(raa_dim)-1); 
 
 refl = struct('refl', refl_table, 'wind_speed', wind_dim, 'sza', sza_dim, 'vza', vza_dim, 'raa', raa_dim,...
     'refl_dimensions', {{'wind_speed', 'sza', 'vza', 'raa'}});

@@ -364,10 +364,7 @@ end
 
 % Define what variables should be included in gridded products. You'll need
 % to edit this is you add new gridded variables.
-gridded_vars = {'AMFTrop', 'Areaweight', 'BEHRAMFTrop','BEHRAMFTropVisOnly','BEHRColumnAmountNO2Trop',...
-    'BEHRColumnAmountNO2TropVisOnly','CloudFraction', 'CloudRadianceFraction', 'ColumnAmountNO2Trop', 'GLOBETerpres',...
-    'Latitude', 'Longitude', 'MODISAlbedo', 'MODISCloud', 'Row', 'XTrackQualityFlags',...
-    'vcdQualityFlags', 'InSituAMF', 'BEHR_R_ColumnAmountNO2Trop'};
+gridded_vars = BEHR_publishing_gridded_fields.all_gridded_vars;
 
 gg = ismember(vars,gridded_vars);
 vars = vars(gg);
