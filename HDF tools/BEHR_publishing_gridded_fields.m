@@ -5,7 +5,8 @@ classdef BEHR_publishing_gridded_fields
     properties(Constant = true)
         cvm_gridded_vars = {'AmfTrop', 'BEHRAMFTrop','BEHRAMFTropVisOnly',...
             'CloudFraction', 'CloudRadianceFraction',  'GLOBETerpres',...
-            'MODISAlbedo', 'MODISCloud', 'Row'};
+            'MODISAlbedo', 'MODISCloud', 'Row', 'XTrackQualityFlags',...
+            'VcdQualityFlags', 'BEHRQualityFlags'};
         
         psm_gridded_vars = {'BEHRColumnAmountNO2Trop',...
             'BEHRColumnAmountNO2TropVisOnly',...
@@ -13,8 +14,9 @@ classdef BEHR_publishing_gridded_fields
         
         reprocessed_gridded_vars = {'InSituAMF', 'BEHR_R_ColumnAmountNO2Trop'};
         
-        publish_only_gridded_vars = {'Latitude', 'Longitude','XTrackQualityFlags',...
-            'VcdQualityFlags','BEHRQualityFlags'};
+        flag_vars = {'XTrackQualityFlags', 'VcdQualityFlags', 'BEHRQualityFlags'};
+        
+        publish_only_gridded_vars = {'Latitude', 'Longitude'};
     end
     
     methods(Static = true)
