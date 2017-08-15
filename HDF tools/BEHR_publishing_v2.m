@@ -339,12 +339,11 @@ if reprocessed
     savename = strcat(savename,'InSitu_');
 end
 
-% Remove pixel specific variables (like AMF, VZA, etc.) if the pixel type
-% is "gridded". Also add in some variables that are only included in the
-% gridded product.
+% Remove pixel specific variables if the pixel type is "gridded". Also add
+% in weighting variables that are only included in the gridded product.
 if strcmpi('gridded', pixel_type)
     vars = remove_ungridded_variables(vars);
-    vars{end+1} = 'Areaweight';
+    vars = cat(2, vars, {'Areaweight'}, BEHR_publishing_gridded_fields.psm_weight_vars);
 end
 
 % Remove variables that cannot be put into a CSV text file because multiple
@@ -390,24 +389,13 @@ if ~iscell(vars)
     E.badinput('vars must be a cell array');
 end
 
-attr = make_empty_struct_from_cell(vars);
 
-attr_table = BEHR_publishing_attribute_table('cell');
+attr = BEHR_publishing_attribute_table('struct');
             
-fns = fieldnames(attr);
-for a=1:numel(fns)
-    xx = strcmp(fns{a}, attr_table(:,1));
-    if sum(xx) == 0;
-        E.callError('var_attr_def', sprintf('The attributes for the variable %s are not defined in the attr_table',fns{a}));
-    elseif sum(xx) > 1
-        E.callError('var_attr_def', sprintf('The attributes for the variable %s are defined more than once in the attr_table',fns{a}));
-    end
-    
-    attr.(fns{a}).Unit = attr_table{xx,2};
-    attr.(fns{a}).Range = attr_table{xx,3};
-    attr.(fns{a}).Fill = attr_table{xx,4};
-    attr.(fns{a}).Product = attr_table{xx,5};
-    attr.(fns{a}).Description = attr_table{xx,6};
+
+xx = ~isfield(attr, vars);
+if any(xx)
+    E.callError('var_attr_def', sprintf('The attributes for the variables %s are not defined in the attr_table', strjoin(vars(xx), ', ')));
 end
 
 end
@@ -459,7 +447,7 @@ for d=1:numel(Data_in)
         % is set for any pixel used in that grid cell it carries through.
         if ~iscell(save_data)
             nans = isnan(save_data);
-            save_data(nans) = attr.(vars{v}).Fill;
+            save_data(nans) = attr.(vars{v}).fillvalue;
         else
             save_data_cell = save_data;
             save_data = uint16(zeros(sz));
@@ -482,7 +470,7 @@ for d=1:numel(Data_in)
             save_data = single(save_data);
         end
         % Ensure that the fill value is of the same type as the data
-        fill_val = cast(attr.(vars{v}).Fill, 'like', save_data);
+        fill_val = cast(attr.(vars{v}).fillvalue, 'like', save_data);
         
         % Create the dataset, then write it and add the attributes
         h5create(hdf_fullfilename, var_name, sz, 'Datatype', class(save_data), 'FillValue', fill_val);
@@ -490,12 +478,42 @@ for d=1:numel(Data_in)
         
         atts = fieldnames(attr.(vars{v}));
         for a=1:numel(atts);
-            if strcmp(atts{a},'Fill')
+            if strcmp(atts{a},'fillvalue')
                 continue % We've already handled the fill value with h5create
             end
             h5writeatt(hdf_fullfilename, var_name, atts{a}, attr.(vars{v}).(atts{a}));
         end
         
+        % If doing gridded data, there's another attribute to set, which is
+        % whether the value was gridded with PSM, CVM, neither, or is a
+        % weight field.
+        if strcmpi(pixel_type, 'gridded')
+            grid_type_attr = 'gridding_method';
+            if ~isempty(regexpi(vars{v}, 'weight'))
+                grid_type = 'weight';
+            elseif ismember(vars{v}, BEHR_publishing_gridded_fields.psm_gridded_vars) || ismember(vars{v}, BEHR_publishing_gridded_fields.reprocessed_psm_vars)
+                grid_type = 'parabolic spline method';
+            elseif ismember(vars{v}, BEHR_publishing_gridded_fields.cvm_gridded_vars) || ismember(vars{v}, BEHR_publishing_gridded_fields.reprocessed_cvm_vars)
+                grid_type = 'constant value method';
+            elseif ismember(vars{v}, BEHR_publishing_gridded_fields.flag_vars)
+                grid_type = 'flag, bitwise OR';
+            elseif ismember(vars{v}, BEHR_publishing_gridded_fields.publish_only_gridded_vars)
+                grid_type = 'grid property';
+            else
+                grid_type = 'undefined';
+            end
+            h5writeatt(hdf_fullfilename, var_name, grid_type_attr, grid_type);
+        end
+        
+        % If this is the BEHRQualityFlags field, add the bit meanings to
+        % the attributes. We need to give behr_quality_flags input that it
+        % can treat as if it were getting actual data in order to create
+        % the flags definition cell array.
+        if strcmpi(vars{v}, 'BEHRQualityFlags')
+            [~,flags_definition] = behr_quality_flags(0,0,0,0,false);
+            flags_definition = flags_definition(~iscellcontents(flags_definition, 'isempty'));
+            h5writeatt(hdf_fullfilename, var_name, 'FlagMeanings', strjoin(flags_definition, ', '));
+        end
     end
     
     % Write an attribute to the swath group describing if it is gridded or
@@ -582,55 +600,55 @@ for s=1:numel(Data_in)
                 case 'Loncorn1'
                     v = Data_in(s).Loncorn(1,p);
                     if isnan(v)
-                        v = attr.Loncorn.Fill;
+                        v = attr.Loncorn.fillvalue;
                     end
                     fprintf(fid,format_spec{a},v);
                 case 'Loncorn2'
                     v = Data_in(s).Loncorn(2,p);
                     if isnan(v)
-                        v = attr.Loncorn.Fill;
+                        v = attr.Loncorn.fillvalue;
                     end
                     fprintf(fid,format_spec{a},v);
                 case 'Loncorn3'
                     v = Data_in(s).Loncorn(3,p);
                     if isnan(v)
-                        v = attr.Loncorn.Fill;
+                        v = attr.Loncorn.fillvalue;
                     end
                     fprintf(fid,format_spec{a},v);
                 case 'Loncorn4'
                     v = Data_in(s).Loncorn(4,p);
                     if isnan(v)
-                        v = attr.Loncorn.Fill;
+                        v = attr.Loncorn.fillvalue;
                     end
                     fprintf(fid,format_spec{a},v);
                 case 'Latcorn1'
                     v = Data_in(s).Latcorn(1,p);
                     if isnan(v)
-                        v = attr.Latcorn.Fill;
+                        v = attr.Latcorn.fillvalue;
                     end
                     fprintf(fid,format_spec{a},v);
                 case 'Latcorn2'
                     v = Data_in(s).Latcorn(2,p);
                     if isnan(v)
-                        v = attr.Latcorn.Fill;
+                        v = attr.Latcorn.fillvalue;
                     end
                     fprintf(fid,format_spec{a},v);
                 case 'Latcorn3'
                     v = Data_in(s).Latcorn(3,p);
                     if isnan(v)
-                        v = attr.Latcorn.Fill;
+                        v = attr.Latcorn.fillvalue;
                     end
                     fprintf(fid,format_spec{a},v);
                 case 'Latcorn4'
                     v = Data_in(s).Latcorn(4,p);
                     if isnan(v)
-                        v = attr.Latcorn.Fill;
+                        v = attr.Latcorn.fillvalue;
                     end
                     fprintf(fid,format_spec{a},v);
                 otherwise
                     v = Data_in(s).(header_cell{a})(p);
                     if isnan(v)
-                        v = attr.(header_cell{a}).Fill;
+                        v = attr.(header_cell{a}).fillvalue;
                     end
                     fprintf(fid,format_spec{a},v);
             end

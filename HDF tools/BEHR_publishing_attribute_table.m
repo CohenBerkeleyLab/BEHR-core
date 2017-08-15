@@ -76,6 +76,12 @@ attr_table = {  'AmfStrat', 'unitless', [0, Inf], longfill, 'SP', 'Stratospheric
                 'BEHRNO2apriori', 'parts-per-part', [-Inf, Inf], behrfill, 'BEHR', 'NO2 a priori profile used for each pixel. Pressure levels given in BEHRPressureLevels.';...
                 };
             
+attr_table = add_psm_weight_fields(attr_table);
+            
+if numel(unique(attr_table(:,1))) < size(attr_table, 1)
+    E.callError('attr_def', 'One or more attributes is multiply defined in the attributes table');
+end
+            
 if strcmpi(format, 'struct')
     fields = {'unit', 'range', 'fillvalue', 'product', 'description'};
     S = struct;
@@ -85,5 +91,18 @@ if strcmpi(format, 'struct')
     attr_table = S;
 end
 
+%%%%%%%%%%%%%%%%%%%%
+% NESTED FUNCTIONS %
+%%%%%%%%%%%%%%%%%%%%
+    function attr_table = add_psm_weight_fields(attr_table)
+        weights_vars = BEHR_publishing_gridded_fields.psm_weight_vars;
+        table_lines = cell(numel(weights_vars), size(attr_table, 2));
+        for i=1:numel(weights_vars)
+            table_lines(i,:) = [weights_vars(i), {'unitless', [0, Inf], behrfill, 'BEHR', sprintf('Weight field for the %s field', BEHR_publishing_gridded_fields.all_psm_vars{i})}];
+        end
+        attr_table = cat(1, attr_table, table_lines);
+    end
+
 end
+
 

@@ -1,4 +1,4 @@
-function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_mode, rows, szalim )
+function [ omi ] = omi_pixel_reject( omi, reject_mode, reject_details )
 %omi_pixel_reject: Set areaweight to 0 for any pixels that will adversely
 %affect the accuracy of the BEHR NO2 map.
 %   There are a number of criteria that need to be evaluated for an OMI
@@ -29,7 +29,6 @@ function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_
 %           which are 0 to 59.
 %
 %   The rejection criteria are:
-%       Column amount < 0: Likely a fill value or unphysical result.
 %       VCD Quality Flag is not a even number: the VCD quality flag is a
 %          bit array, with the least significant bit as a summary.  If this
 %          bit is 1, then some error occured during the NASA retrieval and
@@ -44,60 +43,92 @@ function [ omi ] = omi_pixel_reject( omi_in, cloud_type, cloud_frac, rowanomaly_
 %       Row anomaly: see http://www.knmi.nl/omi/research/product/rowanomaly-background.php
 
 E = JLLErrors;
+
+allowed_reject_modes = {'none', 'behr', 'detailed'};
+if ~ischar(reject_mode) || ~ismember(reject_mode, allowed_reject_modes)
+    E.badinput('REJECT_MODE must be one of the strings %s', strjoin(allowed_reject_modes, ', '))
+end
+
+cld_fields = struct('omi', 'CloudFraction', 'modis', 'MODISCloud', 'rad', 'CloudRadianceFraction');
+allowed_row_modes = {'AlwaysByRow', 'RowsByTime', 'XTrackFlags', 'XTrackFlagsLight'};
+if strcmp(reject_mode, 'detailed')
+    req_details_fields = {'cloud_type', 'cloud_frac', 'row_anom_mode'};
+    if any(~ismember(req_details_fields, fieldnames(reject_details)))
+        E.badinput('The REJECT_DETAILS struct must have the following fields for REJECT_MODE == "%s": %s', reject_mode, strjoin(req_details_fields, ', '));
+    end
+    
+    req_details = {'cloud_type', 'cloud_frac', 'row_anom_mode', 'check_behr_amf', true};
+    if ~exist('reject_details', 'var') || ~isstruct(reject_details) || any(~isfield(reject_details, req_details))
+        E.badinput('If REJECT_MODE == ''detailed'', the third input must be a structure with fields %s', strjoin(req_details, ', '));
+    elseif ~ismember(reject_details.cloud_type, fieldnames(cld_fields))
+        E.badinput('The "cloud_type" field of the REJECT_DETAIL struct must be one of the strings %s', strjoin(fieldnames(cld_fields)));
+    elseif ~isnumeric(reject_details.cloud_frac) || ~isscalar(reject_details.cloud_frac)
+        E.badinput('The "cloud_frac" field of the REJECT_DETAIL struct must be a scalar number');
+    elseif ~ismember(reject_details.row_anom_mode, allowed_row_modes)
+        E.badinput('The "row_anom_mode" field of the REJECT_DETAIL struct must be one of the strings: %s', strjoin(allowed_row_modes, ', '));
+    end
+end
+
+
+
+switch reject_mode
+    case 'none'
+        req_fields = {};
+    case 'behr'
+        req_fields = {'Areaweight', 'BEHRQualityFlags'};
+    case 'detailed'
+        req_fields = {'Areaweight', 'XTrackQualityFlags', 'VcdQualityFlags', cld_fields.(reject_details.cloud_type)};
+    otherwise
+        E.notimplemented('Required fields not defined for REJECT_MODE == ''%s''', reject_mode);
+end
+
+if ~isstruct(omi) || ~isscalar(omi) || (numel(req_fields) > 0 && any(~isfield(omi, req_fields)))
+    E.badinput('OMI must be a scalar structure with the fields %s', strjoin(req_fields, ', '))
+end
+
+%%%%%%%%%%%%%%%%%
+% MAIN FUNCTION %
+%%%%%%%%%%%%%%%%%
+
+if strcmpi(reject_mode, 'none')
+    % do nothing. this allow us to average fields that should not have any
+    % bad values, or at least their bad values are unrelated to what
+    % generates bad values in the VCD.
+elseif strcmpi(reject_mode, 'behr')
+    omi.Areaweight = reject_by_behr_flags(omi.BEHRQualityFlags, omi.Areaweight);
+elseif strcmpi(reject_mode, 'detailed')
+    omi.Areaweight = reject_by_details(reject_details, omi.(sel_cloud_field), omi.VcdQualityFlags, omi.XTrackQualityFlags, omi.BEHRAMFTrop, omi.Row, omi.Areaweight);
+end
+
+end
+
+function areaweight = reject_by_behr_flags(behr_flags, areaweight)
+areaweight(behr_flags>0) = 0;
+end
+
+function areaweight = reject_by_details(details, cloud_frac, vcd_flags, xtrack_flags, behr_amf, rows, areaweight)
 omi = omi_in;
-if ~exist('rows','var')
-    rows = [];
+if ~isfield(details, 'rows')
+    details.rows = [];
 end
-if ~exist('szalim', 'var')
-    szalim = 180;
-end
-
-%omi.Areaweight(omi.BEHRColumnAmountNO2Trop<=0) = 0; %Do not average in negative tropospheric column densities
-fns = fieldnames(omi);
-vcdq_field = fns{strcmpi('vcdqualityflags',fns)}; % I changed the capitalization in v3.0. It matches NASA now, but makes this function a bit annoying
-if iscell(omi.(vcdq_field)) % The flags may be a cell array or not, depending on whether this is for Data or OMI (gridded) structure
-    for a=1:numel(omi.(vcdq_field));
-        if any(mod([omi.(vcdq_field){a}],2)~=0)
-            omi.Areaweight(a) = 0; %If any of the vcdQualityFlags value is not even (least significant bit ~= 0), do not include this element
-        end
-    end
-else
-    omi.Areaweight(mod(omi.(vcdq_field),2)~=0) = 0;
+if ~isfield(details, 'szalim')
+    % not currently implemented since I didn't grid SZA 
+    details.szalim = 180;
 end
 
-if strcmpi(cloud_type,'rad'); %Do not include the element if the cloud fraction is greater than the allowable criteria
-    omi.Areaweight(omi.CloudRadianceFraction > cloud_frac) = 0;
-    omi.Areaweight(isnan(omi.CloudRadianceFraction)) = 0; % Reject pixels with NaN for cloud fraction
-    omi.Areaweight(omi.CloudRadianceFraction < 0) = 0; % Reject pixels with fill values for cloud fraction
-elseif strcmpi(cloud_type,'modis'); 
-    if any(omi.MODISCloud == -127)
-        E.callError('no_MODIS_Cloud','There is no MODIS cloud data for this file');
-    end
-    omi.Areaweight(omi.MODISCloud > cloud_frac) = 0;
-    omi.Areaweight(isnan(omi.MODISCloud)) = 0; % Reject pixels with NaN for cloud fraction
-    omi.Areaweight(omi.MODISCloud < 0) = 0;  % Reject pixels with fill values for cloud fraction
-else
-    omi.Areaweight(omi.CloudFraction > cloud_frac) = 0;
-    omi.Areaweight(isnan(omi.CloudFraction)) = 0; % Reject pixels with NaN for cloud fraction
-    omi.Areaweight(omi.CloudFraction < 0) = 0; % Reject pixels with fill values for cloud fraction
-end 
+areaweight(mod(vcd_flags,2) ~= 0) = 0;
+areaweight(cloud_frac > details.cloud_frac) = 0;
+areaweight(omi_rowanomaly(xtrack_flags, rows, details.row_anom_mode)) = 0;
 
-%omi.Areaweight(omi.BEHRColumnAmountNO2Trop > 1E17) = 0; %Do not include the element if the NO2 column is too great.  These are known to be affected by the row anomaly (Bucsela 2013, Atmos. Meas. Tech. 2607)
-hh=find(isnan(omi.BEHRColumnAmountNO2Trop)); omi.BEHRColumnAmountNO2Trop(hh)=0; omi.Areaweight(hh)=0; %Set any column NaNs to 0 and do not include them in the average
-
-xx = omi_rowanomaly(omi,rowanomaly_mode); %Remove elements affected by the row anomaly.
-omi.Areaweight(xx) = 0;
-
-% Remove elements by row, if the user specifies a row range.
-if ~isempty(rows)
-    rr = omi.Row < min(rows) | omi.Row > max(rows);
-    omi.Areaweight(rr) = 0;
+if details.check_behr_amf
+    areaweight( isnan(behr_amf) || behr_amf <= behr_min_amf_val ) = 0;
 end
 
-% Remove elements with a solar zenith angle greater than specified by the input.
-% Mainly for comparison with the PSA gridding algorithm used by Mark Wenig
-ss = omi.SolarZenithAngle > szalim;
-omi.Areaweight(ss) = 0;
+if ~isempty(details.rows)
+    areaweight( rows < min(details.rows) | rows > max(details.rows) ) = 0;
+end
+
+%areaweight( sza > details.szalim ) = 0;
 
 end
 

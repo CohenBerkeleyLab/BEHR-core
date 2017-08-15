@@ -229,6 +229,10 @@ for j=1:length(datenums)
     S=load(fullfile(sp_mat_dir,sp_mat_name));
     Data=S.Data;
     
+    %%%%%%%%%%%%%%%%%%%%%%
+    % CALCULATE OUR AMFS %
+    %%%%%%%%%%%%%%%%%%%%%%
+    
     for d=1:length(Data);
         % Data is initialized in read_omno2_v_aug2012 with a single 0
         % in the Longitude field.  Since points outside the lat/lons of
@@ -304,6 +308,10 @@ for j=1:length(datenums)
             Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag); % the false value for the MODIS flags is only temporary until I get the ocean model in.
     end
     
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % CALCULATE VCDS FROM NASA SCDS AND OUR AMFS %
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
     b=length(Data);
     for z=1:b;
         if ~isfield(Data,'BEHRAMFTrop') || isempty(Data(z).BEHRAMFTrop)
@@ -321,61 +329,15 @@ for j=1:length(datenums)
     end
     
     
-    addpath('/Users/Josh/Documents/MATLAB/BEHR/Utils/m_map'); %JLL 18 Mar 2014: Adds the path to the m_map toolkit, needed for hdf_quadrangle_5km_new
+    %%%%%%%%%%%%%%%%%
+    % GRIDDING DATA %
+    %%%%%%%%%%%%%%%%%
     
-    %*********************************%
-    %JLL 19 Mar 2014: These will be used to define the quadrangles -
-    %the quads will be smaller than the OMI pixel, and multiple quads
-    %will take on the value for the same (closest) OMI pixel.  By
-    %keeping the quads' centers the same over all retrievals you wish
-    %to average, this will allow easier averaging over multiple OMI
-    %swaths. This is a form of oversampling.
-    %*********************************%
-    lonmin = -125;  lonmax = -65;
-    latmin = 25;   latmax = 50;
-    resolution = 0.05; resolution2 = 0.05;
-    %*********************************%
-    %
-    if lonmin > lonmax %Just in case I enter something backwards...
-        error(E.badinput('Lonmin is greater than lonmax'))
-    elseif latmin > latmax
-        error(E.badinput('Latmin is greater than latmax'))
-    end
+    OMI = psm_wrapper(Data, Data(1).Grid, DEBUG_LEVEL);
     
-    %*********************************%
-    %JLL 19 Mar 2014: Save all relevant values produced by add2grid to
-    %a new structure called 'OMI'
-    %*********************************%
-    
-    if DEBUG_LEVEL > 0; disp('  Preparing OMI structure'); end
-    s=numel(Data);
-    
-    % Prepare the OMI data structure which will receive the gridded
-    % data - this will be passed to the gridding functions to keep the
-    % field names in the right order.
-    OMI=struct('Date','','Longitude', [], 'Latitude', [], 'Time', [], 'ViewingZenithAngle', [], 'SolarZenithAngle', [], 'ViewingAzimuthAngle', [], 'SolarAzimuthAngle', [],...
-        'RelativeAzimuthAngle', [], 'AmfStrat', [], 'AmfTrop',[], 'CloudFraction', [], 'CloudRadianceFraction', [], 'CloudPressure', [], 'ColumnAmountNO2', [],...
-        'SlantColumnAmountNO2', [], 'ColumnAmountNO2Trop', [], 'ColumnAmountNO2TropStd',[],'ColumnAmountNO2Strat',[],'TerrainHeight', [], 'TerrainPressure', [], 'TerrainReflectivity', [], 'VcdQualityFlags',{{}},...
-        'MODISCloud', [], 'MODISAlbedo', [], 'GLOBETerpres', [], 'XTrackQualityFlags', {{}}, 'Row', [], 'Swath', [], 'TropopausePressure', [], 'BEHRColumnAmountNO2Trop',[],...
-        'BEHRAMFTrop', [], 'BEHRColumnAmountNO2TropVisOnly', [], 'BEHRAMFTropVisOnly', [], 'Count', [], 'Area', [], 'Areaweight', [], 'MapData', struct);
-    % Matlab treats structures as matrices, so we can duplicate our
-    % structure to have the required number of entries just like a
-    % matrix.
-    OMI = repmat(OMI,1,s);
-    hh=0;
-    for d=1:s;
-        if Data(d).ViewingZenithAngle==0;
-        elseif numel(Data(d).ViewingZenithAngle)==1;
-            continue
-        else
-            if DEBUG_LEVEL > 1; fprintf('   Gridding data for swath %u\n',d); end
-            hh=hh+1;
-            OMI(hh) = add2grid_BEHR(Data(d),OMI(hh),resolution,resolution2,[lonmin, lonmax],[latmin, latmax]); %JLL 20 Mar 2014: Superimpose data to a grid determined by lat & lon min/max and resolution above. Default resolution is 0.05 degree
-        end
-    end
-    
-    % Clean up any unused elements in OMI
-    OMI(hh+1:end) = [];
+    %%%%%%%%%%%%%
+    % SAVE FILE %
+    %%%%%%%%%%%%%
     
     savename = behr_filename(datenums(j));
     if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
