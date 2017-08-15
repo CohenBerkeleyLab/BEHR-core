@@ -244,6 +244,10 @@ glatlim = [latmin - 10, latmax + 10];
 [globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(glonlim, glatlim);
 globe_elevations(isnan(globe_elevations)) = 0;
 
+%Load the GOME-2 LER which we'll need to adjust ocean reflectances from 550
+%to ~430 nm.
+[gome_ratio, gome_lon, gome_lat] = read_gome2_ler(behr_paths.gome2ler_file, [lonmin, lonmax], [latmin, latmax]); 
+
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the
 %active directory, as MATLAB seems to run slightly slower if the current
@@ -398,6 +402,8 @@ for j=1:length(datenums)
         % Add MODIS albedo info to the files
         if DEBUG_LEVEL>0; fprintf('\n Adding MODIS albedo information \n'); end
         this_data = read_modis_albedo(modis_mcd43_dir, this_dnum, this_data, 'DEBUG_LEVEL', DEBUG_LEVEL);
+        
+        this_data = correct_sea_reflectance(this_data, this_month, gome_ratio, gome_lon, gome_lat);
         
         % Add GLOBE terrain pressure to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
