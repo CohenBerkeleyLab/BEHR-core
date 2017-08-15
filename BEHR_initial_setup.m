@@ -31,7 +31,10 @@ make_paths_file();
         % fine. A generic comment will be inserted and a blank path will be
         % inserted. Including the subfield "no_quote" at all will cause it
         % not to automatically quote the default path, which is useful if
-        % you need to allow for multiple paths in a cell array.
+        % you need to allow for multiple paths in a cell array. Including
+        % the the field "isfile" (whatever value is set to it) will cause
+        % behr_paths.ValidatePaths() to check if a file exists at that
+        % path, rather than a directory.
         
         sat_file_server = '128.32.208.13';
         wrf_file_server = 'cohenwrfnas.dyn.berkeley.edu';
@@ -77,6 +80,9 @@ make_paths_file();
         paths.myd06_dir.default = fullfile(sat_folder, 'SAT', 'MODIS', 'MYD06_L2');
         paths.mcd43c1_dir.comment = sprintf('The MCD43C1 directory on the file server at %s. It should contain folders for each year with MCD43C1 files in them. The file server should be mounted on your computer.',sat_file_server);
         paths.mcd43c1_dir.default = fullfile(sat_folder, 'SAT', 'MODIS', 'MCD43C1');
+        paths.gome2ler_file.comment = sprintf('The GOME-2A LER file on the file server at %s. It has surface reflectances over 21 wavelengths for all 12 months globally.', sat_file_server);
+        paths.gome2ler_file.default = fullfile(sat_folder, 'SAT', 'GOME-2', 'GOME-2_MetOp-A_MSC_025x025_surface_LER_v2.1.hdf5');
+        paths.gome2ler_file.is_file = true;
         paths.globe_dir.comment = sprintf('The GLOBE database directory on the file server at %s. It should contain files a10g through p10g and their .hdr files. The file server should be mounted on your computer.',sat_file_server);
         paths.globe_dir.default = fullfile(sat_folder, 'SAT', 'BEHR','GLOBE_Database');
 
@@ -105,6 +111,8 @@ make_paths_file();
             tline = strrep(tline, template_classname, paths_classname);
             if strcmp(strtrim(tline), '%#PATHS')
                 write_paths(paths, fid_new);
+            elseif strcmp(strtrim(tline), '%#ISFILE')
+                write_is_file_struct(paths, fid_new);
             else
                 fprintf(fid_new, '%s\n', tline);
             end
@@ -164,4 +172,27 @@ for a=1:numel(fns)
         fprintf(fid, '\t\t%s = ''%s'';\n\n', fns{a}, this_default);
     end
 end
+end
+
+function write_is_file_struct(paths, fid)
+is_file = struct;
+fns = fieldnames(paths);
+for a=1:numel(fns)
+    if ~isfield(paths.(fns{a}), 'is_file')
+        is_file.(fns{a}) = 'false';
+    else
+        is_file.(fns{a}) = 'true';
+    end
+end
+
+fprintf(fid,'\t\tis_field_file = struct(');
+for a=1:numel(fns)
+    if a < numel(fns)
+        fprintf(fid,'''%s'', %s,...\n\t\t\t', fns{a}, is_file.(fns{a}));
+    else
+        fprintf(fid,'''%s'', %s);\n', fns{a}, is_file.(fns{a}));
+    end
+end
+
+
 end

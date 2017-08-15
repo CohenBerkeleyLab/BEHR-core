@@ -33,19 +33,28 @@ classdef behr_paths_template
         %#PATHS
     end
     
+    properties(Constant=true, Access=private)
+        %#ISFILE
+    end
+    
     methods(Static=true)
         function success = ValidatePaths()
             fns = fieldnames(behr_paths);
             success = true;
             for a=1:numel(fns)
+                if behr_paths.is_field_file.(fns{a})
+                    test_type = 'file';
+                else
+                    test_type = 'dir';
+                end
                 if ~iscell(behr_paths.(fns{a}))
-                    if ~exist(behr_paths.(fns{a}), 'dir')
+                    if ~exist(behr_paths.(fns{a}), test_type)
                         fprintf('%s is not a valid path\n', fns{a});
                         success = false;
                     end
                 else
                     for b=1:numel(behr_paths.(fns{a}))
-                        if ~exist(behr_paths.(fns{a}){b}, 'dir')
+                        if ~exist(behr_paths.(fns{a}){b}, test_type)
                             fprintf('%s{%d} is not a valid path\n', fns{a}, b);
                             success = false;
                         end
