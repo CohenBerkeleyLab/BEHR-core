@@ -263,9 +263,13 @@ end
 
 onCluster_local = onCluster;
 
-datenums = datenum(date_start):datenum(date_end);
+% Setup some values that either need to be computed to determine the loop
+% indices or which are better calculated outside the loop.
 
+datenums = datenum(date_start):datenum(date_end);
 githead = git_head_hash(behr_repo_dir);
+behr_grid = GlobeGrid(0.05, 'domain', [lonmin, lonmax, latmin, latmax]);
+
 
 %parfor(j=1:length(datenums), n_workers)
 for j=1:length(datenums)
@@ -309,7 +313,7 @@ for j=1:length(datenums)
     % Variables that will be added by BEHR. These will need manual
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
-    behr_variables = {'Date', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
+    behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
         'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres',...
         'IsZoomModeSwath', 'AlbedoOceanFlag', 'GitHead_Read'};
     
@@ -406,6 +410,7 @@ for j=1:length(datenums)
         this_data.LonBdy = [lonmin, lonmax];
         this_data.LatBdy = [latmin, latmax];
         this_data.GitHead_Read = githead;
+        this_data.Grid = behr_grid;
         
         data_ind = data_ind + 1;
         Data(data_ind) = this_data;
