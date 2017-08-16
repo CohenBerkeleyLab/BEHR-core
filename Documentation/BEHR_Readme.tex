@@ -14,7 +14,11 @@
 \usepackage{tabu}
 \usepackage{longtable}
 
-\usepackage{hyperref}
+\usepackage[colorlinks,
+			linkcolor={red!50!black},
+			citecolor={blue!50!black},
+    			urlcolor={blue!80!black}]
+    			{hyperref}
 \usepackage{listings}
 \lstset{basicstyle=\ttfamily}
 
@@ -31,10 +35,11 @@
 %%%%%% TIKZ FLOWCHARTS %%%%%
 % Definitions for tikz flowcharts (https://www.sharelatex.com/blog/2013/08/29/tikz-series-pt3.html)
 % Use the environment \begin{tikzpicture}[node distance=2cm]
-\tikzstyle{startstop} = [rectangle, rounded corners, minimum width=1cm, minimum height=.3cm,text centered, draw=black, fill=red!30, align=center, font=\tiny]
+\tikzstyle{startstop} = [rectangle, rounded corners, minimum width=1cm, minimum height=.3cm,text centered, draw=black, fill=red!30, align=center, font=\small]
 \tikzstyle{io} = [trapezium, trapezium left angle=70, trapezium right angle=110, minimum width=1cm, minimum height=.3cm, text centered, draw=black, fill=blue!30, align=center, font=\tiny]
 \tikzstyle{process} = [rectangle, minimum width=1cm, minimum height=.3cm, text centered, draw=black, fill=orange!30, align=center, font=\tiny]
 \tikzstyle{subprocess} = [rectangle, rounded corners, minimum width=1cm, minimum height=.3cm, text centered, draw=black, fill=yellow!30, align=center, font=\tiny]
+\tikzstyle{extprocess} = [rectangle, rounded corners, minimum width=1cm, minimum height=.3cm, text centered, draw=black, fill=green!30, align=center, font=\tiny]
 \tikzstyle{decision} = [diamond, minimum width=1cm, minimum height=.3cm, text centered, draw=black, fill=green!30, align=center, font=\tiny]
 \tikzstyle{spacer} = [rectangle, minimum width=0cm, minimum height=0cm, draw=none, fill=none]
 \tikzstyle{line} = [thick]
@@ -67,18 +72,20 @@
 	\end{enumerate}
 	
 	This document will describe the current state of BEHR, including its file structure and a changelog.  As of this writing, the code is maintained in a Git repository on my machine.  I will try to keep the main matter of this document up-to-date; however, if there is a discrepancy between the changelog and the main matter, defer to the changelog.
-	
-\tableofcontents
 
-\section{Authors}
+{\hypersetup{linkcolor=black}
+\tableofcontents
+}
+
+\section{Authors}\label{sec:authors}
 
 	BEHR was initiated by Ashley Russell, who completed her Ph. D. in 2012.  She showed that using high-resolution albedo and terrain data improved the OMI NASA Standard Product retrieval (see her papers in the Literature section below).  Check the group website for her current contact information.
 	
 	Luke Valin also completed his Ph. D. in 2012; he helped Ashley run the WRF-Chem simulations needed to get the high-resolution \ce{NO2} profiles.
 	
-	Josh Laughner took over development in 2013.
+	\textbf{Josh Laughner (\href{mailto:joshlaugh5@gmail.com}{joshlaugh5@gmail.com})} took over development in 2013.  He upgraded the surface reflectance from the MODIS black sky albedo to the MODIS BRDF product and instituted daily \emph{a priori} profiles for as many years as possible. The monthly profiles were also recomputed including lightning \ce{NO2} and a more advanced chemical mechanism.
 	
-	If you contribute to the development of BEHR, add your name and contribution to this list and update the change log.
+	If you contribute to the development of BEHR, add your name and contribution to this list and update the change log. The \textbf{bold} name is the most recent contact if you need help getting things up and running.
 
 \section{Literature}
 
@@ -102,58 +109,91 @@
 	You'll want to make sure you have the following software or utilities installed:
 
 	\begin{itemize}
-		\item \textbf{All platforms:}
+	\item \textbf{All platforms:}
 		\begin{itemize}
-			\item MATLAB
-			\item Git version control system
-			\item Python (optional but recommended)
+		\item MATLAB
+		\item Git version control system
+		\item Python (optional but recommended)
 		\end{itemize}
 		
-		\item \textbf{Windows:}
+	\item \textbf{Windows:}
 		\begin{itemize}
-			\item An SSH client like puTTy
-			\item Cygwin - a bash shell for Windows. Includes capability to make SSH connections.
-			\item wget - a method for retrieving remote files, install by selecting it as a package during Cygwin setup
+		\item An SSH client like puTTy
+		\item Cygwin - a bash shell for Windows. Includes capability to make SSH connections.
+		\item wget - a method for retrieving remote files, install by selecting it as a package during Cygwin setup
 		\end{itemize}
 		
-		\item \textbf{Mac:}
+	\item \textbf{Mac:}
 		\begin{itemize}
-			\item Find the ``Terminal'' app, this is where you can SSH from and use commands like \texttt{wget}
+		\item Find the ``Terminal'' app, this is where you can SSH from and use commands like \texttt{wget}
 		\end{itemize}
 		
-		\item \textbf{Other:}
+	\item \textbf{Other:}
 		\begin{itemize}
-			\item Get an account on the computing cluster. Currently this is the Savio cluster (\url{http://research-it.berkeley.edu/services/high-performance-computing/}). Generally the process consists of emailing the cluster support and having Ron approve your request.
+		\item Get an account on the computing cluster. Currently this is the Savio cluster (\url{http://research-it.berkeley.edu/services/high-performance-computing/}). As of 31 Jul 2017, this requires filling out the ``Additional User Account Request/Modification Form'' at \url{http://research-it.berkeley.edu/services/high-performance-computing/getting-account}. Ron will need to approve it.
+			
+		\item Get access to the group file servers at \url{128.32.208.13} and \url{cohenwrfnas.dyn.berkeley.edu}. Ask other group members for the credentials, or reach out to the contact listed in \S\ref{sec:authors}.
+		
+		\item Get access to the satellite download computer at \url{128.32.208.11}. You'll likely need to reach out to the contact person in \S\ref{sec:authors} to get access, as it is only accessible by SSH using an SSH key (no password) and not something that the group at large has access to.
 		\end{itemize}
 	\end{itemize}
 	
-	MATLAB is used to run BEHR itself. Python is another language that some utilities for BEHR are written in currently. None are essential. Bash is a shell---basically a text based OS interface---that Unix based systems use. It's the easiest way to download large amounts of satellite data with the command line utility \texttt{wget}, and is used in much of the BEHR automation and in the development branch. SSH is a secure protocol that allows remote, command-line access to machines set up to accept SSH connection (this includes the file server, Savio cluster, and satellite download computer).
+	MATLAB is used to run BEHR itself. Python is another language that the PSM gridding code and some utilities for BEHR are written in currently. Bash is a shell---basically a text based OS interface---that Unix based systems use. It's the easiest way to download large amounts of satellite data with the command line utility \texttt{wget}, and is used in much of the BEHR automation and is necessary to work on the cluster. SSH is a secure protocol that allows remote, command-line access to machines set up to accept SSH connection (this includes the file server, Savio cluster, and satellite download computer).
 	
-	Some resources if you are new to any of these languages:
-	\begin{itemize}
-		\item MATLAB:
-		\item Git:
-		\item Python:
-		\item Bash:
-		\item SSH:
-	\end{itemize}
+	%Some resources if you are new to any of these languages:
+	%\begin{itemize}
+	%	\item MATLAB:
+	%	\item Git:
+	%	\item Python:
+	%	\item Bash:
+	%	\item SSH:
+	%\end{itemize}
 	
 	\subsection{Quickstart}
 	\begin{enumerate}
-	\item Clone the \lstinline$BEHR_GitRepo$, \lstinline$MiscUtils$, and \lstinline$BEHR_MatlabClasses_GitRepo$ repositories (Table \ref{GitReposTable}, pg. \pageref{GitReposTable}) and add them to your Matlab path.
+	\item Clone the \lstinline$BEHR_GitRepo$, \lstinline$MiscUtils$, and \lstinline$BEHR_MatlabClasses_GitRepo$, and \lstinline$Matlab-Python Interface$ repositories (Table \ref{GitReposTable}, pg. \pageref{GitReposTable}) and add them to your Matlab path.
+	\item In the PSM directory, build the \lstinline$omi$ package. In the \path{omi} subdirectory containing the \path{setup.py} file, run the command \lstinline$python setup.py install --user$.
 	\item Mount the \path{share-sat} share on the Synology NAS at 128.32.208.13 (you'll need the login credentials from another group member).
-	\item Run \lstinline$BEHR_path_setup.m$ under \path{BEHR/Utils/BEHR_path_setup.m} to create the function \lstinline$BEHR_paths.m$ that will point to various directories on your computer and the file server that BEHR needs.
+	\item Run \lstinline$BEHR_initial_setup.m$ under in the root directory of the BEHR repo to create the file \lstinline$behr_paths.m$ that will point to various directories on your computer and the file server that BEHR needs. Check that all the paths listed in \lstinline$behr_paths.m$ are correct. You can validate them by running \lstinline$behr_paths.ValidatePaths()$ in Matlab, it should return \lstinline$1$ (\lstinline$0$ means at least one path is invalid). 
 	\item Try running \lstinline$read_omnno2_v_aug2012.m$ for one or two days. Make sure it saves to some temporary directory and \emph{not} the main \path{OMI_SP} directory on the file server.
 	\item Do the same for \lstinline$BEHR_main.m$, also saving to a temporary folder.
+	\item Do the same for \lstinline$BEHR_publishing_v2.m$, also saving to a temporary folder.
 	\end{enumerate}
 
 \section{Retrieving NASA data}
 	\subsection{Group server file locations}\label{sec:file-server}
-		A shared file server has been dedicated to storing satellite data locally. It is located at the IP address 128.32.208.13. To connect to this server, your computer will need to have a UC Berkeley IP address.  Connecting through an ethernet wall port is the recommended method, but you can also access it by connecting to the RC-Lab wifi network or from anywhere as long as you are connected to the Berkeley VPN.  
+		A shared file server has been dedicated to storing satellite data locally. It is located at the IP address 128.32.208.13. To connect to this server, your computer will need to have a UC Berkeley IP address.  Connecting through an ethernet wall port is the recommended method, but you should be able to access it by connecting to the AirBears2 wifi network or from anywhere as long as you are connected to the Berkeley VPN.  
 		
-		If you are working with satellite data, you will want to ``mount'' the file server as a network share on your computer; this will let your computer treat the files as being on an external hard drive connected to it, meaning you will not need to copy the files to your computer in order to access them.  Instructions to connect are included in the PDF on the shared group Google drive folder; the current safety officer should know where that is.
+		If you are working with satellite data, you will want to ``mount'' the file server as a network share on your computer; this will let your computer treat the files as being on an external hard drive connected to it, meaning you will not need to copy the files to your computer in order to access them.  Instructions to connect are included in the PDF on the shared group Google drive folder, or by clicking on this \href{https://docs.google.com/a/berkeley.edu/document/d/1VQhAgULdtgVGKVtOlumQF3bH10mbaPXK5AKxML1_2s4/edit?usp=sharing}{link}
 		
-		All satellite data is stored on the \texttt{share-sat} shared folder, in the \texttt{SAT} subfolder. It is organized first by instrument (OMI, MODIS) then product (OMNO2, MYD06\_L2, etc). Products necessary to run BEHR are organized chronologically in subfolders by year (and then month in the case of OMNO2). Other products that BEHR does not rely on are sorted in various ways.
+		BEHR requires 4 satellite products:
+		\begin{enumerate}
+		\item OMNO2 level 2 (the NASA OMI \ce{NO2} product)
+			\begin{itemize}
+			\item Stored in \path{/volume1/share-sat/OMI/OMNO2} on the file server. 
+			\item Organized by year, then month.
+			\item The year links in this directory always point to the most recent NASA product version.
+			\end{itemize}
+			
+		\item OMPIXCOR (a NASA pixel corner product)
+			\begin{itemize}
+			\item Stored in \path{/volume1/share-sat/SAT/OMI/OMPIXCOR}
+			\item Organized in the same manner as OMNO2
+			\end{itemize}
+			
+		\item Aqua-MODIS cloud product (MYD06)
+			\begin{itemize}
+			\item Stored in \path{/volume1/share-sat/SAT/MODIS/MYD06_L2}
+			\item Organized by year
+			\item Have not been retaining old versions
+			\end{itemize}
+			
+		\item Combined MODIS BRDF product (MCD43C1).
+			\begin{itemize}
+			\item Stored in \path{/volume1/share-sat/SAT/MODIS/MCD43C1}
+			\item Organized by year
+			\end{itemize}
+		\end{enumerate}
 	
 	\subsection{NASA versioning system}
 	
@@ -179,7 +219,7 @@
 	\begin{itemize}
 	\item \citet{bucsela06} describes version 1 of the level 2 algorithm.
 	\item \citet{bucsela13} describes version 2.1 of the level 2 algorithm.
-	\item \citet{marchenko15} describes one of the changes between version 2.1 and version 3; namely the revised procedure for fitting the Earthshine radiances to obtain slant column densities.
+	\item \citet{marchenko15} describes one of the changes between version 2.1 and version 3; namely the revised procedure for fitting the Earthshine radiances to obtain slant column densities. \citet{krotkov17} covers the version 3 algorithm itself.
 	\item See \citet{omi-readme} as well for information on changes to the chemical transport model used to generate the \ce{NO2} a priori profiles in version 3.
 	\end{itemize}
 	
@@ -188,13 +228,30 @@
 	\begin{itemize}
 	
 	\item \textbf{OMNO2:}
+		You will need an EarthData account to download OMI data. As of 31 Jul 2017, you can register at \url{https://urs.earthdata.nasa.gov/}.	
 	
 		NASA OMNO2 data (the NASA OMI \ce{NO2} product) can be downloaded at \url{http://mirador.gsfc.nasa.gov}. Search for the keyword ``omno2'' and specify your date range. We usually leave the location empty. This will return several products; BEHR uses the ``1 orbit L2 swath'' version. Click on ``View files,'' then on the following page ``Add all files in all pages to cart.''  We don't need any special options, so choose ``Continue to cart'' and then on the next page ''Checkout.'' On the next page choose ``URL List (Data),'' this will open in a new tab or window. Save these URLs in a plain text file in the \texttt{download\_staging} folder under OMNO2 on the file server. 
 		
-		To download, navigate to the \texttt{download\_staging} folder and run \texttt{wget -i "<list file>"} where \texttt{<list file>} is the file you just saved. Keep the window open until this finishes. To sort these into the proper folders, go up one directory and into the \texttt{scripts} folder. Run \texttt{sortscript.sh} by typing \texttt{./sortscript.sh}. All the OMNO2 files will be moved into the appropriate year/month folders.
+		To download, navigate to the \texttt{download\_staging} folder in the appropriate \path{version_x_x_x} folder under the OMNO2 path. and run \texttt{wget -i "<list file>"} where \texttt{<list file>} is the file you just saved. Keep the window open until this finishes. To sort these into the proper folders, run \texttt{sortscript.sh} by typing \texttt{./sortscript.sh}. All the OMNO2 files will be moved into the appropriate year/month folders.
 	
 	\item \textbf{MODIS data:}
-	
+		Go to \url{https://search.earthdata.nasa.gov} and search for the MODIS product abbreviation (MYD06\_L2 or MCD43C1). This should bring up a list of products underneath the map. Click on one to access it (for MYD06\_L2, we use the regular one, not the near real time one). You can further subset to time period and geographic location using the controls next to the search bar. For MYD06\_L2, geographic subsetting to the US really helps cut down on the number of files to download.
+		
+		Next, click ``Download Data'' on the right side under the map. When the next menu comes up, choose ``Stage for Download,'' then click ``Submit.'' You will receive two emails at the email address you provided when you registered for EarthData, the first is confirming that the request was send to the data center that actually serves the MODIS data, the second will be an email from v2lads with instructions to download your order. You can either follow those instructions, or use wget from the command line (Terminal on Macs, cygwin on Windows):
+		
+\begin{lstlisting}[basicstyle=\scriptsize\ttfamily]
+wget --ftp-password=<password> -r ftp://<ftp address>/<orders directory>
+\end{lstlisting}
+		
+where \lstinline$<password>$ is the password given in the email (usually your email address), \lstinline$<ftp address>$ is the address given in the first line of the FTP commands in the email, and \lstinline$<orders directory>$ is the directory they tell you to \lstinline$cd$ to for example,
+
+\begin{lstlisting}[basicstyle=\scriptsize\ttfamily]
+wget --ftp-password=myemail@email.com -r ftp://ladsweb.nascom.nasa.gov/orders/501162485
+\end{lstlisting}
+
+This will download the data to a \path{ladsweb.nascom.nasa.gov} subdirectory in the current directory. (You can change that with the \lstinline$--cut-dirs$ and \lstinline$-nH$ options.)
+		
+		If you choose ``Direct Download'' instead, you can open a page containing the links (which you'd then have to click on) or generate a download script. I have not had luck getting the download script to work (access denied errors).
 		
 	\end{itemize}
 
@@ -208,18 +265,18 @@
 		Here the downloading process itself will be described. All scripts can be found in the \texttt{Downloading} folder of the BEHR git repository (see \S\ref{sec:version-control}).  For information on how the computer and its OS were configured for this, see Appendix \ref{app:autodl}.
 		
 		\begin{itemize}
-			\item \textbf{OMNO2:}
+			\item \textbf{OMNO2 and OMPIXCOR:}
 			
-			Automatic OMNO2 downloads required a data subscription with GISC Mirador (the current one was setup by Josh Laughner in his name). The process consists of two steps:
+			Automatic OMNO2 and OMPIXCOR downloads required a data subscription with GISC Mirador (the current one was setup by Josh Laughner in his name). The process consists of two steps:
 			\begin{enumerate} [noitemsep]
-				\item \texttt{order\_omno2.sh} - this script uses the subscription to request OMNO2 files from the last 30 days. It then waits for the Delivery Notice to be send by Mirador to the \emph{nasa} user set up on this computer specifically to receive these notices by SFTP (see Appendix \ref{app:autodl}), then copies these to one folder as a record and to the \texttt{download\_staging} folder on the file server.
+				\item \texttt{order\_omi.sh} - this script uses the subscription to request OMNO2 or OMPIXCOR files from the last 120 days. It then waits for the Delivery Notice to be send by Mirador to the \emph{nasa} user set up on this computer specifically to receive these notices by SFTP (see Appendix \ref{app:autodl}), then copies these to one folder as a record and to the \texttt{download\_staging} folder on the file server.
 				
-				\item \texttt{get\_omno2.sh} - this script waits for \texttt{order\_omno2.sh} to copy the delivery notice to the \texttt{download\_staging} folder, then downloads each non-metadata file that does not exist locally (using wget). As it downloads each file, it sorts it into the proper year/month folder.
+				\item \texttt{get\_omi.sh} - this script waits for \texttt{order\_omni.sh} to copy the delivery notice to the appropriate \texttt{download\_staging} folder, then downloads each file (including metadata) that does not exist locally (using wget). As it downloads each file, it sorts it into the proper year/month folder.
 			\end{enumerate}
 			
 			\item \textbf{MODIS:}
 			
-			Currently, albedo and cloud files are handled differently; this may change. \texttt{get\_modis.sh} searches for both sets of files for the last 90 days. (The longer time frame is because the albedo is a combined Aqua/Terra product, averaged over 16 days, and so is not released in real time.) In both cases, it looks for remote files not present locally. For the albedo, it does so by using a feature of wget which can retrieve remote directory listings. It checks the listings on the LADSWEB FTP server against local files, and then retrieves those files not present locally (also using wget).
+			Currently, albedo and cloud files are handled differently; this may change. \texttt{get\_modis.sh} searches for both sets of files for the last 90 days. In both cases, it looks for remote files not present locally. For the albedo, it does so by using a feature of wget which can retrieve remote directory listings. It checks the listings on the LADSWEB FTP server against local files, and then retrieves those files not present locally (also using wget).
 			
 			Cloud files were more involved, because these become very large as many of them are downloaded. Since we look at individual MODIS granules for clouds (instead of the global gridded product for albedo) we want to restrict the cloud files to the lat/lon boundaries of the US (or other region of interest), plus a 5-10$^\circ$ buffer to ensure all granules are retrieved.
 			
@@ -227,7 +284,7 @@
 			
 			\item \textbf{Reading the files:}
 			
-			Finally, \texttt{run\_read\_omno2.sh} will find the last OMI\_SP\_yyyymmdd.mat file produced, the last albedo file retrieved, and run the MATLAB function necessary to import all satellite data between those two dates. This range was the simplest way to ensure that the necessary albedo file was retrieved.
+			Finally, \path{run_read_omno2.sh} will find the last OMI\_SP\_yyyymmdd.mat file produced, the last albedo file retrieved, and run the MATLAB function necessary to import all satellite data between those two dates into a format MATLAB can work with. \path{run_behr_main.sh} runs the main BEHR algorithm, and \path{run_publishing.m} converts the .mat files into .hdf and .txt files and places them in the appropriate folder for the website to access them.
 			
 		\end{itemize}
 		
@@ -235,13 +292,20 @@
 		
 \section{Version Control}\label{sec:version-control}
 	\subsection{Repositories}
-	The core code for BEHR is contained in a Git repository on our group's Synology DS1813+ NAS file server.  If you are not familiar with Git, I recommend reading chapters 1-4 at \url{http://git-scm.com/doc}, which includes information on installing Git on your system as well as the basic commands.  If you are working on a Windows machine you make also want to look at \url{http://guides.beanstalkapp.com/version-control/git-on-windows.html} and follow their recommendations, although as I've never used Git on a Windows machine, I can't say for certain how well that works.  
+	The core code for BEHR is contained in a Git repository on our group's Synology DS1813+ NAS file server.  If you are not familiar with Git, I recommend reading chapters 1-4 at \url{http://git-scm.com/doc}, which includes information on installing Git on your system as well as the basic commands.  If you are working on a Windows machine you make also want to look at \url{http://guides.beanstalkapp.com/version-control/git-on-windows.html} and follow their recommendations, although as I've never used Git on a Windows machine, I can't say for certain how well that works. I have also created video tutorials available by clicking on the links here:
+	\begin{itemize}
+	\item \href{https://www.youtube.com/playlist?list=PL4hBjskP5N4fQDkb2DIHRX2Mn5nF6TDnf}{Command line}
+	\item \href{https://www.youtube.com/playlist?list=PL4hBjskP5N4ekDz503xbV7tqDyZqRQMvc}{Mac, using the SourceTree GUI}
+	\item \href{https://www.youtube.com/playlist?list=PL4hBjskP5N4dCs2H-QRUpONX8QohlEYei}{Windows, using the SourceTree GUI}
+	\end{itemize}	 
+	Further instructions will proceed assuming you're using the command line, since that is the same on any machine.	
+	
 	Once you have Git installed and working on your machine, navigate to the folder that will be your working directory for the project in either Terminal (Mac) or Command Prompt (Windows) and run the command:
 
 \vspace{12pt}
 \lstset{basicstyle=\scriptsize\ttfamily}
 \begin{lstlisting}
-git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo.git
+git clone ssh://RCCohenLab@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo.git
 \end{lstlisting}
 \lstset{basicstyle=\ttfamily}
 
@@ -255,16 +319,19 @@ git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo
 	\texttt{BEHR\_GitRepo.git} & BEHR & All the code needed to run BEHR \\ \hline
 	\texttt{MiscUtils.git} & Utils & Miscellaneous utilities not needed for BEHR but generally helpful \\ \hline
 	\texttt{AircraftProfiles.git} & NO2 Profiles & Functions to work with aircraft data sets, including code to validate satellite data against such data sets. \\ \hline
-	\texttt{BEHR\_MatlabClasses\_GitRepo.git} & Classes & Certain MATLAB classes I wrote to help manage certain tasks (e.g. error messages)
+	\texttt{BEHR\_MatlabClasses\_GitRepo.git} & Classes & Certain MATLAB classes I wrote to help manage certain tasks (e.g. error messages) \\ \hline
+	\url{https://github.com/firsttempora/MatlabPythonInterface.git} & Python Interface & Matlab functions I wrote that handle converting Matlab types into Python types and vice versa.
 \end{tabu}
 	\caption{Summary of the IP addresses, recommended folders within the main Matlab directory, and contents of the three Git repositories.}
 	\label{GitReposTable}
 \end{table}
 
-	This repository is in place now and will be kept relatively up-to-date as I progress.  I will also try to remember to make a simple copy of the BEHR code to the file server which will not require the use of Git to obtain.  However, there are several reasons you should consider learning to use Git if you haven't yet. (If you have, you probably stopped reading this as soon as I told you where the repository was.)
+	If you have not worked with Git (or another version control system) before, it may seem like an overly complicated way to go about keeping track of files. It's not. It's far more complicated to try to do it manually. The advantages of a version control system are:
 	
 	\begin{enumerate}
-	 \item \emph{It keeps everything in one place, and makes it easy to keep everything up to date.} As long as you make changes in the directory that the Git repo consists of (and commit the changes periodically), those changes are tracked.  So, you can roll back to an earlier version if something breaks, or see what code you (or I) changed.
+	 \item \emph{It keeps everything in one place, and makes it easy to keep everything up to date.} As long as you make changes in the directory that the Git repo consists of (and commit the changes periodically), those changes are tracked.  
+	 \item \emph{You can see how the code has changed over time.} So, you can roll back to an earlier version if something breaks, or see what code you (or I) changed.
+	 \item \emph{It provides traceablility.} Each of the major steps of BEHR stores a hash that points to the Git commit that was the HEAD when that step was executed. That way if a user has any concerns over a bug in the code, we can trace back to the approximate state the code was in when it produced the data they are looking at.
 	 \item \emph{Parallel development.}  If multiple people are developing BEHR at one point, each person can create their own branch and develop simultaneously, while still being able to update the project on the server, and eventually merge the development lines together.
 	 \item \emph{Code sharing.} Conversely, if two (or more) people are both using BEHR, this makes it easier to synchronize code when and if you want.
 	\end{enumerate}
@@ -274,8 +341,10 @@ git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo
 	
 	\begin{itemize}
 	\item \textbf{The master branch should only contain stable code.} Generally in Git, the ``master'' branch is just as it sounds: the main branch with reliable code. This branch should contain the version of BEHR that produces the \emph{published website} data.
-	\item \textbf{Changes to the master branch should be understood by all parties.} Before merging any work into the master branch, everyone involved in developing BEHR should sit down together and be sure they understand the changes to be merged. Ideally, this would include a full code review where everyone satisfies themselves that there are no lingering bugs; but realistically that probably won't happen.
-	\item \textbf{Each student on the project should create their own development branch.}  This will serve as a sort of ``personal master branch,'' i.e. the branch that all the rest of your branches split from and that you merge back into. Ideally, only this branch should then be merged into the true master branch.
+	\item \textbf{Changes to the master branch should be understood by all parties.} Before merging any work into the master branch, everyone involved in developing BEHR should sit down together and be sure they understand the changes to be merged. Ideally, this would include a full code review where everyone satisfies themselves that there are no lingering bugs; but that may not be doable within everyone's available time.
+	\item \textbf{Each student on the project should create their own development branch.}  This will serve as a sort of ``personal master branch,'' i.e. the branch that all the rest of your branches split from and that you merge back into. Ideally, only this branch should then be merged into the true master branch. Conversely, whenever the master branch gets updated, be sure to merge the master branch into this branch.
+	\item \textbf{Before merging into the master branch, merge the master branch into your main dev branch.} This should result in a fast-forward merge, if you've been keeping up with updates to the master branch. If not, you'll need to resolve any conflicts and test the updated algorithm to verify everything works.
+	\item \textbf{Prepend remote branches with your name.} For example, if I had a local branch \lstinline$lnox-fix$ and you push it to a remote, I should make the remote branch's name \lstinline$josh-lnox-fix$. This will require specifying both the local and remote names in the push, e.g. \lstinline$git push -u origin lnox-fix:josh-lnox-fix$. This will help keep straight whose branch is whose.
 	\item \textbf{Not every local branch needs a remote branch.} Git is really useful because you can create these branches to develop new code while leaving a stable state alone. However, not every local branch needs to have a corresponding remote branch.  To keep the remote repo from getting too crazy, only make remotes when you need to sync that branch across multiple computers.
 	\item \textbf{Clean up remote branches when finished with them.} Once you merge or delete a development branch, make sure the remote that went along with it gets deleted.
 	\item \textbf{Finally, don't check out someone else's dev branch without telling them.} And definitely don't push back to it, as then they have unexpected code coming into their dev branch.
@@ -307,39 +376,67 @@ git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo
 
 	\begin{figure}
 	\begin{tikzpicture}[node distance=0.5cm and 1cm,every text node part/.style={align=center}]
-	\node (omno2) [io] {OMNO2 \\ .he5 files};
-	\node (modcld) [io, below=of omno2] {MYD06};
-	\node (space1) [spacer, right=of modcld] {};
-	\node (modalb) [io, right=of space1] {MCD43C3};
-	\node (globe) [io, above=of modalb] {GLOBE \\ Database};
-	\node (corners) [subprocess, above=of omno2] {\texttt{fxn\_corner\_coordinates.m}};
-	\node (read) [process, below=of space1] {\texttt{read\_omno2\_v\_aug2012.m}};
+	% Reading data %
+	\node (start) [startstop] {\textbf{Start}};
+	\node (read) [process, below=of start, yshift=-2cm] {\texttt{read\_omno2\_v\_aug2012.m}};
+	\node (space1l) [spacer, left=of read] {};
+	\node (space1ul) [spacer, above=of space1l] {};
+	\node (space1r) [spacer, right=of read] {};
+	\node (space1ur) [spacer, above=of space1r] {};
+
+	\node (readomi) [subprocess, left=of space1ul] {\texttt{read\_omi\_sp.m}};
+	\node (ompixcor) [io, left=of readomi] {OMPIXCOR};
+	\node (omno2) [io, above=of ompixcor] {OMNO2};
+	
+	\node (readglobe) [subprocess, left=of space1l] {\texttt{avg\_globe\_data\_to\_pixels.m}};
+	\node (globedata) [io, below=of ompixcor, yshift=-0.75cm] {GLOBE database};	
+	
+	\node (readmyd) [subprocess, right=of space1ur] {\texttt{read\_modis\_cloud.m}};
+	\node (myd06) [io, right=of readmyd] {MYD\_06};	
+	
+	\node (readmcd) [subprocess, right=of space1r] {\texttt{read\_modis\_albedo.m}};
+	\node (mcd43) [io, right=of readmcd] {MCD43C1};
 	
 	\node (omisp) [io, below=of read] {OMI\_SP\_yyyymmdd.mat};
+	
+	% BEHR Main %
 	\node (behrmain) [process, below=of omisp, yshift=-1cm] {\texttt{BEHR\_main.m}};
 	\node (space2) [spacer, left=of behrmain] {};
 	\node (rDamf2) [subprocess, above=of space2] {\texttt{rDamf2.m}};
 	\node (rNmcTmp2) [subprocess, below=of space2] {\texttt{rNmcTmp2.m}};
 	\node (swtab) [io, left=of rDamf2] {SW table \\ (\texttt{damf.txt})};
 	\node (temptab) [io, left=of rNmcTmp2, xshift=0.2cm] {Temperature \\ table \\ (\texttt{nmcTmpYr.txt})};
-	\node (rProfileUS) [subprocess, right=of behrmain] {\texttt{rProfile\_US.m}};
-	\node (profiles) [io, right=of rProfileUS] {WRF-Chem \\ profiles \\ (\texttt{mXX\_NO2\_profile.mat})};
+	\node (rProfileWRF) [subprocess, right=of behrmain] {\texttt{rProfile\_WRF.m}};
+	\node (wrfout) [io, right=of rProfileWRF] {wrfout files};
+	\node (wrf) [extprocess, above=of wrfout] {WRF-Chem};
+	\node (runwrf) [extprocess, below=of wrfout] {\texttt{(slurm)run\_wrf\_output.sh}};
+	\node (wrfbehr) [io, below=of runwrf] {WRF\_BEHR\_monthly*.nc};
+	
 	
 	\node (grid) [subprocess, below=of behrmain,yshift=-1cm] {\texttt{add2grid\_BEHR.m} \\ \texttt{hdf\_quadrangle\_BEHR.m}};
 	\node (omibehr) [io, below=of grid] {OMI\_BEHR\_yyyymmdd.mat};
 	
+	% Publishing %
 	\node (publish) [process, below=of omibehr] {\texttt{BEHR\_publishing\_v2.m}};
 	\node (space3) [coordinate, below=of publish] {};
 	\node (behrhdf) [io, below=of space3] {OMI\_BEHR\_yyyymmdd.hdf \\ native HDF5};
 	\node (behrtxt) [io, left=of behrhdf] {OMI\_BEHR\_yyyymmdd.txt \\ native TXT};
 	\node (behrgridded) [io, right=of behrhdf] {OMI\_BEHR\_yyyymmdd.hdf \\ gridded HDF5};
 	
-	\draw [arrow] (omno2) -| (read);
-	\draw [arrow] (modcld) -| (read);
-	\draw [arrow] (modalb) -| (read);
-	\draw [arrow] (globe) -| (read);
-	\draw [arrow] (corners) -| (read);
+
+	\draw [arrow] (start) -- (read);
+	\draw [arrow] (readglobe) -- (read);	
+	\draw [arrow] (globedata) |- (readglobe);	
 	
+	\draw (readomi) -| (space1l);
+	\draw [arrow] (ompixcor) -- 	(readomi);
+	\draw [arrow] (omno2) -| (readomi);
+	
+	\draw [arrow] (readmcd) -- (read);
+	\draw [arrow] (myd06) -- (readmyd);
+	\draw [arrow] (mcd43) -- (readmcd);	
+	
+	\draw (readmyd) -| (space1r);
 	\draw [arrow] (read) -- (omisp);
 	\draw [arrow] (omisp) -- (behrmain);
 	
@@ -347,8 +444,12 @@ git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo
 	\draw [arrow] (rDamf2) |- (behrmain);
 	\draw [arrow] (temptab) -- (rNmcTmp2);
 	\draw [arrow] (rNmcTmp2) |- (behrmain);
-	\draw [arrow] (profiles) -- (rProfileUS);
-	\draw [arrow] (rProfileUS) -- (behrmain);
+	\draw [arrow] (rProfileWRF) -- (behrmain);
+	\draw [arrow] (wrf) -- (wrfout);
+	\draw [arrow] (wrfout) -- (rProfileWRF);
+	\draw [arrow] (wrfout) -- (runwrf);
+	\draw [arrow] (runwrf) -- (wrfbehr);
+	\draw [arrow] (wrfbehr) -| (rProfileWRF);
 	
 	\draw [arrow] (behrmain) -- (grid);
 	\draw [arrow] (grid) -- (omibehr);
@@ -359,48 +460,50 @@ git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo
 	\draw [arrow] (space3) -| (behrgridded);
 	
 	\end{tikzpicture}
-	\caption{The structure of the BEHR program. Orange rectangles indicate the primary MATLAB functions that need to be executed; yellow rounded rectangles are other functions called internally by those main functions. Blue trapezoids represent input or output data.}
+	\caption{The structure of the BEHR program. Orange rectangles indicate the primary MATLAB functions that need to be executed; yellow rounded rectangles are other functions called internally by those main functions. Green rounded rectangles are external programs not called directly by the BEHR algorithm. Blue trapezoids represent input or output data.}
 	\label{fig:curr-pgrm-flow}
 	\end{figure}
 
 	\subsection{Read data}
 	
-	The first step in running BEHR on new data is to read the NASA files into Matlab.  This is done using the \texttt{read\_omno2\_v\_aug2012.m} file.  This is a Matlab function, but it is meant to be run from the editor without any input arguments. All of the properties that need to be set are coded into the function.  However, it can accept start and end dates as inputs to the function, which can be useful to run it in batches.
+	The first step in running BEHR on new data is to read the NASA files into Matlab.  This is done using the \texttt{read\_omno2\_v\_aug2012.m} file.  It takes a number of parameters as input, but defaults are coded into the file, so that you can (if desired) run it using the ``Run'' button in the editor without passing those parameters, and just setting them in the code. Having these options as parameters makes it easier for external driver functions to pass what they need to to run it in a specific mode of operation.
 	
 	 The ``\texttt{v\_aug2012}'' part of the name indicates that this file is intended to work with OMNO2 v. 3, which was released in Aug. 2012 (or at least the technical specs for it were).  
 	 
 	 This function serves several purposes: 
 		\begin{enumerate}
  		 \item It reads all relevant variables from OMNO2 files into Matlab.
- 		 \item It computes pixel corner points based on the field of regard of each pixel and the area over which 50\% of the pixel's sensitivity can be attributed.
+ 		 \item It reads pixel corner data from the OMPIXCOR product and matches it up to the standard product data.
 		 \item It averages the MYD06\_L2 cloud product data to each OMI pixel.
-		 \item It averages the MCD43C3 albedo product data to each OMI pixel.
+		 \item It calculates the BRDF albedo from the MCD43C1 BRDF parameters for each pixel.
 		 \item It averages the GLOBE terrain data to each OMI pixel, converting from altitude to terrain pressure.
 		\end{enumerate}
+Each of these operations is carried out by a separate read function (Fig. \ref{fig:curr-pgrm-flow}) so \lstinline$read_omno2_v_aug_2012.m$ is primarily a driver function that iterates over the necessary data.		
+		
 	For each day that this function processes, a \texttt{.mat} file is saved with a single variable, \texttt{Data}.  This variable is a data structure, in which each OMI swath for that day is stored under a different top-level index (i.e., \texttt{Data(1)} refers to the first swath of that day, and \texttt{Data(2)} the second, etc.).  These data structures contain the data read from the OMNO2, MODIS, and GLOBE files as matrix fields.  Each element of the matrix corresponds to an OMI pixel.
 	
-	Production (i.e. not testing) files output from this script will generally have the name \texttt{OMI\_SP\_yyyymmdd.mat}.  Filenames with additional information are generally testing files I have created in the course of various debugging runs, and should not be used to produce \ce{NO2} data.
+	Production (i.e. not testing) files output from this script will generally have the name \path{OMI_SP_vX.YZ_yyyymmdd.mat}.  Filenames with additional information are generally testing files I have created in the course of various debugging runs, and should not be used to produce \ce{NO2} data.
 	
-	To run this file, enter the latitude and longitude boundaries for the area to retrieve (any OMI pixels outside this area will be discarded) and the date range to process.  The first time you run this file, you may need to edit the paths to the various files; follow the instructions in the comments to identify which directory corresponds to which type of file.  To specify a path to a folder on the lab server, Mac users should begin the path with \texttt{/Volumes}.  PC users: the path should begin with the letter you chose when mounting the volume.
-	
-	Should a new version of the OMNO2 files be released, lines 293 and 333--358 (dealing with various H5 loading functions to read OMNO2) might need updated to reflect any change in dataset names in the OMNO2 he5 files.  The MYD06 and MCD43C3 files are loaded further down in the code; follow the comments. 
+	I have tried to make this function and its subsidiary function general enough to handle future updates to the input products gracefully, however, some editing may be needed in the event a new product is released. This is also the place to make changes to import more variables from the input products or read additional ancillary products.
 	
 	\subsection{Recalculate AMF and Tropospheric Column}
 	
-		This is handled by the \texttt{BEHR\_main.m} function in \path{BEHR/BEHR_Main/}. Compared to the reading function, this is rather short, but it is the key component of BEHR. It goes through several steps:
+		This is handled by the \texttt{BEHR\_main.m} function in \path{BEHR/BEHR_Main/}. This is the key component of BEHR. It goes through several steps:
 		\begin{enumerate}
-			\item It uses the TOMRAD look up table from NASA's OMNO2 product to generate box AMFs for each pixel, but using MODIS albedo and GLOBE terrain pressure.  This is done for the clear and cloudy cases.
+			\item It uses the TOMRAD look up table from NASA's OMNO2 product to generate scattering weights (a.k.a. box AMFs)  for each pixel, but using MODIS albedo and GLOBE terrain pressure.  This is done for the clear and cloudy cases.
 			\item Reads in \ce{NO2} profiles generated from WRF-Chem and bins them to each OMI pixel.
-			\item Calculates the full AMFs by combining the WRF profiles and box AMFs.
+			\item Calculates new AMFs by combining the WRF profiles and scattering weights.
 			\item The new AMF is then applied to the tropospheric slant column, found by multiplying the NASA AMF with their vertical column.
 			\item Finally selected data fields are gridded onto a $0.05^\circ \times 0.05^\circ$.  
 		\end{enumerate}
 		
-		The resulting outputs are saved in BEHR files that contain two variables: \texttt{Data} contains the original OMI pixel data, with the new BEHR AMF and \ce{NO2} column density appended. \texttt{OMI} contains the variables gridded to $0.05^\circ \times 0.05^\circ$. Both retain the same structure wherein the top-level index represents a single swath.  However, in \texttt{OMI}, every swath's grid covers the entire region of interest, and cells with no data for that swath have a fill value.
+		New in version 3 of BEHR, daily \ce{NO2} profiles are read directly from \path{wrfout} output files from the WRF-Chem model. \path{rProfile_WRF} can read from any \path{wrfout} file that has the variables \lstinline$no2$, \lstinline$XLONG$, \lstinline$XLAT$, \lstinline$P$, and \lstinline$PB$. It also will read in profiles from \path{WRF_BEHR} files produces by either \path{run_wrf_output.sh} or \path{slurmrun_wrf_output.sh}. These are shell scripts that use command line NCO (netCDF operator) tools to subset and average WRF-Chem output files. Currently, these are only used for the monthly average profiles.
+		
+		The results of \path{BEHR_main.m} are BEHR files that contain two variables: \texttt{Data} contains the original OMI pixel data, with the new BEHR AMF and \ce{NO2} column density appended. \texttt{OMI} contains the variables gridded to $0.05^\circ \times 0.05^\circ$. Both retain the same structure wherein the top-level index represents a single swath.  However, in \texttt{OMI}, every swath's grid covers the entire region of interest, and cells with no data for that swath have a fill value.
 		
 		You may wonder that the grid is smaller than the regular OMI pixels; this technique is called \emph{oversampling} and allows us to take advantage of the fact that the OMI pixels do not overlap exactly day-to-day to obtain an effective resolution greater than the pixel size if we average over longer time periods.
 		
-		This function should require minimal upkeep even in the event a new NASA product is released.
+		This function should require minimal upkeep even in the event a new NASA product is released, but is where major changes to the algorithm will occur.
 		
 	\subsection{Weight pixels and map}
 	This step is used when creating maps of BEHR \ce{NO2} data. The existing function to handle this is \lstinline$no2_column_map_2014.m$. It can be called with a GUI by using \lstinline$no2colmap_wrapper.m$. Either way, this uses the gridded BEHR data to do time averaging and \lstinline$omi_pixel_reject.m$ to filter out pixels with cloud contamination or that are affected by the row anomaly.
@@ -420,7 +523,7 @@ git clone ssh://RCCohenLab\@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo
 	
 	\item Whether or not you generate the data files, it will next run \path{reading_priori_tests.m} and \path{behr_priori_tests.m}. These are not tests of the \emph{a priori} profiles necessarily; just tests that can be run without knowledge of any previous versions of BEHR. For example, one of the things that \path{reading_priori_tests.m} checks is that the corner coordinates of the pixels make sense, that they contain the pixel center. Generally, as you find bugs in the code \emph{or} if there's something that you're concerned about that comes up as you're coding, see if there's a test that can go here to ensure that the bug does not recur.
 	
-	\item Finally, it runs \path{behr_unit_test.m} on the Data structures produced by \path{read_omno2_v_aug2012.m} and/or \path{BEHR_main.m}. It checks the structures to determine if the same fields are present and have the same values in both old and new versions. Since you will most likely \emph{expect} some differences between versions, this will probably result in a failed unit test. \emph{However}, the important thing is to make sure that only differences that you are expecting occur.
+	\item Finally, it runs \path{behr_unit_test.m} on the Data structures produced by \path{read_omno2_v_aug2012.m} and/or \path{BEHR_main.m}. It checks the structures to determine if the same fields are present and have the same values in both old and new versions. Since you will most likely \emph{expect} some differences between versions, this will probably result in a ``failed'' unit test. \emph{However}, the important thing is to make sure that only differences that you are expecting occur.
 	\end{enumerate}
 	
 	\subsubsection{Detailed data tests---\lstinline$behr_prod_test.m$}
@@ -591,7 +694,7 @@ exit $MATLAB_EXIT
 
 \item Merge changes into master branch.
 
-\item Ensure that the prior version's \path{OMI_BEHR*.mat} files are backed up to Box.
+\item Ensure that the prior version's \path{OMI_BEHR*.mat} files are backed up to Box. (The \lstinline$BoxMirror$ script from \url{https://github.com/CohenBerkeleyLab/BoxUpload} makes this much easier.)
 
 \item Reproduce the data record with the new version, probably best to use the cluster for this (\S\ref{sec:Cluster}).  This should generate new \path{OMI_SP*.mat} files, \path{OMI_BEHR*.mat} files, and the published files (\path{*.hdf}, \path{*.txt}).
 
@@ -753,84 +856,6 @@ exit $MATLAB_EXIT
 		
 	
 
-\section{Current development}
-	The current focus of work on BEHR is to give it daily (rather than monthly average) \emph{a priori} \ce{NO2} profiles. To do so, I've completely rewritten how the \ce{NO2} profiles are imported into \lstinline$BEHR_main.m$.
-
-\begin{figure}
-	\begin{tikzpicture}[node distance=0.5cm and 1cm,every text node part/.style={align=center}]
-	\node (omno2) [io] {OMNO2 \\ .he5 files};
-	\node (modcld) [io, below=of omno2] {MYD06};
-	\node (space1) [spacer, right=of modcld] {};
-	\node (modalb) [io, right=of space1] {MCD43C3};
-	\node (globe) [io, above=of modalb] {GLOBE \\ Database};
-	\node (corners) [subprocess, above=of omno2] {\texttt{fxn\_corner\_coordinates.m}};
-	\node (read) [process, below=of space1] {\texttt{read\_omno2\_v\_aug2012.m}};
-	
-	\node (omisp) [io, below=of read] {OMI\_SP\_yyyymmdd.mat};
-	\node (behrmain) [process, below=of omisp, yshift=-1cm] {\texttt{BEHR\_main.m}};
-	\node (space2) [spacer, left=of behrmain] {};
-	\node (rDamf2) [subprocess, above=of space2] {\texttt{rDamf2.m}};
-	\node (rNmcTmp2) [subprocess, below=of space2] {\texttt{rNmcTmp2.m}};
-	\node (swtab) [io, left=of rDamf2] {SW table \\ (\texttt{damf.txt})};
-	\node (temptab) [io, left=of rNmcTmp2, xshift=0.2cm] {Temperature \\ table \\ (\texttt{nmcTmpYr.txt})};
-	\node (rProfileWRF) [subprocess, right=of behrmain] {\texttt{rProfile\_WRF.m}};
-	\node (profiles) [io, right=of rProfileWRF] {WRF\_BEHR\_*\_yyyy-mm-dd.nc};
-	\node (runwrf) [process, above=of profiles] {\texttt{slurmrun/run\_wrf\_output.sh}};
-	\node (readwrf) [subprocess, left=of runwrf] {\texttt{read\_wrf\_output.sh}};
-	\node (wrfout) [io, above=of runwrf] {wrfout\_*};
-	\node (wrfchem) [process, above=of wrfout] {WRF-Chem};
-		
-	\node (grid) [subprocess, below=of behrmain,yshift=-1cm] {\texttt{add2grid\_BEHR.m} \\ \texttt{hdf\_quadrangle\_BEHR.m}};
-	\node (omibehr) [io, below=of grid] {OMI\_BEHR\_yyyymmdd.mat};
-	
-	\node (publish) [process, below=of omibehr] {\texttt{BEHR\_publishing\_v2.m}};
-	\node (space3) [coordinate, below=of publish] {};
-	\node (behrhdf) [io, below=of space3] {OMI\_BEHR\_yyyymmdd.hdf \\ native HDF5};
-	\node (behrtxt) [io, left=of behrhdf] {OMI\_BEHR\_yyyymmdd.txt \\ native TXT};
-	\node (behrgridded) [io, right=of behrhdf] {OMI\_BEHR\_yyyymmdd.hdf \\ gridded HDF5};
-	
-	\node (development) [draw=red, line width=1.5pt, dashed, fit=(rProfileWRF) (profiles) (runwrf) (readwrf) (wrfout) (wrfchem)] {};
-	
-	\draw [arrow] (omno2) -| (read);
-	\draw [arrow] (modcld) -| (read);
-	\draw [arrow] (modalb) -| (read);
-	\draw [arrow] (globe) -| (read);
-	\draw [arrow] (corners) -| (read);
-	
-	\draw [arrow] (read) -- (omisp);
-	\draw [arrow] (omisp) -- (behrmain);
-	
-	\draw [arrow] (swtab) -- (rDamf2);
-	\draw [arrow] (rDamf2) |- (behrmain);
-	\draw [arrow] (temptab) -- (rNmcTmp2);
-	\draw [arrow] (rNmcTmp2) |- (behrmain);
-	\draw [arrow] (rProfileWRF) -- (behrmain);
-	\draw [arrow] (profiles) -- (rProfileWRF);
-	\draw [arrow] (runwrf) -- (profiles);
-	\draw [arrow] (readwrf) -- (runwrf);
-	\draw [arrow] (wrfout) -- (runwrf);
-	\draw [arrow] (wrfchem) -- (wrfout);
-	
-	\draw [arrow] (behrmain) -- (grid);
-	\draw [arrow] (grid) -- (omibehr);
-	\draw [arrow] (omibehr) -- (publish);
-	
-	\draw [arrow] (publish) -- (behrhdf);
-	\draw [arrow] (space3) -| (behrtxt);
-	\draw [arrow] (space3) -| (behrgridded);
-	
-	\end{tikzpicture}
-	\caption{The changes necessary to allow the use of daily \emph{a priori} profiles, marked by the red box.}
-	\label{fig:dev-pgrm-flow}
-	\end{figure}
-
-	The new pieces of code are \lstinline$rProfile_WRF.m$, which replaces \lstinline$rProfile_US.m$ and reads profiles from the \lstinline$WRF_BEHR_*_yyyy-mm-dd.nc$ netCDF files instead of the .mat files used previously.  These netCDF files are produced by the Bash shell script \lstinline$slurmrun_wrf_output.sh$ or \lstinline$run_wrf_output.sh$. Ideally the difference between these two is that \lstinline$run_wrf_output.sh$ is meant to run in serial, while \lstinline$slurmrun_wrf_output.sh$ runs in parallel, using the \lstinline$srun$ command with the SLURM scheduler. However, development of \lstinline$slurmrun_wrf_output.sh$ tends to proceed more rapidly, so it is preferred although it can only be run on the Savio cluster or another cluster using the SLURM scheduler.
-	
-	Both scripts use the NCO tools. These are installed on the Savio cluster (although as a module that needs to be loaded) and can be installed on your computer if desired. Essentially, \lstinline$slurmrun_wrf_output.sh$ determines how to average the WRF output (monthly, daily, hourly), which set of variables to put in the final files, and whether it is preparing \emph{a priori} for OMI or TEMPO (the TEMPO one is a notional implementation at current, making certain assumptions about the operation of TEMPO). It identifies the files necessary and instantiates multiple instances of the appropriate \lstinline$read_wrf_output.sh$ (may also be \lstinline$read_wrf_tempo.sh$ or \lstinline$read_wrf_emis.sh$) to allow parallel execution.  These in turn make use of built-in NCO functions and several NCO scripts I've written to both extract the key variables and calculate several additional quantities not automatically included in the WRF output. Cutting down the files in this manner substantially reduces the amount of data that needs to be moved from a cluster capable of running WRF-Chem to whatever computer is running BEHR.
-	
-	This information is extracted from the raw WRF-Chem output files, \path{wrfout_d0X_yyyy-mm-dd_hh:mm:ss}. My scripts assume that there is one output ``frame'' per file, that is, each file represents a single slice in time. It is possible that WRF-Chem might save multiple time slices to each file, although the resulting files will likely be huge. 
-	
-	\lstinline$rProfile_WRF.m$ is also fairly intelligent about how it reads and applies the \ce{NO2} profiles, accounting for different spatial resolutions as well as being able to use different temporal resolutions. However to do the latter, it expects the profiles to be organized in subfolders named by the temporal resolution of the \emph{a priori} profiles in them: ``hourly,'' ``daily,'' or ``monthly.''
 
 \newpage
 \label{thebib}
@@ -844,6 +869,12 @@ exit $MATLAB_EXIT
 \addappheadtotoc
 
 \section{Running downloads in the background}
+
+	The simplest way to run downloads in the background, if using the command line on a Mac or Linux machine is to use the \lstinline$screen$ utility. (If you are working on a Windows machine, and having trouble with this in Cygwin, you can always log into the satellite download computer to do it.) \lstinline$screen$ is a utility that lets you start a terminal-within-a-terminal session that will stay alive even if you close the actualy Terminal application, or log out of a computer you are SSH'ed in to.
+	
+	\lstinline$screen$ should already be install on any Linux system; for a Mac, you'll need to use \textbf{Homebrew} or \textbf{Macports} to install it. These are linux-like package managers for Mac. Generally you want to install only one. (I prefer Macports, though Homebrew is getting more popular lately.)  On Windows machines using Cygwin, if \lstinline$screen$ is not installed, you should be able to install it by rerunning the \lstinline$setup-x86_64.exe$ (or \lstinline$setup-x86.exe$ if you are by some random chance of fate still using a 32-bit machine.)
+	
+	Start a \lstinline$screen$ session from Terminal by typing the command \lstinline$screen$. (You can also name your screen session with \lstinline$screen -S <name>$, replacing \lstinline$<name>$ with whatever you want.) Execute your download command exactly how you would normally. Then, press \textbf{Control+a} followed by \textbf{d}. This will ``detach'' your screen session. You can reattach to it with the command \lstinline$screen -r$. (If you have more than one, you'll need to specify which one either by the name given with the \lstinline$-S$ flag mentioned above, or with it's number. \lstinline$screen -ls$ will list all active screens.) You will see that the download continued without interruption. As long as your computer is on, screen sessions can continue running in the background. When the download finishes, reconnect to the screen session and type \lstinline$exit$ to kill the screen session.
 
 \section{Setup for automatic downloads} \label{app:autodl}
 \subsection{OMNO2}
@@ -865,7 +896,7 @@ sudo apt-get install openssh
 	
 	\item The way that the machine request interface works is that upon a request (delivered by wget'ing a formatted URL), it will produce a delivery notice with the URLs to the files requested via secure file transfer protocol (sftp) to the designated computer at a fixed IP address.  I have the users \lstinline$nasa$ set up on the black Compaq computer at 128.32.208.13 for this purpose. 
 	
-	\item For security, the computer has password authentication for SSH disable, only asymmetric key login allowed. Authorized public keys need to be pasted into the \path{~/.ssh/authorized_keys} file (one per line) for the correct user. The OMNO2 DISC sent their public key to me upon request, this should go in the \path{authorized_keys} file for the \lstinline$nasa$ user. (Password authentication is disabled by changing the line in \path{/etc/ssh/sshd_config}
+	\item For security, the computer has password authentication for SSH disabled, only asymmetric key login allowed. Authorized public keys need to be pasted into the \path{~/.ssh/authorized_keys} file (one per line) for the correct user. The OMNO2 DISC sent their public key to me upon request, this should go in the \path{authorized_keys} file for the \lstinline$nasa$ user. (Password authentication is disabled by changing the line in \path{/etc/ssh/sshd_config}
 	\begin{lstlisting}
 PasswordAuthentication yes
 	\end{lstlisting}
@@ -913,35 +944,40 @@ If successful, you should be in a usual ftp prompt in the www directory.
 	All the necessary scripts are written in Bash or Python and are contained in the BEHR repo's Downloading folder. These can be automated through the use of crontab. Most can be run from your user, however some need to be run as root (to allow access to the nasa user).
 	
 	First, the root crontab, edit with \lstinline$sudo crontab -e$:
-	\begin{lstlisting}
+	\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 # m h  dom mon dow   command
-30 3 * * 6 /home/josh/Documents/MATLAB/BEHR/Downloading/order_omno2.sh
+30 3 * * 6 /home/josh/Documents/MATLAB/BEHR/Downloading/order_omi.sh OMNO2
+30 3 * * 5 /home/josh/Documents/MATLAB/BEHR/Downloading/order_omi.sh OMPIXCOR
 	\end{lstlisting}
 	
 	And the regular user's crontab, edit with \lstinline$crontab -e$:
-	\begin{lstlisting}
+	\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 # m h  dom mon dow   command
 0 1 * * 6 /home/josh/SatDL/get_modis.sh
-0 1 * * 7 /home/josh/SatDL/get_omno2.sh
+0 4 * * 7 /home/josh/SatDL/get_omi.sh OMNO2
+0 4 * * 5 /home/josh/SatDL/get_omi.sh OMPIXCOR
 0 1 * * 1 /home/josh/SatDL/run_read_omno2.sh
 0 1 * * 2 /home/josh/SatDL/run_behr_main.sh
 0 1 * * 3 /home/josh/SatDL/run_publishing.sh
 	\end{lstlisting}
+
+	\emph{Note: be VERY CAREFUL not to type \lstinline$crontab -r$ as this erases the existing crontab without any prompt to ask if you are sure!!!}	
 	
-	This reads as, e.g. ``run \lstinline$order_omno2.sh$ at 3:30 AM on Saturday morning.''  The only two key points for the order are:
+	This reads as, e.g. ``run \lstinline$order_omi.sh OMNO2$ at 4:00 AM on Saturday morning.''  The only two key points for the order are:
 	\begin{enumerate}
-	\item \lstinline$order_omno2.sh$ must run before \lstinline$get_omno2.sh$.
-	\item \lstinline$get_omno2.sh$ and \lstinline$get_modis$ should run before any of the \lstinline$run_xxx.sh$ files.
+	\item \lstinline$order_omi.sh$ must run before \lstinline$get_omi.sh$.
+	\item \lstinline$get_omi.sh$ and \lstinline$get_modis$ should run before any of the \lstinline$run_xxx.sh$ files.
 	\end{enumerate}
 	
 	These scripts rely on the following environmental variables and aliases being set. Add the following to your \path{~/.bashrc} file:
-\begin{lstlisting}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 # Define the environmental variables and aliases first,
 # this way they'll be defined before the check if the shell
 # is interactive
 
 # User defined environmental variables
-export OMNO2DIR="/mnt/sat/SAT/OMI/OMNO2/download_staging"
+export OMNO2DIR="/mnt/sat/SAT/OMI/OMNO2/version_3_3_0/download_staging"
+export OMPIXCORDIR="/mnt/sat/SAT/OMI/OMPIXCOR/version_003/download_staging"
 export MODDIR="/mnt/sat/SAT/MODIS"
 export SPDIR="/mnt/sat/SAT/BEHR/SP_Files_2014"
 export BEHRDIR="/mnt/sat/SAT/BEHR/BEHR_Files_2014"
@@ -958,12 +994,13 @@ export PATH="/usr/local/bin:$PATH"
 \end{lstlisting}
 
 	To the root \path{.bashrc} in \path{/root/.bashrc} (you'll need to use \lstinline$sudo$ to edit it) add the \lstinline$OMNO2DIR$ variable:
-\begin{lstlisting}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 # User defined environmental variables
-export OMNO2DIR="/mnt/sat/SAT/OMI/OMNO2/download_staging"
+export OMNO2DIR="/mnt/sat/SAT/OMI/OMNO2/version_3_3_0/download_staging"
+export OMPIXCORDIR="/mnt/sat/SAT/OMI/OMPIXCOR/version_003/download_staging"
 \end{lstlisting}
 just before the following lines:
-\begin{lstlisting}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 # If not running interactively, don't do anything
 [ -z "$PS1" ] && return
 \end{lstlisting}
