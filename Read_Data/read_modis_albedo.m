@@ -108,10 +108,20 @@ band3_lons=band3_lons(in_lats,in_lons);
 
 s=size(data.Latitude);
 c=numel(data.Latitude);
-MODISAlbedo=nan(s);
+MODISAlbedo = nan(s);
+ocean_flag = false(s); 
 
 %Now actually average the MODIS albedo for each OMI pixel
 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
+
+% We will save the Mobley table if it is needed, the first time it is
+% needed, it will be read in.
+coart_lut = [];
+
+% For debugging only %
+count_nans = zeros(size(data.SolarZenithAngle));
+count_modis = zeros(size(data.SolarZenithAngle));
+% ****************** %
 for k=1:c;
     if DEBUG_LEVEL > 2; tic; end
     
@@ -132,13 +142,21 @@ for k=1:c;
     % the supplemental angle of what's in the data product). See the help
     % text for modis_brdf_kernels for why that matters.
     band3_vals = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), 180-data.RelativeAzimuthAngle(k));
-    band3_avg = nanmean(band3_vals(band3_vals>0));
     
-    %put in ocean surface albedo from LUT
-    if isnan(band3_avg)==1;
-        sza_vec = [5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 89];
-        alb_vec = [0.038 0.038 0.039 0.039 0.040 0.042 0.044 0.046 0.051 0.058 0.068 0.082 0.101 0.125 0.149 0.158 0.123 0.073];
-        band3_avg = interp1(sza_vec, alb_vec, data.SolarZenithAngle(k));
+    % DEBUGGING ONLY %
+    count_nans(k) = sum(isnan(band3_vals));
+    count_modis(k) = numel(band3_vals);
+    % ************** %
+    
+    if sum(isnan(band3_vals)) < 0.5 * numel(band3_vals)
+        band3_avg = nanmean(band3_vals(band3_vals>0));
+    else
+        if isempty(coart_lut)
+            [band3_avg, coart_lut] = coart_sea_reflectance(data.SolarZenithAngle(k));
+        else
+            band3_avg = coart_sea_reflectance(data.SolarZenithAngle(k), coart_lut);
+        end
+        ocean_flag(k) = true;
     end
     
     MODISAlbedo(k) = band3_avg;
@@ -147,6 +165,7 @@ end
 
 data.MODISAlbedo = MODISAlbedo;
 data.MODISAlbedoFile = mcd43_info.Filename;
+data.AlbedoOceanFlag = ocean_flag;
 
 end
 
