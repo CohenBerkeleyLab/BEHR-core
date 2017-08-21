@@ -56,8 +56,8 @@ addpath(genpath(fullfile(mpath,'..','Utils')));
 
 
 % Add the paths needed for certain utility classes and functions
-addpath(genpath(BEHR_paths('classes')));
-addpath(genpath(BEHR_paths('utils')));
+addpath(genpath(BEHR_paths_old('classes')));
+addpath(genpath(BEHR_paths_old('utils')));
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -165,39 +165,39 @@ estimated_num_swaths = 5;
 
 %This is the directory where the final .mat file will be saved.
 if isempty(sp_mat_dir)
-    sp_mat_dir = BEHR_paths('sp_mat_dir');
+    sp_mat_dir = BEHR_paths_old('sp_mat_dir');
 end
 
 %This is the directory where the OMI NASA SP (OMNO2) he5 files are
 %saved. It should include subfolders organized by year, which in turn
 %are organized by month.
 if isempty(omi_he5_dir)
-    omi_he5_dir = BEHR_paths('omno2_dir');
+    omi_he5_dir = BEHR_paths_old('omno2_dir');
 end
 
 %This is the directory where the OMPIXCOR he5 files are saved. It
 %should include subfolders organized by year, which in turn are
 %organized by month.
 if isempty(omi_pixcor_dir)
-    omi_pixcor_dir = BEHR_paths('ompixcor_dir');
+    omi_pixcor_dir = BEHR_paths_old('ompixcor_dir');
 end
 
 %This is the directory where the MODIS myd06_L2*.hdf files are saved.
 %It should include subfolders organized by year.
 if isempty(modis_myd06_dir)
-    modis_myd06_dir = BEHR_paths('myd06_dir');
+    modis_myd06_dir = BEHR_paths_old('myd06_dir');
 end
 
 %This is the directory where the MODIS MCD43C3*.hdf files are saved. It
 %should include subfolders organized by year.
 if isempty(modis_mcd43_dir)
-    modis_mcd43_dir = BEHR_paths('mcd43c3_dir');
+    modis_mcd43_dir = BEHR_paths_old('mcd43c3_dir');
 end
 
 %This is the directory where the GLOBE data files and their headers
 %(.hdr files) are saved.
 if isempty(globe_dir)
-    globe_dir = BEHR_paths('globe_dir');
+    globe_dir = BEHR_paths_old('globe_dir');
 end
 
 % Verify the paths integrity.
