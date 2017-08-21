@@ -116,8 +116,12 @@ if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
 
 % We will save the Mobley table if it is needed, the first time it is
 % needed, it will be read in.
-mobley_lut = [];
+coart_lut = [];
 
+% For debugging only %
+count_nans = zeros(size(data.SolarZenithAngle));
+count_modis = zeros(size(data.SolarZenithAngle));
+% ****************** %
 for k=1:c;
     if DEBUG_LEVEL > 2; tic; end
     
@@ -138,14 +142,19 @@ for k=1:c;
     % the supplemental angle of what's in the data product). See the help
     % text for modis_brdf_kernels for why that matters.
     band3_vals = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), 180-data.RelativeAzimuthAngle(k));
-    band3_avg = nanmean(band3_vals(band3_vals>0));
     
-    %put in ocean surface albedo from LUT from Mobley 2015
-    if isnan(band3_avg);
-        if isempty(mobley_lut)
-            [band3_avg, mobley_lut] = mobley_sea_refl(data.SolarZenithAngle(k), data.ViewingZenithAngle(k), data.RelativeAzimuthAngle(k));
+    % DEBUGGING ONLY %
+    count_nans(k) = sum(isnan(band3_vals));
+    count_modis(k) = numel(band3_vals);
+    % ************** %
+    
+    if sum(isnan(band3_vals)) < 0.5 * numel(band3_vals)
+        band3_avg = nanmean(band3_vals(band3_vals>0));
+    else
+        if isempty(coart_lut)
+            [band3_avg, coart_lut] = coart_sea_reflectance(data.SolarZenithAngle(k));
         else
-            band3_avg = mobley_sea_refl(data.SolarZenithAngle(k), data.ViewingZenithAngle(k), data.RelativeAzimuthAngle(k), mobley_lut);
+            band3_avg = coart_sea_reflectance(data.SolarZenithAngle(k), coart_lut);
         end
         ocean_flag(k) = true;
     end
