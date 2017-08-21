@@ -1,7 +1,7 @@
 function BEHR_main(varargin)
 % BEHR_MAIN: primary BEHR algorithm
 %
-%   This function is the primary BEHR algorith, it takes the OMI, MODIS,
+%   This function is the primary BEHR algorithm, it takes the OMI, MODIS,
 %   and GLOBE data read in by read_omno2_v_aug2012.m and uses it to
 %   recalculated the BEHR AMFs and VCDs. There are a number of input
 %   parameters that control it's operation; the defaults are set such that

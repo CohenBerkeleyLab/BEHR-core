@@ -1,13 +1,59 @@
 function read_omno2_v_aug2012(varargin)
-% readhe5_omno2_v_aug2012
-%Reads omno2 he5 files as of the Aug 2012 version; saves the resulting .mat
-%file as <satellite>_<retrieval>_<year><month><day>. Based on
-%readhe5_neus_wcld by Ashley Russel.
+% READ_OMNO2_V_AUG2012 Reads in OMI, MODIS, and GLOBE data to .mat files
 %
-%Josh Laughner <joshlaugh5@gmail.com> 27 Feb 2014
+%   READ_OMNO2_V_AUG2012 is the first step in the BEHR workflow. It reads
+%   in the satellite data from the various sources, include OMI NO2, MODIS
+%   clouds, MODIS albedo, and GLOBE (a database, not a satellite) terrain
+%   elevation. These data are cut down to the US domain and, in the case of
+%   the MODIS and GLOBE data, averaged to the OMI pixels. The resulting
+%   Data structures are saved as an OMI_SP .mat file.
+%
+%   This function is setup such that running it without arguments will
+%   produce any new OMI_SP files required. This requires that the necessary
+%   data be available either locally or via a mounted network drive. This
+%   behavior can be changed with the following parameters:
+%
+%       'start' - set the first day to process using either a date string
+%       that Matlab understands or a date number. Default is '2005-01-01'.
+%
+%       'end' - set the last day to process using either a date string that
+%       Matlab understands or a date number. Default is today.
+%
+%       'sp_mat_dir' - the directory that the OMI_SP .mat files will be
+%       saved to. Default is the path provided by the behr_paths class.
+%
+%       'omi_he5_dir' - the directory that contains the OMI NO2 HDF5 files,
+%       sorted into subdirectories by year and month (i.e. this directory
+%       itself should contain subdirectories 2005, 2006, etc., each of
+%       which has subdirectories 01, 02, 03, etc. that contain the HDF5
+%       files). Default is the path provided by the behr_paths class.
+%
+%       'modis_myd06_dir' - the directory that contains the MODIS MYD06
+%       cloud HDF4 files, sorted by year. Default is the path provided by
+%       the behr_paths class.
+%
+%       'modis_mcd43_dir' - the directory that contains the MODIS MCD43C1
+%       BRDF parameters files, sorted into subdirectories by year. Default
+%       is the path provided by the behr_paths class.
+%
+%       'globe_dir' - the directory that contains the GLOBE (Global Land
+%       One-km Base Elevation) terrain elevation data. This will contain
+%       files a10g through p10g and a10g.hdr through p10g.hdr. Default is
+%       the path provided by the behr_paths class.
+%
+%       'region' - which region BEHR is running in. This controls both the
+%       longitude and latitude limits and which orbits are skipped as
+%       "nighttime" orbits. This must be a string. Default (and only option
+%       at present) is 'US'.
+%
+%       'overwrite' - scalar logical which controls whether existing files
+%       will be overwritten. If false, a day will be skipped if the
+%       corresponding OMI_SP .mat file exists in the directory given as
+%       'omi_he5_dir'. If true, no days will be skipped and the data in
+%       omi_he5_dir will be overwritten.
 
 %****************************%
-% CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times %
+% CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times
 %
 % Allows for quick control over the amount of output to the console.
 % Choose a higher level to keep track of what the script is doing.
@@ -402,8 +448,6 @@ for j=1:length(datenums)
         % Add MODIS albedo info to the files
         if DEBUG_LEVEL>0; fprintf('\n Adding MODIS albedo information \n'); end
         this_data = read_modis_albedo(modis_mcd43_dir, this_dnum, this_data, 'DEBUG_LEVEL', DEBUG_LEVEL);
-        
-        this_data = correct_sea_reflectance(this_data, this_month, gome_ratio, gome_lon, gome_lat);
         
         % Add GLOBE terrain pressure to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
