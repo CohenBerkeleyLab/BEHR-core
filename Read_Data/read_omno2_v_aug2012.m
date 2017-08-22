@@ -235,10 +235,10 @@ if isempty(modis_myd06_dir)
     modis_myd06_dir = BEHR_paths_old('myd06_dir');
 end
 
-%This is the directory where the MODIS MCD43C3*.hdf files are saved. It
+%This is the directory where the MODIS MCD43C1*.hdf files are saved. It
 %should include subfolders organized by year.
 if isempty(modis_mcd43_dir)
-    modis_mcd43_dir = BEHR_paths_old('mcd43c3_dir');
+    modis_mcd43_dir = BEHR_paths_old('mcd43c1_dir');
 end
 
 %This is the directory where the GLOBE data files and their headers
