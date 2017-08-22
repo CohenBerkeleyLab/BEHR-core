@@ -26,8 +26,8 @@ elseif strcmpi(profile_mode, 'daily')
             E.dir_dne('The root WRF-Chem profile directory %s does not exist;\n  Is the file server mounted?\n  Is the directory defined correctly in behr_paths.m?', wrf_dirs{a});
         end
         
-        wrf_dir = fullfile(wrf_dirs, yr_str, mn_str);
-        if exist(wrf_dir, 'dir')
+        wrf_path = fullfile(wrf_dirs{a}, yr_str, mn_str);
+        if exist(wrf_path, 'dir')
             return
         end
     end
