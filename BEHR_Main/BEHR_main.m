@@ -189,8 +189,8 @@ else
 end
 
 datenums = datenum(date_start):datenum(date_end);
-%parfor(j=1:length(datenums), n_workers)
-for j=1:length(datenums)
+parfor(j=1:length(datenums), n_workers)
+%for j=1:length(datenums)
     savename = behr_filename(datenums(j));
     
     if exist(fullfile(behr_mat_dir, savename),'file') && ~overwrite
