@@ -313,8 +313,8 @@ datenums = datenum(date_start):datenum(date_end);
 
 githead = git_head_hash(behr_repo_dir);
 
-%parfor(j=1:length(datenums), n_workers)
-for j=1:length(datenums)
+parfor(j=1:length(datenums), n_workers)
+%for j=1:length(datenums)
     %Read the desired year, month, and day
     this_dnum = datenums(j);
     this_year = year(this_dnum);
