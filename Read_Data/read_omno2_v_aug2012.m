@@ -361,7 +361,8 @@ parfor(j=1:length(datenums), n_workers)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres', 'IsZoomModeSwath', 'GitHead_Read'};
+        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres',...
+        'IsZoomModeSwath', 'GitHead_Read', 'AlbedoOceanFlag'};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
     Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
