@@ -272,8 +272,8 @@ if gitstat ~= 0
     githead = 'Unknown';
 end
 
-%parfor(j=1:length(datenums), n_workers)
-for j=1:length(datenums)
+parfor(j=1:length(datenums), n_workers)
+%for j=1:length(datenums)
     %Read the desired year, month, and day
     this_dnum = datenums(j);
     this_year = year(this_dnum);
