@@ -215,15 +215,16 @@ parfor(j=1:length(datenums), n_workers)
     if DEBUG_LEVEL > 1; fprintf('\t ...Found.\n'); end
     S=load(fullfile(sp_mat_dir,sp_mat_name)); %JLL 17 Mar 2014: Will load the variable 'Data' into the workspace
     Data=S.Data;
+   
+    % Must load profiles every time because there's no way to easily check if the month has changed since the
+    % last iteration of the parfor loop
+    month_str=datestr(datenums(j),'mm');
+    profile_file=['m',month_str,'_NO2_profile'];
     
-    if ~exist('profile_file','var') || ~strcmp(profile_file(2:3),month_str)
-        month_str=datestr(datenums(j),'mm');
-        profile_file=['m',month_str,'_NO2_profile'];
-        
-        if DEBUG_LEVEL > 1; disp(['Loading ',fullfile(no2_profile_path,profile_file)]); end
-        S=load(fullfile(no2_profile_path,profile_file));
-        PROFILE = S.PROFILE;
-    end
+    if DEBUG_LEVEL > 1; disp(['Loading ',fullfile(no2_profile_path,profile_file)]); end
+    S=load(fullfile(no2_profile_path,profile_file));
+    PROFILE = S.PROFILE;
+
     for d=1:length(Data);
         % Data is initialized in read_omno2_v_aug2012 with a single 0
         % in the Longitude field.  Since points outside the lat/lons of
