@@ -26,8 +26,8 @@ GLOBETerpres = nan(size(data.Latitude));
 
 for a=1:numel(GLOBETerpres)
     
-    if DEBUG_LEVEL > 1; fprintf('Averaging GLOBE data to pixel %u of %u \n',a,c); end
-    if DEBUG_LEVEL > 2; tic; end
+    if DEBUG_LEVEL > 3; fprintf('Averaging GLOBE data to pixel %u of %u \n',a,numel(GLOBETerpres)); end
+    if DEBUG_LEVEL > 3; tic; end
     
     xall=[data.(loncorn_field)(:,a); data.(loncorn_field)(1,a)];
     yall=[data.(latcorn_field)(:,a); data.(latcorn_field)(1,a)];
@@ -60,7 +60,7 @@ for a=1:numel(GLOBETerpres)
     GLOBETerpres(a)=1013.25 .* exp(-mean(pres_vals) / 7400 ); %Originally divided by 7640 m
     
     
-    if DEBUG_LEVEL > 2; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',a,c,telap); end
+    if DEBUG_LEVEL > 3; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',a,numel(GLOBETerpres),telap); end
 end
 
 data.GLOBETerpres = GLOBETerpres;
