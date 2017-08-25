@@ -111,6 +111,8 @@ addpath(genpath(behr_paths.utils));
 %%%%% INITIALIZATION & INPUT VALIDATION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+if DEBUG_LEVEL > 1; fprintf('Parsing input\n'); end
+
 E = JLLErrors;
 
 p = inputParser;
@@ -285,10 +287,18 @@ end
 %Go ahead and load the terrain pressure data - only need to do this once
 %Add a little buffer around the edges to make sure we have terrain data
 %everywhere that we have NO2 profiles.
+if DEBUG_LEVEL > 1; fprintf('Loading globe elevations\n'); end
+if DEBUG_LEVEL > 2; t_load_globe = tic; end
 glonlim = [lonmin - 10, lonmax + 10];
 glatlim = [latmin - 10, latmax + 10];
 [globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(glonlim, glatlim);
 globe_elevations(isnan(globe_elevations)) = 0;
+if DEBUG_LEVEL > 2; fprintf('    Time to load GLOBE elevations: %f\n', toc(t_load_globe)); end
+
+if DEBUG_LEVEL > 1; fprintf('Loading COART sea reflectances\n'); end
+if DEBUG_LEVEL > 2; t_load_coart = tic; end
+[~, coart_lut] = coart_sea_reflectance(0);
+if DEBUG_LEVEL > 2; fprintf('    Time to load COART look up table: %f\n', toc(t_load_coart)); end
 
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the
@@ -313,8 +323,17 @@ datenums = datenum(date_start):datenum(date_end);
 
 githead = git_head_hash(behr_repo_dir);
 
+if DEBUG_LEVEL > 1; fprintf('Staring main loop\n'); end
+
 parfor(j=1:length(datenums), n_workers)
 %for j=1:length(datenums)
+    this_task = getCurrentTask();
+    if isempty(this_task)
+        this_task.ID = -1;
+    end
+
+    if DEBUG_LEVEL > 2; t_day = tic; end
+
     %Read the desired year, month, and day
     this_dnum = datenums(j);
     this_year = year(this_dnum);
@@ -380,6 +399,8 @@ parfor(j=1:length(datenums), n_workers)
     
     data_ind = 0;
     for a=1:n %For loop over all the swaths in a given day.
+        if DEBUG_LEVEL > 2; t_orbit = tic; end
+
         if DEBUG_LEVEL > 0
             if a==1 || mod(a,10)==0; fprintf('Swath %u of %s \n', a, datestr(this_dnum)); end
         end
@@ -393,8 +414,10 @@ parfor(j=1:length(datenums), n_workers)
             if DEBUG_LEVEL > 0; fprintf(' Swath %d: Nighttime granule skipped\n',a); end
             continue
         end
-        
+       
+        if DEBUG_LEVEL > 2; t_sp = tic; end 
         [this_data, pixels_in_domain] = read_omi_sp(this_sp_filename, '/HDFEOS/SWATHS/ColumnAmountNO2', sp_variables, sub_data, [lonmin, lonmax], [latmin, latmax]);
+        if DEBUG_LEVEL > 2; fprintf('      Time to read SP data on worker %d: %f\n', this_task.ID, toc(t_sp)); end
         
         if ~pixels_in_domain
             if DEBUG_LEVEL > 1; disp('No points within lat/lon boundaries'); end
@@ -404,15 +427,21 @@ parfor(j=1:length(datenums), n_workers)
         
         % If we've gotten here, then there are pixels in the swath that lie
         % within the domain of interest. Add the OMPIXCOR data
+        if DEBUG_LEVEL > 2; t_pixcor = tic; end
         pixcor_name = make_pixcorn_name_from_sp(this_sp_filename, fullfile(omi_pixcor_dir, this_year_str, this_month_str));
         this_data = read_omi_sp(pixcor_name, '/HDFEOS/SWATHS/OMI Ground Pixel Corners VIS', pixcor_variables, this_data, [lonmin, lonmax], [latmin, latmax], 'match_data', true);
+        if DEBUG_LEVEL > 2; fprintf('      Time to read OMPIXCOR data on worker %d: %f\n', this_task.ID, toc(t_pixcor)); end
         
+
+        if DEBUG_LEVEL > 2; t_pixclean = tic; end
         this_data = handle_corner_zeros(this_data, DEBUG_LEVEL);
         
         % The OMNO2 and OMPIXCOR products place the zoom-mode pixels
         % differently in the swath - fix that here.
         this_data = align_zoom_mode_pixels(this_data);
-        
+        if DEBUG_LEVEL > 2; fprintf('      Time to clean up pixel corners on worker %d: %f\n', this_task.ID, toc(t_pixclean)); end        
+
+
         % Add a few pieces of additional information
         % Swath is given in the file name as a five digits number following
         % the "-o" in the name (swath == orbit number)
@@ -433,19 +462,25 @@ parfor(j=1:length(datenums), n_workers)
         % Add MODIS cloud info to the files 
         if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
         
+        if DEBUG_LEVEL > 2; t_modis_cld = tic; end
         this_data = read_modis_cloud(modis_myd06_dir, this_dnum, this_data, omi_starttime, omi_next_starttime, [lonmin, lonmax], [latmin, latmax],...
             'DEBUG_LEVEL', DEBUG_LEVEL);
+        if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS clouds on worker %d: %f\n', this_task.ID, toc(t_modis_cld)); end
         
         
         % Add MODIS albedo info to the files
-        if DEBUG_LEVEL>0; fprintf('\n Adding MODIS albedo information \n'); end
-        this_data = read_modis_albedo(modis_mcd43_dir, this_dnum, this_data, 'DEBUG_LEVEL', DEBUG_LEVEL);
+        if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS albedo information \n'); end
+        if DEBUG_LEVEL > 2; t_modis_alb = tic; end
+        this_data = read_modis_albedo(modis_mcd43_dir, coart_lut, this_dnum, this_data, 'DEBUG_LEVEL', DEBUG_LEVEL);
+
+        if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS albedo on worker %d: %f\n', this_task.ID, toc(t_modis_alb)); end
         
         % Add GLOBE terrain pressure to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
-        
+        if DEBUG_LEVEL > 2; t_globe = tic; end
         this_data = avg_globe_data_to_pixels(this_data, globe_elevations, globe_lon_matrix, globe_lat_matrix,...
             'DEBUG_LEVEL', DEBUG_LEVEL);
+        if DEBUG_LEVEL > 2; fprintf('      Time to average GLOBE data on worker %d: %f\n', this_task.ID, toc(t_globe)); end
         
         % Add the few attribute-like variables
         this_data.Date = datestr(this_dnum, 'yyyy/mm/dd');
@@ -455,14 +490,18 @@ parfor(j=1:length(datenums), n_workers)
         
         data_ind = data_ind + 1;
         Data(data_ind) = this_data;
+
+        if DEBUG_LEVEL > 2; fprintf('    Time for one orbit on worker %d: %f\n', this_task.ID, toc(t_orbit)); end
         
     end %End the loop over all swaths in a day
     
     % Remove preallocated but unused swaths
     Data(data_ind+1:end) = [];
+    if DEBUG_LEVEL > 2; t_save = tic; end
     saveData(fullfile(sp_mat_dir,savename), Data); % Saving must be handled as a separate function in a parfor loop because passing a variable name as a string upsets the parallelization monkey (it's not transparent).
+    if DEBUG_LEVEL > 2; fprintf('       Time to save on worker %d: %f\n', this_task.ID, toc(t_save)); end
     
-    
+    if DEBUG_LEVEL > 2; fprintf('    Time for one day on worker %d: %f\n', this_task.ID, toc(t_day)); end
 end %End the loop over all days
 end
 
