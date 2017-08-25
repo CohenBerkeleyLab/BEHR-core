@@ -539,6 +539,107 @@ Each of these operations is carried out by a separate read function (Fig. \ref{f
 	\end{itemize}
 	
 	The publishing is handled by the function \lstinline$BEHR_publishing_v2.m$. It is set up to produce a single one of the above three types with each run. Which type and the dates to produce for can be specified as inputs to the function or by modifying the corresponding values in the ``Set Options'' part of the code and running it without any inputs. It also retains the ability to produce some specialized versions of the product, mainly those that used \emph{a priori} profiles derived from the DISCOVER-AQ research flights.
+	
+
+\section{Code style}
+	I'll apologize now if this seems pompous, but having a consistent coding style makes the algorithm easier for newcomers to read, and easier for us all to understand what's going on at a glance because, i.e. knowing that single, lower case letter variables are always loop indicies makes it easy to identify, at a glance, that, e.g. \lstinline$no2_profiles(:,a)$ is being subset according to some loop variable \lstinline$a$.
+	
+	Some of these rules grew up naturally as the algorithm developed, others are the result of bad experiences trying to understand the program flow.
+	
+\subsection{Functions vs. scripts}
+	\textbf{Always use functions (or classes), never scripts.} Matlab code can be contained in scripts or functions, the latter start with the keyword \lstinline$function$ and the name of the function must match the file name. (You can get a function template from the Matlab editor under the dropdown menu for ``New''.)
+	
+	Scripts all share the same workspace, running a script is conceptually identical to copying and pasting its contents in the command window. This has two main problems: 
+	
+	\begin{enumerate}
+	\item variables with the same name in both scripts will conflict
+	\item since variables are not passed explicitly into and out of scripts, it's impossible to tell from the call to the script what variables in the calling script are needed or modified.
+	\end{enumerate}
+	
+\subsection{Comments}
+	\begin{enumerate}
+	\item Every function should start with a comment block that describes the operation, inputs, and outputs of the function. See \lstinline$state_outlines.m$ in the general Utils repository and \lstinline$BEHR_main.m$ itself for ideal examples. These code blocks should consist of:
+		\begin{enumerate}
+		\item First line: name of the function in all caps followed by a one-line description of its purpose.
+		\item A description of each possible syntax to call the function (excluding parameters, see \#\ref{enum:style:parameters}) where the outputs, function name, and function inputs are written in all caps followed by a paragraph describing that syntax.
+		\item A list of any parameters, including for each acceptable values, what its effects are, and the default value. (Parameters are inputs for which the order does not matter, but each value must be preceded by a string that names which parameter is being given.) \label{enum:style:parameters}
+		\item Optionally, examples.
+		\end{enumerate}
+		
+	\item Use comments surrounded by \lstinline$%$ to delineate sections of the code, e.g.
+	\begin{lstlisting}
+%%%%%%%%%%%%%%%%%
+% INPUT PARSING %
+%%%%%%%%%%%%%%%%%
+	\end{lstlisting}
+	With some blank lines before it, this is easy to see and helps the eye find major sections of the code.
+	
+	\item Reference any papers (with at least author, journal, DOI or author, journal, year, pages) or websites relevate to the code. This includes e.g. stackexchange or Matlab forum discussions that code is obtained from.
+	
+	\item Explain any constants or conversion, e.g.:
+\begin{lstlisting}
+no2 = ncread(wrf_file, 'no2');
+% NO2 from WRF is in ppm, we want unscaled mixing ratio
+no2 = no2 * 1e-6;
+\end{lstlisting}
+	There should never be ``mystery numbers,'' when constants show up in code, they should almost always have a comment explaining why they are needed.
+	
+	\item If you are having trouble working out how to code something, write down your thought process in comments. Having it written down will help you, and likely help whoever comes after you understand why you made the decisions you did.
+	
+	\item If a change to long standing code is made to fix a bug, comment why the change was necessary.
+	
+	\item If in doubt, comment.
+	\end{enumerate}
+	
+\subsection{Variable and function names}
+	\begin{enumerate}
+	\item Single letter, lower case variables are reserved for loop indicies, e.g. \lstinline$a$, \lstinline$i$.
+		\begin{enumerate}
+		\item I typically start with \lstinline$a$ for the outermost loop, unless another variable makes more sense, e.g. \lstinline$d$ for a loop over dates.
+		\item Longer names may be appropriate when a large number of loops are occurring simultaneously, e.g. \lstinline$i_sza$, \lstinline$i_vza$, \lstinline$i_raa$, \lstinline$i_alb$, and \lstinline$i_surfp$ if you were looping over all the variables of the AMF scattering weight lookup table. Starting with a single lower case letter followed by an underscore helps denote these are still loop variables.
+		\end{enumerate}
+	\item Double lower case variables (e.g. \lstinline$xx$, \lstinline$yy$) are to be used for logical indexing or the result of the \lstinline$find$ function, e.g.:
+\begin{lstlisting}
+xx = lon > lon_lim(1) & lon < lon_lim(2);
+\end{lstlisting}
+
+	\item All other numerical, string, and cell array variables should be given pothole case (e.g. \lstinline$amf_clear$, \lstinline$wrf_file$: all lower case letters with words separated by underscores) names.
+	
+	\item Function names should also be written in \lstinline$pothole_case$.
+	
+	\item Structures and instances of classes should be written in camel case (e.g. \lstinline$BehrGrid$: each word in the name is capitalized).
+	
+	\item Class names should also be written in \lstinline$CamelCase$
+	
+	\item Subordinate the capitalization of ``BEHR'' in names to these rules. Older functions may not follow this rule (and renaming breaks the history in Git) but new functions and variables going forward should.
+	
+	\item All variables names (other than loop or logical index variables) should be descriptive enough that it is obvious what the significance of that variable is: \lstinline$grid_lon$ is better than \lstinline$glon$, \lstinline$wrf_profile_path$ is better than \lstinline$wp$, etc.
+	\end{enumerate}
+	
+\subsection{Single, authoritative representation of data}
+	Constant values that may be references multiple times should have a function that returns that value. This way, if that value changes, all instances of it in the algorithm change as well. This is why:
+	\begin{itemize}
+	\item The version identifier is contained in \lstinline$BEHR_version$
+	\item The fill value is stored in \lstinline$behr_fill_val$
+	\item The minimum allowed AMF value is contained in \lstinline$behr_min_amf_val$
+	\item etc.
+	\end{itemize}
+	
+	
+\subsection{Logical organization through functions and sub-functions}
+	Use functions to help logically organize the code. This has two main flavors:	
+	\begin{enumerate}
+	\item Avoid long, repetitive, copy-paste code by using functions written to take what changes between each copy-paste chunk as inputs.
+	\item Move large but logically connected sections of code out of large, monolithic files into separate function files, or at least a sub-function within the same file.
+	\end{enumerate} 
+	
+	Both of these can be seen in the changes to the main reading code between version 2.1C (\lstinline$read_omno2_v_aug2012$) and v3.0A (\lstinline$read_behr_data$). In version 2.1C, each variable read in had a copied chunk of HDF reading code. This became very difficult to maintain. In v3.0A, this was replaced with the \lstinline$read_omi_sp$ function. This loses some flexibility, but ensures the same behavior is applied to all data read in.
+	
+	Likewise, in v2.1C, the blocks of code for reading in MODIS cloud, MODIS albedo, and GLOBE terrain elevation data were all contained directly in the main reading function. By moving these to their own separate function, it is easier to obtain a high-level overview of the main reading function by seeing that it calls, in turn, functions that read in SP data, MODIS cloud data, etc. The details are then contained in each of these functions.
+	
+	Note: this benefit only happens if the called functions are clearly named, so be sure to give your functions descriptive names!
+
+
 
 \section{Running BEHR on a compute cluster} \label{sec:Cluster}
 	\subsection{BEHR in Matlab}
