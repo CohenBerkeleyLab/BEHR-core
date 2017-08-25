@@ -1,4 +1,4 @@
-function [ data ] = read_modis_albedo( modis_directory, date_in, data, varargin )
+function [ data ] = read_modis_albedo( modis_directory, coart_lut, date_in, data, varargin )
 %UNTITLED6 Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -114,10 +114,6 @@ ocean_flag = false(s);
 %Now actually average the MODIS albedo for each OMI pixel
 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
 
-% We will save the Mobley table if it is needed, the first time it is
-% needed, it will be read in.
-coart_lut = [];
-
 % For debugging only %
 count_nans = zeros(size(data.SolarZenithAngle));
 count_modis = zeros(size(data.SolarZenithAngle));
@@ -151,16 +147,12 @@ for k=1:c;
     if sum(isnan(band3_vals)) < 0.5 * numel(band3_vals)
         band3_avg = nanmean(band3_vals(band3_vals>0));
     else
-        if isempty(coart_lut)
-            [band3_avg, coart_lut] = coart_sea_reflectance(data.SolarZenithAngle(k));
-        else
-            band3_avg = coart_sea_reflectance(data.SolarZenithAngle(k), coart_lut);
-        end
+        band3_avg = coart_sea_reflectance(data.SolarZenithAngle(k), coart_lut);
         ocean_flag(k) = true;
     end
     
     MODISAlbedo(k) = band3_avg;
-    if DEBUG_LEVEL > 2; telap = toc; fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+    if DEBUG_LEVEL > 3; telap = toc; fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
 end
 
 data.MODISAlbedo = MODISAlbedo;
