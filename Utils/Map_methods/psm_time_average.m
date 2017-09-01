@@ -16,8 +16,9 @@ p.addParameter('behr_dir', behr_paths.behr_mat_dir);
 p.addParameter('filepattern', sprintf('OMI_BEHR_%s_*.mat', BEHR_version));
 p.addParameter('dayofweek', 'UMTWRFS');
 p.addParameter('holidays', false);
+p.addParameter('filterpsm', false);
 p.addParameter('avgfield', 'BEHRColumnAmountNO2Trop');
-p.addParameter('rejectmode', 'behr');
+p.addParameter('rejectmode', 'detailed');
 p.addParameter('clouds', 'omi');
 p.addParameter('cloudfraccrit', 0.2);
 p.addParameter('rowanomaly', 'XTrackFlags');
@@ -26,8 +27,18 @@ p.addParameter('DEBUG_LEVEL', 2);
 p.parse(varargin{:});
 pout = p.Results;
 
-start_date = validate_date(start_date);
-end_date = validate_date(end_date);
+if ~iscell(start_date)
+    start_date = {start_date};
+end
+if ~iscell(end_date)
+    end_date = {end_date};
+end
+
+start_date = cellfun(@validate_date,start_date);
+end_date = cellfun(@validate_date,end_date);
+if numel(start_date) ~= numel(end_date)
+    E.badinput('START_DATE and END_DATE must have the same number of elements');
+end
 
 if isa(pout.lon_bdy, 'GlobeGrid')
     input_grid = pout.lon_bdy;
@@ -84,6 +95,7 @@ end
 reject_details.cloud_type = pout.clouds;
 reject_details.cloud_frac = pout.cloudfraccrit;
 reject_details.row_anom_mode = pout.rowanomaly;
+reject_details.check_behr_amf = true;
 
 
 if ~isnumeric(pout.DEBUG_LEVEL) || ~isscalar(pout.DEBUG_LEVEL)
@@ -106,11 +118,17 @@ for a=1:numel(day_abbrevs)
 end
 
 if (~islogical(pout.holidays) && ~isnumeric(pout.holidays)) || ~isscalar(pout.holidays)
-    E.badinput('"holidays" must be a scalar logical or numeric values');
+    E.badinput('"holidays" must be a scalar logical or numeric value');
 elseif pout.holidays
     holidays = [];
 else
     holidays = 0;
+end
+
+if ~isscalar(pout.filterpsm) || (~islogical(pout.filterpsm) && ~isnumeric(pout.filterpsm))
+    E.badinput('"filterpsm" must be a scalar logical or numeric value');
+else
+    filter_psm = pout.filterpsm;
 end
 
 
@@ -127,9 +145,14 @@ end
 
 first_file = true;
 
+datevec = [];
+for a=1:numel(start_date)
+    datevec = cat(2, datevec, start_date(a):end_date(a));
+end
+
 for a=1:numel(F)
     file_date = get_file_date(F(a).name);
-    if file_date < start_date || file_date > end_date
+    if ~ismember(file_date, datevec)
         if DEBUG_LEVEL > 1
             fprintf('File %s outside of date range specified, skipping\n', F(a).name);
         end
@@ -186,8 +209,8 @@ for a=1:numel(F)
         % filtered, not because of the difference in the gridding algorithm,
         % but because I use the generic preprocessing function in PSM_Main for
         % all the CVM fields.
-        if ~is_psm
-            this_swath = omi_pixel_reject(this_swath, reject_mode, reject_details);
+        if ~is_psm || filter_psm
+            this_swath = omi_pixel_reject(this_swath, reject_mode, reject_details, 'weight_field', weights_field);
         end
         
         this_swath_values = this_swath.(avg_field)(yy,xx);

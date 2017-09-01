@@ -1,4 +1,4 @@
-function [ omi ] = omi_pixel_reject( omi, reject_mode, reject_details )
+function [ omi ] = omi_pixel_reject( omi, reject_mode, varargin )
 %omi_pixel_reject: Set areaweight to 0 for any pixels that will adversely
 %affect the accuracy of the BEHR NO2 map.
 %   There are a number of criteria that need to be evaluated for an OMI
@@ -44,6 +44,16 @@ function [ omi ] = omi_pixel_reject( omi, reject_mode, reject_details )
 
 E = JLLErrors;
 
+p = inputParser;
+p.addOptional('reject_details', struct(), @isstruct);
+p.addParameter('weight_field', 'Areaweight', @ischar);
+
+p.parse(varargin{:});
+pout = p.Results;
+
+reject_details = pout.reject_details;
+weight_field = pout.weight_field;
+
 allowed_reject_modes = {'none', 'behr', 'detailed'};
 if ~ischar(reject_mode) || ~ismember(reject_mode, allowed_reject_modes)
     E.badinput('REJECT_MODE must be one of the strings %s', strjoin(allowed_reject_modes, ', '))
@@ -57,7 +67,7 @@ if strcmp(reject_mode, 'detailed')
         E.badinput('The REJECT_DETAILS struct must have the following fields for REJECT_MODE == "%s": %s', reject_mode, strjoin(req_details_fields, ', '));
     end
     
-    req_details = {'cloud_type', 'cloud_frac', 'row_anom_mode', 'check_behr_amf', true};
+    req_details = {'cloud_type', 'cloud_frac', 'row_anom_mode', 'check_behr_amf'};
     if ~exist('reject_details', 'var') || ~isstruct(reject_details) || any(~isfield(reject_details, req_details))
         E.badinput('If REJECT_MODE == ''detailed'', the third input must be a structure with fields %s', strjoin(req_details, ', '));
     elseif ~ismember(reject_details.cloud_type, fieldnames(cld_fields))
@@ -95,9 +105,10 @@ if strcmpi(reject_mode, 'none')
     % bad values, or at least their bad values are unrelated to what
     % generates bad values in the VCD.
 elseif strcmpi(reject_mode, 'behr')
-    omi.Areaweight = reject_by_behr_flags(omi.BEHRQualityFlags, omi.Areaweight);
+    omi.(weight_field) = reject_by_behr_flags(omi.BEHRQualityFlags, omi.(weight_field));
 elseif strcmpi(reject_mode, 'detailed')
-    omi.Areaweight = reject_by_details(reject_details, omi.(sel_cloud_field), omi.VcdQualityFlags, omi.XTrackQualityFlags, omi.BEHRAMFTrop, omi.Row, omi.Areaweight);
+    sel_cloud_field = cld_fields.(reject_details.cloud_type);
+    omi.(weight_field) = reject_by_details(reject_details, omi.(sel_cloud_field), omi.VcdQualityFlags, omi.XTrackQualityFlags, omi.BEHRAMFTrop, omi.Row, omi.(weight_field));
 end
 
 end
@@ -107,7 +118,7 @@ areaweight(behr_flags>0) = 0;
 end
 
 function areaweight = reject_by_details(details, cloud_frac, vcd_flags, xtrack_flags, behr_amf, rows, areaweight)
-omi = omi_in;
+
 if ~isfield(details, 'rows')
     details.rows = [];
 end
@@ -118,10 +129,13 @@ end
 
 areaweight(mod(vcd_flags,2) ~= 0) = 0;
 areaweight(cloud_frac > details.cloud_frac) = 0;
-areaweight(omi_rowanomaly(xtrack_flags, rows, details.row_anom_mode)) = 0;
+
+% As of 30 Aug 2017, the PSM OMI structure does not include date. This will
+% need to be rectified in the future. For now, just pass 0 as the date.
+areaweight(omi_rowanomaly(xtrack_flags, rows, 0, details.row_anom_mode)) = 0;
 
 if details.check_behr_amf
-    areaweight( isnan(behr_amf) || behr_amf <= behr_min_amf_val ) = 0;
+    areaweight( isnan(behr_amf) | behr_amf <= behr_min_amf_val ) = 0;
 end
 
 if ~isempty(details.rows)
