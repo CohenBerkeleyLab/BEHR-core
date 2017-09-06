@@ -11,8 +11,7 @@
 #
 # Basically all this will need to do is move the download notice into the
 # download_staging folder on the file server and check if the specified file
-# does not exist before downloading it. It will also ignore files ending in
-# .xml, since these are unnecessary metadata files. The files will be downloaded
+# does not exist before downloading it. The files will be downloaded
 # to download_staging, then sorted into proper year/month folders.
 
 # OMNO2DIR must be an environmental variable set pointing to the
@@ -21,13 +20,30 @@
 
 source ~/.bashrc
 
-if [[ -z $OMNO2DIR ]]
-then
-    echo "ERROR get_omno2.sh: OMNO2DIR is not defined"
+# This requires 1 input: the dataset being downloaded (OMNO2 or OMPIXCOR)
+if [[ -z $1 ]]; then
+    (>&2 echo "$0 requires one input: OMNO2 or OMPIXCOR")
+    exit 1
+else
+    dataset="$1"
+fi
+
+# This determines which staging directory will be used
+if [[ $dataset == OMNO2 ]]; then
+    staging_dir="$OMNO2DIR"
+elif [[ $dataset == OMPIXCOR ]]; then
+    staging_dir="$OMPIXCORDIR"
+fi
+
+if [[ -z $staging_dir ]]; then
+    (>&2 echo "Dataset $dataset does not have a staging directory set via an environmental variable")
+    exit 1
+elif [[ ! -d $staging_dir ]]; then
+    (>&2 echo "Staging directory $staging_dir does not exist")
     exit 1
 fi
 
-cd "$OMNO2DIR"
+cd "$staging_dir"
 
 # The root script will name the download notices DL_YYYYMMDD, so this is the
 # file name we need to look for.
@@ -42,7 +58,7 @@ do
         break
     elif [[ $safety -gt 360 ]]
     then
-        automessage.sh "get_omno2.sh failed" "After six hours, the download notice $dlf has not been found"
+        automessage.sh "$(basename $0) failed" "After six hours, the download notice $dlf has not been found"
         exit 1
     else
         echo "download notice $dlf not found, waiting 60 sec..."
@@ -61,11 +77,22 @@ done
 rm -f "$HOME/.urs_cookies"
 touch "$HOME/.urs_cookies"
 
+# Since we will get different file names for different products, we need to find
+# the first date with format YYYYmMMDD in the name (though we only need the year
+# and month). I'll include the underscore b/c the data time is preceeded by an
+# underscore in the name, while the processing time is preceeded by a dash.
+regex='_[0-9][0-9][0-9][0-9]m[0-9][0-9]'
+
 for f in $(cat $dlf)
 do
     fname=$(basename $f)
-    y=${fname:18:4}
-    m=${fname:23:2}
+    if [[ $fname =~ $regex ]]; then
+        fdate=${BASH_REMATCH[0]}
+        y=${fdate:1:4}
+        m=${fdate:6:2}
+    else
+        (>&2 echo "Could not find data date in the filename $fname")
+    fi
 
     
     if [[ ! -d ../${y}/${m} ]]

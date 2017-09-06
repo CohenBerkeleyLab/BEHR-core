@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # This function will contact the MODIS LAADS Web FTP server at ftp://ladsweb.nascom.nasa.gov/ and
-# identify MYD06 and MCD43C3 files from the past three months that have not already been downloaded
+# identify MYD06 and MCD43C1 files from the past three months that have not already been downloaded
 # and retrieve them, putting them in the proper directory.  This should be run weekly (using cron).
 #
 # The MODIS root directory on the file server should be defined in the env. variable MODDIR. (This
@@ -37,11 +37,11 @@ fi
 REMOTEDIR="ftp://ladsweb.nascom.nasa.gov/allData"
 
 ## =============== ##
-##     MCD43C3     ##
+##     MCD43C1     ##
 ## =============== ##
 
 
-# Retrieve the MCD43C3 data. There's only one file produced every 8 days, so we
+# Retrieve the MCD43C1 data. There's only one file produced every 8 days, so we
 # only need to look for the lone .hdf file in each day's folder.
 for offset in `seq -90 -1`
 do
@@ -53,8 +53,8 @@ do
         y=$(date -d "${offset} days" +'%Y')
         doy=$(date -d "${offset} days" +'%j')
     fi
-    fullLocalDir="${MODDIR}/MCD43C3/${y}/"
-    fullRemDir="${REMOTEDIR}/5/MCD43C3/${y}/${doy}/"
+    fullLocalDir="${MODDIR}/MCD43C1/${y}/"
+    fullRemDir="${REMOTEDIR}/6/MCD43C1/${y}/${doy}/"
 
     if [[ ! -d $fullLocalDir ]]
     then
@@ -63,19 +63,20 @@ do
     fi
 
     cd $fullLocalDir
-    if [[ $DEBUG -gt 0 ]]; then echo $(pwd); fi
+    if [[ $DEBUG -gt 0 ]]; then echo "Current directory is $(pwd)"; fi
 
     # This will retrieve a list of files in the remote directory to the .listing
     # file, which we can then parse to see if the remote files are present
     # locally. If wget returns a non-zero exit status, most likely the remote
     # directory did not exist b/c either that day has not been processed yet, or
-    # it's not one of the days that MCD43C3 exists for. Yes, we could define
+    # it's not one of the days that MCD43C1 exists for. Yes, we could define
     # what days those should be, but this is safe against changes to the
     # processing schedule.
 
-    if [[ $DEBUG -gt 0 ]]; then echo "Getting MCD43C3 file list for $y $doy"; fi
+    if [[ $DEBUG -gt 0 ]]; then echo "Getting MCD43C1 file list for $y $doy"; fi
 
     wget -q --spider --no-remove-listing $fullRemDir
+#    wget --spider --no-remove-listing $fullRemDir
     if [[ $? -ne 0 ]]; then continue; fi
 
     fname=$(grep '.hdf' .listing | awk '{print $9'})
