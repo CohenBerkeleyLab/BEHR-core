@@ -89,7 +89,8 @@ def write_urls(urls):
 if __name__ == "__main__":
     inargs = parse_args(sys.argv)
 
-    url = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
+    #url = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
+    url = "https://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
     server = SOAPProxy(url)
     print "Retrieving file IDs"
     attempt=0
