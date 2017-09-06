@@ -42,6 +42,11 @@ function BEHR_main(varargin)
 %       named 'WRF_BEHR_monthly_yyyy-mm.nc' (monthly) or
 %       'wrfout_*_yyyy-mm-dd_hh-00-00' (daily).
 %
+%       'use_psm_gridding' - if false (default), uses CVM gridding for all
+%       fields. If true, then NO2 fields will be gridded using the PSM
+%       method (specifically, fields specified as psm_gridded_vars in
+%       BEHR_publishing_gridded_fields will be gridded by PSM).
+%
 %       'DEBUG_LEVEL' - level of progress messaged printed to the console.
 %       0 = none, 1 = minimal, 2 = all, 3 = processing times are added.
 %       Default is 2.
@@ -84,6 +89,7 @@ p.addParameter('amf_tools_path', behr_paths.amf_tools_dir);
 p.addParameter('no2_profile_path', '');
 p.addParameter('overwrite', false);
 p.addParameter('profile_mode', 'monthly');
+p.addParameter('use_psm_gridding', false);
 p.addParameter('DEBUG_LEVEL', 2);
 
 p.parse(varargin{:});
@@ -97,6 +103,7 @@ amf_tools_path = pout.amf_tools_path;
 no2_profile_path = pout.no2_profile_path;
 overwrite = pout.overwrite;
 prof_mode = pout.profile_mode;
+use_psm = pout.use_psm_gridding;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 %%% Validation %%%
@@ -117,6 +124,8 @@ elseif (~islogical(overwrite) && ~isnumeric(overwrite)) || ~isscalar(overwrite)
     E.badinput('Parameter "overwrite" must be a scalar logical or number')
 elseif ~ismember(prof_mode,allowed_prof_modes)
    	E.badinput('prof_mode (if given) must be one of %s', strjoin(allowed_prof_modes,', '));
+elseif ~isscalar(use_psm) || (~islogical(use_psm) && ~isnumeric(use_psm))
+    E.badinput('use_psm_gridding must be a scalar logical or number')
 end
 
 % Verify the paths integrity.
@@ -333,7 +342,7 @@ for j=1:length(datenums)
     % GRIDDING DATA %
     %%%%%%%%%%%%%%%%%
     
-    OMI = psm_wrapper(Data, Data(1).Grid, DEBUG_LEVEL);
+    OMI = psm_wrapper(Data, Data(1).Grid, 'only_cvm', ~use_psm, 'DEBUG_LEVEL', DEBUG_LEVEL);
     
     %%%%%%%%%%%%%
     % SAVE FILE %

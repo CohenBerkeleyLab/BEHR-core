@@ -302,8 +302,6 @@ if DEBUG_LEVEL > 2; fprintf('    Time to load COART look up table: %f\n', toc(t_
 
 %Load the GOME-2 LER which we'll need to adjust ocean reflectances from 550
 %to ~430 nm.
-[gome_ratio, gome_lon, gome_lat] = read_gome2_ler(behr_paths.gome2ler_file, [lonmin, lonmax], [latmin, latmax]); 
-
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the
 %active directory, as MATLAB seems to run slightly slower if the current
