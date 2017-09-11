@@ -87,6 +87,9 @@ else
     fid = 1;
 end
 
+fields_to_ignore = input('Specify any fields to ignore in unit testing, separated by a space: ', 's');
+fields_to_ignore = strsplit(fields_to_ignore);
+
 if generate_new_data
     make_git_report();
 end
@@ -111,10 +114,13 @@ border = repmat('*', 1, numel(msg));
 fprintf(fid, '\n%s\n', border);
 fprintf(fid, '%s\n', msg);
 fprintf(fid, '%s\n\n', border);
-fclose(fid);
+if fid > 2
+    fclose(fid);
+end
 
-fprintf('Results saved to %s\n', results_file);
-
+if save_results_to_file
+    fprintf('Results saved to %s\n', results_file);
+end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% NESTED FUNCTIONS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -260,7 +266,7 @@ fprintf('Results saved to %s\n', results_file);
                 fprintf(fid, '\n%1$s\n%2$s\n%1$s\n', header_border, header_msg);
             end
             
-            successes(i) = behr_unit_test(new_data.Data, old_data.Data, DEBUG_LEVEL, fid) && successes(i);
+            successes(i) = behr_unit_test(new_data.Data, old_data.Data, DEBUG_LEVEL, fid, fields_to_ignore) && successes(i);
         end
     end
 
@@ -338,7 +344,7 @@ fprintf('Results saved to %s\n', results_file);
                 fprintf(fid, '\n%1$s\n%2$s\n%1$s\n', header_border, header_msg);
             end
             
-            successes_data(i) = behr_unit_test(new_data.Data, old_data.Data, DEBUG_LEVEL, fid);
+            successes_data(i) = behr_unit_test(new_data.Data, old_data.Data, DEBUG_LEVEL, fid, fields_to_ignore);
             
             if DEBUG_LEVEL > 0
                 header_msg = '***** Running BEHR_main unit tests on OMI struct ****';
@@ -346,7 +352,7 @@ fprintf('Results saved to %s\n', results_file);
                 fprintf(fid, '\n%1$s\n%2$s\n%1$s\n', header_border, header_msg);
             end
             
-            successes_grid(i) = behr_unit_test(new_data.OMI, old_data.OMI, DEBUG_LEVEL, fid);
+            successes_grid(i) = behr_unit_test(new_data.OMI, old_data.OMI, DEBUG_LEVEL, fid, fields_to_ignore);
         end
         
         successes = successes_data & successes_grid;
