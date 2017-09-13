@@ -10,9 +10,9 @@ clone_dir=$(dirname $_mydir) # by default, put the new repositories in the folde
 
 fork="CohenBerkeleyLab"
 
-github_repos=("${fork}/BEHR-core.git" \
-    "${fork}/BEHR-core-utils.git" \
+github_repos=("${fork}/BEHR-core-utils.git" \
     "${fork}/Matlab-Gen-Utils.git" \
+    "${fork}/BEHR-PSM-Gridding" \
     "${fork}/MatlabPythonInterface.git" )
 
 
