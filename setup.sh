@@ -1,14 +1,20 @@
 #!/bin/bash
 
 _mydir=$(dirname $0)
-    
-github_repos=('/volume1/share-sat/SAT/BEHR/MiscUtils.git' \
-    '/volume1/share-sat/SAT/BEHR/BEHR_MatlabClasses_GitRepo.git' \
-    '/volume2/share2/GROUP/GitRepos/MatlabPythonInterface.git')
+_mydir=$(cd $_mydir; pwd -P)
+clone_dir=$(dirname $_mydir) # by default, put the new repositories in the folder containing this one
 
-berkeley_repos=('/volume1/share-sat/SAT/BEHR/MiscUtils.git' \
-    '/volume1/share-sat/SAT/BEHR/BEHR_MatlabClasses_GitRepo.git' \
-    '/volume2/share2/GROUP/GitRepos/MatlabPythonInterface.git')
+# *************************************** #
+# Setup variables needed in sub functions #
+# *************************************** #
+
+fork="CohenBerkeleyLab"
+
+github_repos=("${fork}/BEHR-core.git" \
+    "${fork}/BEHR-core-utils.git" \
+    "${fork}/Matlab-Gen-Utils.git" \
+    "${fork}/MatlabPythonInterface.git" )
+
 
 manual_setup () {
     >&2 echo  "GIT does not appear to be installed on this computer.
@@ -24,51 +30,115 @@ need to also download the following repositories:"
     done
 }
 
-github_setup () {
-    # these need to change
+print_usage() {
+    cat <<EOU
+Usage: $(basename $0) [--https]|[--ssh]|[--ssh=<alias>]
+    Will clone the additional repositories that the BEHR code depends on. Code
+    from GitHub can be cloned using either HTTPS or SSH protocols. Cloning with
+    HTTPS can be done by anyone, but requires a username and password to push
+    changes back. This is the default option. Cloning with SSH requires that you
+    have a GitHub account that has access to the BEHR repositories configured 
+    with an SSH key.
 
-    cd "$_mydir/.."
+     Options:
+        --https : force this to clone from GitHub using HTTPS protocol. 
+        --ssh : force this to clone from GitHub using SSH protocol.
+        --ssh=<alias> : clone using SSH protocol, substituting <alias> for 
+            "github.com" in the URL. The default URL is "git@github.com:/${fork}/<repo>",
+            but if you have an SSH alias setup that specifies which SSH key to use
+            to access GitHub, you can specify that here. For example, if I had
+            the following in my ~/.ssh/config file:
+
+                Host lab-github
+                HostName github.com
+                User git
+                IdentityFile ~/.ssh/id_rsa_lab_github
+                IdentitiesOnly yes
+
+            then calling
+
+                ./$(basename $0) --ssh=lab-github
+
+            would clone the repositories with "git@lab-github:/${fork}/..."
+
+    The repositories will be cloned to:
+EOU
 
     for repo in ${github_repos[@]}; do
-        git clone ${repo}
+        reponame=$(basename $repo)
+        reponame=${reponame%.*}
+        repopath="$clone_dir/$reponame"
+        echo "        $reponame --> $repopath"
+    done
+
+    exit 0
+}
+
+github_setup () {
+    cd "$clone_dir"
+
+    for repo in ${github_repos[@]}; do
+        git clone ${1}${repo}
     done
 }
 
-berkeley_setup() {
 
-    default_user=RCCohenLab
-    echo "Enter the user name on the 128.32.208.13 server to use (empty will use $default_user)"
-    read user
+# *************** #
+# Parse arguments #
+# *************** #
 
-    if [[ -z $user ]]; then
-        user=$default_user
-    fi
+force_ssh=false
+force_https=false
+ssh_alias="github.com"
 
-    echo "You will need to enter your password for each rep (sorry, could not find a way around that)"
-    read junk
-
-
-    cd "$_mydir/.."
-
-    for repo in ${berkeley_repos[@]}; do
-        GIT_SSH_COMMAND="ssh -o PreferredAuthentications=password" git clone ${user}@128.32.208.13:${repo}
-    done
-
-}
+for arg in "$@"; do
+    case $arg in
+        --ssh)
+            force_ssh=true
+            force_https=false
+            ;;
+        --https)
+            force_ssh=false
+            force_https=true
+            ;;
+        --ssh=*)
+            ssh_alias="${arg#*=}"
+            ;;
+        *)
+            # no need to explicitly specify help options, will print usage
+            # whenever an unrecognized argument is given, including -h, --help
+            print_usage
+            ;;
+    esac
+    shift
+done
+            
 
 # Is Git installed on the system?
-isgit=$(which gitblah > /dev/null)
+which git > /dev/null
+isgit=$?
 if [[ $isgit != 0 ]]; then
     manual_setup
     exit 0
 fi
 
-# Were we cloned from GitHub or the Berkeley file server?
-origin_address="$(git remote get-url origin)"
-if [[ $origin_address =~ 'github' ]]; then
-    github_setup
-    exit 0
+# Were we cloned with SSH or HTTPS?
+# Allow user to force using HTTPS or SSH with the options '--https' or '--ssh'
+https_stem="https://github.com/"
+ssh_stem="git@${ssh_alias}:"
+
+if $force_https; then
+    stem="$https_stem"
+elif $force_ssh; then
+    stem="$ssh_stem"
 else
-    berkeley_setup
-    exit 0
+    remote=($(git remote -v | grep origin.*fetch))
+    if [[ ${remote[1]} =~ '^https' ]]; then
+        stem="$https_stem"
+    else
+        stem="$ssh_stem"
+    fi
 fi
+
+github_setup "$stem"
+
