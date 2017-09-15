@@ -91,21 +91,6 @@ if isempty(numThreads)
     numThreads = 1;
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% DEPENDENCIES %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%
-if DEBUG_LEVEL > 1; fprintf('Adding folders\n'); end
-%Add the 'Utils' folder within the BEHR repo and all subfolders to MATLAB's
-%search path. Also do the same for the "Albedo" directory (except it
-%doesn't need to be recursive at the moment).
-addpath(genpath(fullfile(behr_repo_dir,'Utils')));
-addpath(fullfile(behr_repo_dir, 'Albedo'));
-
-
-% Add the paths needed for certain utility classes and functions
-addpath(genpath(behr_paths.classes));
-addpath(genpath(behr_paths.utils));
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INITIALIZATION & INPUT VALIDATION %%%%%
@@ -331,8 +316,8 @@ behr_grid = GlobeGrid(0.05, 'domain', [lonmin, lonmax, latmin, latmax]);
 
 if DEBUG_LEVEL > 1; fprintf('Staring main loop\n'); end
 
-parfor(j=1:length(datenums), n_workers)
-%for j=1:length(datenums)
+%parfor(j=1:length(datenums), n_workers)
+for j=1:length(datenums)
     this_task = getCurrentTask();
     if isempty(this_task)
         this_task.ID = -1;

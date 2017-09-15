@@ -60,18 +60,6 @@ function BEHR_main(varargin)
 %%%%% INITIALIZATION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
-%the Git repository for BEHR, this is the /Utils folder.
-mpath = fileparts(mfilename('fullpath'));
-addpath(genpath(fullfile(mpath,'..','Utils')));
-
-
-% Add the paths needed to run on the cluster. Modify these manually if
-% needed.
-addpath(genpath(behr_paths.classes));
-addpath(genpath(behr_paths.utils));
-addpath(behr_paths.psm_dir);
-
 E = JLLErrors;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -131,6 +131,12 @@ end
             if ~ask_yn(sprintf('Directory\n %s\n exists, it will be cleared before continuing. Proceed?', dfolder))
                 E.userCancel()
             else
+                % This is set up to delete all files in one of the
+                % "ProducedYYYYMMDD" folders b/c all files in those folders
+                % should be produced by the code in the state represented
+                % by the GitReport.txt file. If we allow ourselves to only
+                % remove a subset of files, that is no longer guaranteed to
+                % be true.
                 delete(fullfile(dfolder, '*'));
             end
         else
