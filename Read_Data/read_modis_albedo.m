@@ -15,12 +15,14 @@ p = inputParser;
 p.addParameter('DEBUG_LEVEL', 0);
 p.addParameter('LoncornField', 'FoV75CornerLongitude');
 p.addParameter('LatcornField', 'FoV75CornerLatitude');
+p.addParameter('QualityLimit', 2);
 p.parse(varargin{:});
 pout = p.Results;
 
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 loncorn_field = pout.LoncornField;
 latcorn_field = pout.LatcornField;
+max_qual_flag = pout.QualityLimit;
 
 if ~ischar(modis_directory)
     E.badinput('MODIS_DIRECTORY must be a string')
@@ -73,10 +75,12 @@ mcd43_info = hdfinfo(fullfile(alb_dir,alb_files(1).name));
 band3_iso = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter1_Band3'));
 band3_vol = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter2_Band3'));
 band3_geo = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter3_Band3'));
+brdf_quality = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Quality'));
 
-band3_iso = flipud(double(band3_iso));
-band3_vol = flipud(double(band3_vol));
-band3_geo = flipud(double(band3_geo));
+band3_iso = flipud(band3_iso);
+band3_vol = flipud(band3_vol);
+band3_geo = flipud(band3_geo);
+brdf_quality = flipud(brdf_quality);
 
 %MODIS albedo is given in 0.05 degree cells and a single file covers the
 %full globe, so figure out the lat/lon of the middle of the grid cells as:
@@ -102,6 +106,7 @@ in_lons = find(band3_lon>=lon_min & band3_lon<=lon_max);
 band3_iso = band3_iso(in_lats,in_lons); 
 band3_vol = band3_vol(in_lats,in_lons);
 band3_geo = band3_geo(in_lats,in_lons);
+brdf_quality = brdf_quality(in_lats,in_lons);
 
 band3_lats=band3_lats(in_lats,in_lons);
 band3_lons=band3_lons(in_lats,in_lons);
@@ -134,6 +139,17 @@ for k=1:c;
     % single lat and lon vector
     xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
     
+    % Also remove data that has too low a quality. The quality values are
+    % described in the "Description" attribute for the "BRDF_Quality" SDS.
+    % Lower values for the quality flag are better.
+    xx_alb = xx_alb & brdf_quality <= max_qual_flag;
+    
+    % If we don't have any data left, set the BRDF value to a NaN. 
+    if sum(xx_alb) == 0
+        MODISAlbedo(k) = nan;
+        continue
+    end
+    
     % The 180-RAA should flip the RAA back to the standard definition (i.e.
     % the supplemental angle of what's in the data product). See the help
     % text for modis_brdf_kernels for why that matters.
@@ -144,6 +160,9 @@ for k=1:c;
     count_modis(k) = numel(band3_vals);
     % ************** %
     
+    % Criteria for when to consider a pixel ocean: if less that 50% of the
+    % MODIS grid cells in the pixel have a non-fill value, then we treat
+    % the pixel as an ocean pixel.
     if sum(isnan(band3_vals)) < 0.5 * numel(band3_vals)
         band3_avg = nanmean(band3_vals(band3_vals>0));
     else
