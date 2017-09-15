@@ -133,9 +133,11 @@ elif $force_ssh; then
     stem="$ssh_stem"
 else
     remote=($(git remote -v | grep origin.*fetch))
-    if [[ ${remote[1]} =~ '^https' ]]; then
+    if [[ ${remote[1]} =~ ^https ]]; then
+        echo "Cloning with HTTPS..."
         stem="$https_stem"
     else
+        echo "Cloning with SSH..."
         stem="$ssh_stem"
     fi
 fi
