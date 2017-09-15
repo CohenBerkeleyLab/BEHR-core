@@ -77,9 +77,9 @@ global mat_file_dir
 global save_dir
 global numThreads
 if ~onCluster
-    mat_file_dir = BEHR_paths('behr_mat_dir');
+    mat_file_dir = behr_paths.behr_mat_dir;
     save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,BEHR_version);
-    save_dir = fullfile(BEHR_paths('website_staging_dir'),save_subdir);
+    save_dir = fullfile(behr_paths.website_staging_dir,save_subdir);
     if ~exist(save_dir,'dir')
         mkdir(save_dir)
     end
@@ -500,6 +500,16 @@ for d=1:numel(Data_in)
             h5writeatt(hdf_fullfilename, var_name, atts{a}, attr.(vars{v}).(atts{a}));
         end
         
+        
+        % If this is the BEHRQualityFlags field, add the bit meanings to
+        % the attributes. We need to give behr_quality_flags input that it
+        % can treat as if it were getting actual data in order to create
+        % the flags definition cell array.
+        if strcmpi(vars{v}, 'BEHRQualityFlags')
+            [~,flags_definition] = behr_quality_flags();
+            flags_definition = flags_definition(~iscellcontents(flags_definition, 'isempty'));
+            h5writeatt(hdf_fullfilename, var_name, 'FlagMeanings', strjoin(flags_definition, ', '));
+        end
     end
     
     % Write an attribute to the swath group describing if it is gridded or

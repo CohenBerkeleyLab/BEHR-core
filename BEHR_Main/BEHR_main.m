@@ -39,21 +39,6 @@ if onCluster
     cleanupobj = onCleanup(@() mycleanup());
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% DEPENDENCIES %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%
-
-%Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
-%the Git repository for BEHR, this is the /Utils folder.
-mpath = fileparts(mfilename('fullpath'));
-addpath(genpath(fullfile(mpath,'..','Utils')));
-
-
-% Add the paths needed to run on the cluster. Modify these manually if
-% needed.
-addpath(genpath(BEHR_paths_old('classes')));
-addpath(genpath(BEHR_paths_old('utils')));
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INITIALIZATION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -103,27 +88,27 @@ end
 %This is the directory where the final .mat file will be saved. This will
 %need to be changed to match your machine and the files' location.
 if isempty(behr_mat_dir)
-    behr_mat_dir = BEHR_paths_old('behr_mat_dir');
+    behr_mat_dir = behr_paths.behr_mat_dir;
 end
 
 %This is the directory where the "OMI_SP_*.mat" files are saved. This will
 %need to be changed to match your machine and the files' location.
 if isempty(sp_mat_dir)
-    sp_mat_dir = BEHR_paths_old('sp_mat_dir');
+    sp_mat_dir = behr_paths.sp_mat_dir;
 end
 
 %Add the path to the AMF_tools folder which contains rNmcTmp2.m,
 %omiAmfAK2.m, integPr2.m and others.  In the Git repository for BEHR, this
 %is the 'AMF_tools' folder.
 if isempty(amf_tools_path)
-    amf_tools_path = BEHR_paths_old('amf_tools_dir');
+    amf_tools_path = behr_paths.amf_tools_dir;
 end
 
 %This is the directory where the NO2 profiles are stored. This will
 %need to be changed to match your machine and the files' location.
 %no2_profile_path = '/Volumes/share/GROUP/SAT/BEHR/Monthly_NO2_Profiles';
 if isempty(no2_profile_path)
-    no2_profile_path = BEHR_paths_old('no2_profile_path');
+    no2_profile_path = behr_paths.no2_profile_path;
 end
 
 % Verify the paths integrity.
@@ -169,6 +154,10 @@ end
 %****************************%
 cloud_amf = 'omi';
 %****************************%
+
+core_githead = git_head_hash(behr_paths.behr_core);
+behrutils_githead = git_head_hash(behr_paths.behr_utils);
+genutils_githead = git_head_hash(behr_paths.utils);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN FUNCTION %%%%%
@@ -302,7 +291,8 @@ parfor(j=1:length(datenums), n_workers)
         Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
         Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
         Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
-        
+        Data(d).BEHRQualityFlags = behr_quality_flags(Data(d).BEHRAMFTrop, Data(d).BEHRAMFTropVisOnly,...
+            Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag, Data(d).MODISAlbedoQuality, Data(d).CloudFraction); 
     end
     
     b=length(Data);
@@ -318,6 +308,9 @@ parfor(j=1:length(datenums), n_workers)
         Data(z).BEHRColumnAmountNO2TropVisOnly(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AmfTrop < -30000) = nan;
         if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
         
+        Data(z).GitHead_Core_Main = core_githead;
+        Data(z).GitHead_BEHRUtils_Main = behrutils_githead;
+        Data(z).GitHead_GenUtils_Main = genutils_githead;
     end
     
     
