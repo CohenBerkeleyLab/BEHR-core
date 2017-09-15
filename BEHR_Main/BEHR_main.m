@@ -51,20 +51,6 @@ function BEHR_main(varargin)
 %Based on BEHR_nwus by Ashley Russell (02/09/2012)
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% INITIALIZATION %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%Add the 'Utils' folder and all subfolders to MATLAB's search path. Within
-%the Git repository for BEHR, this is the /Utils folder.
-mpath = fileparts(mfilename('fullpath'));
-addpath(genpath(fullfile(mpath,'..','Utils')));
-
-
-% Add the paths needed to run on the cluster. Modify these manually if
-% needed.
-addpath(genpath(behr_paths.classes));
-addpath(genpath(behr_paths.utils));
 
 E = JLLErrors;
 
@@ -173,6 +159,10 @@ if onCluster
     cleanupobj = onCleanup(@() mycleanup());
 end
 
+
+core_githead = git_head_hash(behr_paths.behr_core);
+behrutils_githead = git_head_hash(behr_paths.behr_utils);
+genutils_githead = git_head_hash(behr_paths.utils);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN FUNCTION %%%%%
@@ -300,7 +290,7 @@ parfor(j=1:length(datenums), n_workers)
         Data(d).BEHRWRFFile = wrf_profile_file;
         Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
         Data(d).BEHRQualityFlags = behr_quality_flags(Data(d).BEHRAMFTrop, Data(d).BEHRAMFTropVisOnly,...
-            Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag); % the false value for the MODIS flags is only temporary until I get the ocean model in.
+            Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag, Data(d).MODISAlbedoQuality, Data(d).CloudFraction); 
     end
     
     b=length(Data);
@@ -316,7 +306,9 @@ parfor(j=1:length(datenums), n_workers)
         Data(z).BEHRColumnAmountNO2TropVisOnly(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AmfTrop < -30000) = nan;
         if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
         
-        Data(z).GitHead_Main = githead;
+        Data(z).GitHead_Core_Main = core_githead;
+        Data(z).GitHead_BEHRUtils_Main = behrutils_githead;
+        Data(z).GitHead_GenUtils_Main = genutils_githead;
     end
     
     

@@ -44,17 +44,21 @@ for a=1:numel(GLOBETerpres)
     % vice versa, we can quickly reduce the number of
     % points by comparing just one lat and lon vector to
     % the extent of the pixel.
+    if DEBUG_LEVEL > 4; t_cut = tic; end
     ai=find(globe_lat_matrix(:,1)>=min(yall) & globe_lat_matrix(:,1)<=max(yall));
     bi=find(globe_lon_matrix(1,:)>=min(xall) & globe_lon_matrix(1,:)<=max(xall));
     pressurex=globe_elevations(ai,bi);
     pressure_latx=globe_lat_matrix(ai,bi);
     pressure_lonx=globe_lon_matrix(ai,bi);
+    if DEBUG_LEVEL > 4; fprintf('    Time to cut down GLOBE data = %f\n', toc(t_cut)); end
     %%%%%%%%%%%%%%%%%%%
     
     % inpolygon is slow compared to a simple logical test,
     % so we only apply it to the subset of GLOBE heights
     % immediately around our pixel.
+    if DEBUG_LEVEL > 4; t_poly = tic; end
     xx_globe = inpolygon(pressure_latx,pressure_lonx,yall,xall);
+    if DEBUG_LEVEL > 4; fprintf('    Time to apply inpolygon to GLOBE data = %f\n', toc(t_poly)); end
     
     pres_vals=pressurex(xx_globe);
     GLOBETerpres(a)=1013.25 .* exp(-mean(pres_vals) / 7400 ); %Originally divided by 7640 m

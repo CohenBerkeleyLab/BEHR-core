@@ -564,6 +564,16 @@ for d=1:numel(Data_in)
             h5writeatt(hdf_fullfilename, var_name, atts{a}, attr.(vars{v}).(atts{a}));
         end
         
+        
+        % If this is the BEHRQualityFlags field, add the bit meanings to
+        % the attributes. We need to give behr_quality_flags input that it
+        % can treat as if it were getting actual data in order to create
+        % the flags definition cell array.
+        if strcmpi(vars{v}, 'BEHRQualityFlags')
+            [~,flags_definition] = behr_quality_flags();
+            flags_definition = flags_definition(~iscellcontents(flags_definition, 'isempty'));
+            h5writeatt(hdf_fullfilename, var_name, 'FlagMeanings', strjoin(flags_definition, ', '));
+        end
     end
     
     % Write an attribute to the swath group describing if it is gridded or
