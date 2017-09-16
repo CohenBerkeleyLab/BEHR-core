@@ -1,6 +1,25 @@
 function [ data ] = avg_globe_data_to_pixels( data, globe_elevations, globe_lon_matrix, globe_lat_matrix, varargin )
-%UNTITLED7 Summary of this function goes here
-%   Detailed explanation goes here
+%AVG_GLOBE_DATA_TO_PIXELS Averages GLOBE elevation data to OMI pixels
+%   DATA = AVG_GLOBE_DATA_TO_PIXELS( DATA, GLOBE_ELEV, GLOBE_LON,
+%   GLOBE_LAT) Averages Global Land One-km Elevation (GLOBE) data given in
+%   GLOBE_ELEV at coordinates GLOBE_LON and GLOBE_LAT to the pixels with
+%   corners given by the fields FoV75CornerLongitude, FoV75CornerLatitude
+%   in the structure DATA. GLOBE_LON and GLOBE_LAT must be matrices the
+%   same shape as GLOBE_ELEV. The elevations are converted to pressure by
+%   the equation: 
+%
+%       p = (1013 hPa) * exp( -z / 7400 )
+%
+%   where z is the GLOBE elevation in meters. This is stored as the field
+%   GLOBETerpres in DATA.
+%
+%   Parameters:
+%
+%       'DEBUG_LEVEL' - increase the verbosity. Default is 0, higher
+%       numbers print more information.
+%
+%       'LoncornField', 'LatcornField' - change which fields in DATA are
+%       used as the definition of the pixel corners
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
