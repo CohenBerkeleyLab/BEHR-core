@@ -142,7 +142,7 @@ for k=1:c;
     % Also remove data that has too low a quality. The quality values are
     % described in the "Description" attribute for the "BRDF_Quality" SDS.
     % Lower values for the quality flag are better.
-    xx_alb = xx_alb & brdf_quality <= max_qual_flag;
+    xx_alb = xx_alb & (brdf_quality <= max_qual_flag | isnan(brdf_quality));
     
     % If we don't have any data left, set the BRDF value to a NaN. 
     if sum(xx_alb) == 0
