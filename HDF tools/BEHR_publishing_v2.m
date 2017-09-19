@@ -213,7 +213,9 @@ if ~exist(save_dir,'dir')
     E.badinput('save_dir must be a directory');
 end
 
-git_head = git_head_hash(behr_repo_dir);
+git_heads.core = git_head_hash(behr_paths.behr_core);
+git_heads.behr_utils = git_head_hash(behr_paths.behr_utils);
+git_heads.gen_utils = git_head_hash(behr_paths.utils);
 
 %%%%%%%%%%%%%%%%%%%%%
 %%%%% MAIN LOOP %%%%%
@@ -251,7 +253,7 @@ if ~onCluster
             end
 
             if strcmpi(output_type,'hdf')
-                overwrite = make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_head, DEBUG_LEVEL);
+                overwrite = make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
                 overwrite = make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,overwrite,DEBUG_LEVEL);
             end
@@ -286,7 +288,7 @@ else
             end
 
             if strcmpi(output_type,'hdf')
-                make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_head, DEBUG_LEVEL);
+                make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
                 make_txt_file(Data_to_save, vars, attr, date_string, save_dir, savename, overwrite, DEBUG_LEVEL);
             end
@@ -401,7 +403,7 @@ end
 end
 
 
-function overwrite = make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, current_git_head, DEBUG_LEVEL)
+function overwrite = make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, current_git_heads, DEBUG_LEVEL)
 E = JLLErrors;
 
 if ~strcmp(savename(end),'_')
@@ -526,11 +528,30 @@ for d=1:numel(Data_in)
         otherwise
             E.badinput('"pixel_type" not recognized');
     end
+    
+    % General swath attributes
     h5writeatt(hdf_fullfilename, group_name, 'Description', swath_attr);
     h5writeatt(hdf_fullfilename, group_name, 'Version', BEHR_version());
-    h5writeatt(hdf_fullfilename, group_name, 'ReadGitHead', Data_in(d).GitHead_Read);
-    h5writeatt(hdf_fullfilename, group_name, 'MainGitHead', Data_in(d).GitHead_Main);
-    h5writeatt(hdf_fullfilename, group_name, 'PubGitHead', current_git_head);
+    
+    % Files read in in the process of generating the product
+    h5writeatt(hdf_fullfilename, group_name, 'OMNO2-File', Data_in(d).OMNO2File);
+    h5writeatt(hdf_fullfilename, group_name, 'OMPIXCOR-File', Data_in(d).OMPIXCORFile);
+    h5writeatt(hdf_fullfilename, group_name, 'MODIS-Cloud-Files', strjoin(Data_in(d).MODISCloudFiles, ', '));
+    h5writeatt(hdf_fullfilename, group_name, 'MODIS-Albedo-File', Data_in(d).MODISAlbedoFile);
+    h5writeatt(hdf_fullfilename, group_name, 'WRF-Chem-File', Data_in(d).BEHRWRFFile);
+    
+    % Attributes tracking back to Git HEAD hashes
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-Core-Read', Data_in(d).GitHead_Core_Read);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-BEHRUtils-Read', Data_in(d).GitHead_BEHRUtils_Read);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-GenUtils-Read', Data_in(d).GitHead_GenUtils_Read);
+    
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-Core-Main', Data_in(d).GitHead_Core_Main);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-BEHRUtils-Main', Data_in(d).GitHead_BEHRUtils_Main);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-GenUtils-Main', Data_in(d).GitHead_GenUtils_Main);
+    
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-Core-Pub', current_git_heads.core);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-BEHRUtils-Pub', current_git_heads.behr_utils);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-GenUtils-Pub', current_git_heads.gen_utils);
     if DEBUG_LEVEL > 2; toc; end
 end
 end
