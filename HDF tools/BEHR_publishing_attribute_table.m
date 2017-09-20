@@ -1,17 +1,21 @@
-function [ attr_table ] = BEHR_publishing_attribute_table( format )
+function [ attr_table ] = BEHR_publishing_attribute_table( varargin )
 %BEHR_PUBLISHING_ATTRIBUTE_TABLE Returns table of HDF attributes for BEHR fields
 %   Detailed explanation goes here
 
 E = JLLErrors;
 
-if ~exist('format','var')
-    format = 'cell';
+as_struct = ismember('struct', varargin);
+
+allowed_subsets = {'all', 'sp', 'behr', 'behr-insitu', 'pub', 'pub-insitu'};
+xx = ismember(varargin, allowed_subsets);
+if sum(xx) > 1
+    E.badinput('Only one of %s may be an input', strjoin(allowed_subsets, ', '));
+elseif sum(xx) < 1
+    subset = 'all';
 else
-    allowed_formats = {'cell','struct'};
-    if ~ismember(format, allowed_formats)
-        E.badinput('FORMAT must be one of %s', strjoin(allowed_formats, ', '));
-    end
-end
+    subset = varargin{xx};
+end 
+
 
 % This cell array will have the variable name, unit, range, fill, product
 % (SP or BEHR) and description in that order.
@@ -20,6 +24,8 @@ shortfill = single(-32767);
 pixcorfill = single(-1.00000001504747e+30);
 behrfill = single(behr_fill_val());
 nofill = NaN;
+
+% Variable name, unit, range, fill value, product, description
 
 attr_table = {  'AmfStrat', 'unitless', [0, Inf], longfill, 'SP', 'Stratospheric AMF';...
                 'AmfTrop', 'unitless', [0, Inf], longfill, 'SP', 'Tropospheric AMF (standard product)';...
@@ -77,12 +83,13 @@ attr_table = {  'AmfStrat', 'unitless', [0, Inf], longfill, 'SP', 'Stratospheric
                 };
             
 attr_table = add_psm_weight_fields(attr_table);
+attr_table = choose_subset(attr_table, subset);
             
 if numel(unique(attr_table(:,1))) < size(attr_table, 1)
     E.callError('attr_def', 'One or more attributes is multiply defined in the attributes table');
 end
             
-if strcmpi(format, 'struct')
+if as_struct
     fields = {'unit', 'range', 'fillvalue', 'product', 'description'};
     S = struct;
     for a = 1:size(attr_table,1)
@@ -98,9 +105,36 @@ end
         weights_vars = BEHR_publishing_gridded_fields.psm_weight_vars;
         table_lines = cell(numel(weights_vars), size(attr_table, 2));
         for i=1:numel(weights_vars)
-            table_lines(i,:) = [weights_vars(i), {'unitless', [0, Inf], behrfill, 'BEHR', sprintf('Weight field for the %s field', BEHR_publishing_gridded_fields.all_psm_vars{i})}];
+            if ismember(weights_vars{i}, BEHR_publishing_gridded_fields.psm_weight_vars('insitu'))
+                product = 'BEHR-InSitu';
+            else
+                product = 'BEHR';
+            end
+
+            table_lines(i,:) = [weights_vars(i), {'unitless', [0, Inf], behrfill, product, sprintf('Weight field for the %s field', BEHR_publishing_gridded_fields.all_psm_vars{i})}];
         end
         attr_table = cat(1, attr_table, table_lines);
+    end
+
+    
+    function attr_table = choose_subset(attr_table, subset)
+        if strcmpi(subset, 'all')
+            return
+        elseif strcmpi(subset, 'pub')
+            products = {'SP', 'BEHR'};
+        elseif strcmpi(subset, 'pub-insitu')
+            products = {'SP', 'BEHR', 'BEHR-InSitu'};
+        else
+            products = {subset};
+        end
+
+        xx = false(size(attr_table,1));
+
+        for a=1:size(attr_table,1)
+            xx(a) = any(strcmpi(attr_table{a,5}, products));
+        end
+
+        attr_table = attr_table(xx,:);
     end
 
 end

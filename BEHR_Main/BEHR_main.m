@@ -195,7 +195,9 @@ else
     n_workers=0;
 end
 
-githead = git_head_hash(behr_repo_dir());
+core_githead = git_head_hash(behr_paths.behr_core);
+behrutils_githead = git_head_hash(behr_paths.behr_utils);
+genutils_githead = git_head_hash(behr_paths.utils);
 
 datenums = datenum(date_start):datenum(date_end);
 %parfor(j=1:length(datenums), n_workers)
@@ -302,7 +304,7 @@ for j=1:length(datenums)
         Data(d).BEHRWRFFile = wrf_profile_file;
         Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
         Data(d).BEHRQualityFlags = behr_quality_flags(Data(d).BEHRAMFTrop, Data(d).BEHRAMFTropVisOnly,...
-            Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag); % the false value for the MODIS flags is only temporary until I get the ocean model in.
+        Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag); % the false value for the MODIS flags is only temporary until I get the ocean model in.
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -322,7 +324,9 @@ for j=1:length(datenums)
         Data(z).BEHRColumnAmountNO2TropVisOnly(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AmfTrop < -30000) = nan;
         if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
         
-        Data(z).GitHead_Main = githead;
+        Data(z).GitHead_Core_Main = core_githead;
+        Data(z).GitHead_BEHRUtils_Main = behrutils_githead;
+        Data(z).GitHead_GenUtils_Main = genutils_githead;
     end
     
     

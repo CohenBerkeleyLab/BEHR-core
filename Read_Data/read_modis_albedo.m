@@ -1,7 +1,25 @@
 function [ data ] = read_modis_albedo( modis_directory, coart_lut, date_in, data, varargin )
-%UNTITLED6 Summary of this function goes here
-%   Detailed explanation goes here
-
+%READ_MODIS_ALBEDO Reads MODIS MCD43C1 BRDF albedo 
+%   DATA = READ_MODIS_ALBEDO( MODIS_DIR, COART_LUT, DATE_IN, DATA ) Reads
+%   MODIS MCD43C1 data from MODIS_DIR (which must be the path to the root
+%   MCD43C1 directory, containing each year in a subfolder). It identifies
+%   the proper file to read for the DATE_IN (a date string automatically
+%   understood by Matlab or date number), reads in the BRDF kernel
+%   coefficients, calculates the kernel values, and combines them to get
+%   the surface reflectivity. If a pixel is over water (which means that
+%   more than 50% of the coincident MCD43C1 data are fill values), the
+%   surface reflectance is deduced from the COART_LUT, the look up table
+%   struct returned by COART_SEA_REFLECTANCE. This table must be given as
+%   loading the HTML file is problematic in a parallel loop.
+%
+%   Parameters:
+%
+%       'DEBUG_LEVEL' - increase the verbosity. Default is 0, higher
+%       numbers print more information.
+%
+%       'LoncornField', 'LatcornField' - change which fields in DATA are
+%       used as the definition of the pixel corners
+%
 % Important references for MODIS BRDF v006 product:
 %   V006 User Guide: https://www.umb.edu/spectralmass/terra_aqua_modis/v006
 %

@@ -1,6 +1,17 @@
 function [ gome_ler_ratio, gome_lon, gome_lat ] = read_gome2_ler( ler_file, lonlim, latlim )
-%UNTITLED2 Summary of this function goes here
-%   Detailed explanation goes here
+%READ_GOME2_LER Reads in LER values from the GOME2 data file
+%   To use the Mobley sea reflectivity (which is defined at 550 nm) for the
+%   BEHR retrieval, we need to convert it to the 400-460 nm range used in
+%   the NO2 retrieval. GOME2 was used to produce a Lambertian Equivalent
+%   Reflectivity surface reflectivity map at a number of wavelengths, so we
+%   can use that to calculate a surface reflectivity ratio between 433 and
+%   550 nm, and scale the Mobley values by that.
+%
+%   [ GOME_LER_RATIO, GOME_LON, GOME_LAT ] = READ_GOME2_LER( LER_FILE,
+%   LONLIM, LATLIM ) Reads the GOME2 LER file defined in BEHR_PATHS.m,
+%   cutting down the data to between LONLIM and LATLIM, and returning the
+%   ratio of LER_433/LER_550 (GOME_LER_RATIO) and the lat/lon coordinates
+%   as a meshgrid.
 
 % The GOME-2A file was obtained from http://www.temis.nl/surface/gome2_ler.html
 

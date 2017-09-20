@@ -1,6 +1,28 @@
 function [ success ] = behr_unit_test( new, old, DEBUG_LEVEL, fid, fields_to_ignore )
-%UNTITLED9 Summary of this function goes here
-%   Detailed explanation goes here
+%BEHR_UNIT_TEST Compare old and new BEHR data 
+%   SUCCESS = BEHR_UNIT_TEST( NEW, OLD )
+%   Takes two Data or OMI structures (NEW and OLD) and compares the values
+%   of each field in the structures. If everything matches, SUCCESS will be
+%   true, if not, it'll be false.
+%
+%   SUCCESS = BEHR_UNIT_TEST( NEW, OLD, DEBUG_LEVEL ) Allows you to control
+%   the verbosity of the function. By default it prints out each individual
+%   comparison (DEBUG_LEVEL == 2). This is useful if you need the detail,
+%   but prints a lot of information. Passing 1 as DEBUG_LEVEL will only
+%   print failed tests, passing 0 will turn it off completely.
+%
+%   SUCCESS = BEHR_UNIT_TEST( NEW, OLD, DEBUG_LEVEL, FID ) Redirects the
+%   output printing from the terminal to the file with file ID FID (from
+%   FOPEN).
+%
+%   SUCCESS = BEHR_UNIT_TEST( NEW, OLD, DEBUG_LEVEL, FID, FIELDS_TO_IGNORE )
+%   FIELDS_TO_IGNORE is a cell array of strings that specifies fields that
+%   should not be compared, usually because you know they will fail for a
+%   good reason. For instance, the GitHead fields will almost always fail
+%   because the new and old data were produced with different versions of
+%   the code.
+
+E = JLLErrors;
 
 if ~exist('DEBUG_LEVEL', 'var')
     DEBUG_LEVEL = 2;
@@ -14,6 +36,8 @@ end
 
 if ~exist('fields_to_ignore', 'var')
     fields_to_ignore = {};
+elseif ~iscellstr(fields_to_ignore)
+    E.badinput('FIELDS_TO_IGNORE must be a cell array of strings');
 end
 
 tol = 1e-6;

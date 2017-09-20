@@ -1,6 +1,15 @@
 function [  ] = find_vcd_fill( start_date, end_date )
-%UNTITLED4 Summary of this function goes here
-%   Detailed explanation goes here
+%FIND_VCD_FILL Find days where cloud pressures caused fill value in VCDs
+%   If surface pressure > 1013 hPa, the BEHR AMF calculation fails because
+%   this is outside the range of surface pressure values defined in the
+%   TOMRAD look up table. This includes cloud pressures > 1013, so this
+%   function finds days when the AMF calculation failed due to cloud
+%   pressure > 1013, which we clamp to >= 1013 hPa now.
+%
+%   FIND_VCD_FILL( START_DATE, END_DATE ) diagnoses BEHR *.mat files in the
+%   standard behr_mat_dir between START_DATE and END_DATE, printing out
+%   information to the command window.
+
 sp_path = behr_paths.behr_mat_dir;
 %save_path = fullfile(sp_path,'Staging');
 for d=datenum(start_date):datenum(end_date)

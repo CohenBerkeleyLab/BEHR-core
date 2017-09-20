@@ -1,6 +1,10 @@
 function [ DataHDF, DataTXT ] = match_hdf_txt( hdffile, txtfile, fields )
-%UNTITLED Summary of this function goes here
-%   Detailed explanation goes here
+%MATCH_HDF_TEXT Matches up data in a text file to the array shape in an HDF file
+%   [ DATAHDF, DATATXT ] = MATCH_HDF_TEXT( HDFFILE, TXTFILE, FIELDS )
+%   will read data from the files at paths HDFFILE and TXTFILE and return
+%   structures DATAHDF and DATATXT with fields FIELDS, matching up the data
+%   in the text file with that from the HDF file so that the arrays have
+%   the same shape.
 
 fields = [{'Longitude', 'Latitude'}, fields(:)'];
 

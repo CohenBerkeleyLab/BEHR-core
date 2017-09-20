@@ -1,6 +1,28 @@
 function [ refl, refl_struct ] = coart_sea_reflectance( sza, refl_struct )
-%UNTITLED Summary of this function goes here
-%   Detailed explanation goes here
+%COART_SEA_REFLECTANCE Calculate sea surface reflectance from the COART LUT
+%   The COART (Coupled Atmosphere-Ocean Radiative Transfer) model allows
+%   for simulation of light interacting with the surface of the ocean. The
+%   model is hosted online at 
+%
+%   https://cloudsgate2.larc.nasa.gov/jin/coart.html
+%
+%   In order to calculate surface reflectance, I produced a look-up table
+%   from this model that parameterizes the surface reflectance by the solar
+%   zenith angle. This function reads the HTML version of that output and
+%   interpolates to the input SZA values.
+%
+%   [ REFL, REFL_STRUCT ] = COART_SEA_REFLECTANCE( SZA ) will read the HTML
+%   file 'coart.htm' in the same directory as this function, extracting the
+%   surface reflectance/SZA look-up table from it and finding the surface
+%   reflectances that correspond to the input SZAs (which may be an array),
+%   returned as REFL (which will be the same size as SZA). REFL_STRUCT is
+%   the result of reading the HTML file, it is a structure with fields
+%   "sza" and "alb".
+%
+%   [ ___ ] = COART_SEA_REFLECTANCE( SZA, REFL_STRUCT ) skips reading the
+%   HTML file and instead takes the LUT from the REFL_STRUCT input. This
+%   can speed up the algorithm significantly, especially if running in
+%   parallel (as parallel read requests can jam up).
 
 
 

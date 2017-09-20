@@ -1,6 +1,10 @@
 function [ data ] = correct_sea_reflectance( data, this_month, gome_ratio, gome_lon, gome_lat )
-%UNTITLED3 Summary of this function goes here
-%   Detailed explanation goes here
+%CORRECT_SEA_REFLECTANCE Correct sea reflectance based on the ratio observed by GOME at two wavelengths
+%   [ DATA ] = CORRECT_SEA_REFLECTANCE( DATA, THIS_MONTH, GOME_RATIO,
+%   GOME_LON, GOME_LAT ) Takes in a BEHR Data structure and the numerical
+%   month, as well as GOME data read by read_gome2_ler. This multiplies the
+%   MODISAlbedo field in DATA by the GOME_RATIO value interpolated to each
+%   pixel's lat/lon, if the AlbedoOceanFlag is set to true for that pixel.
 
 for a=1:numel(data.Longitude)
     if data.AlbedoOceanFlag(a)

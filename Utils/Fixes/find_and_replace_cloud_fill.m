@@ -1,6 +1,16 @@
 function [  ] = find_and_replace_cloud_fill( start_date, end_date )
-%UNTITLED4 Summary of this function goes here
-%   Detailed explanation goes here
+%FIND_AND_REPLACE_CLOUD_FILL Fixes mistakenly scaled cloud fill values
+%   In the SP data, the CloudFraction and CloudRadianceFraction fields are
+%   given as integers that are to be scaled by 1000 in order to give the
+%   true value between 0 and 1. In an early version of BEHR, these fields
+%   were scaled before the fill values were treated, mistakenly scaling the
+%   fill values down by 1000 to. While not a fatal error, I wrote this
+%   function to replace the incorrectly scaled fill values with the
+%   unscaled ones.
+%
+%   FIND_AND_REPLACE_CLOUD_FILL( START_DATE, END_DATE ) loads OMI_SP .mat
+%   files from the sp_mat_dir specified by behr_paths, corrects the fill
+%   values, and saves them in a subdirectory of the sp_mat_dir, "Staging".
 sp_path = behr_paths.sp_mat_dir;
 save_path = fullfile(sp_path,'Staging');
 for d=datenum(start_date):datenum(end_date)
