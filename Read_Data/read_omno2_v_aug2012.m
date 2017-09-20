@@ -91,7 +91,6 @@ if isempty(numThreads)
     numThreads = 1;
 end
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INITIALIZATION & INPUT VALIDATION %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
