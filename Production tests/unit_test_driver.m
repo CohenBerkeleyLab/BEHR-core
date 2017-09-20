@@ -69,7 +69,7 @@ test_dates_no_data = {'2016-05-30'};  % OMI was in safe mode; algorithm should g
 test_dates = unique(cat(1,test_dates,test_dates_no_data));
 my_dir = fileparts(mfilename('fullpath'));
 addpath(fullfile(my_dir,'SubTests'));
-what_to_test = ask_multichoice('Which step should be tested?', {'all', 'reading', 'behrmain'});
+what_to_test = ask_multichoice('Which step should be tested?', {'all', 'reading', 'behrmain', 'publishing'});
 
 use_behrpaths = ask_yn('Use the paths specified by BEHR_paths() for the old data?');
 generate_new_data = ask_yn('Generate the new files? If not you will be asked to choose the directories to load new files from');
@@ -91,13 +91,17 @@ fields_to_ignore = input('Specify any fields to ignore in unit testing, separate
 fields_to_ignore = strsplit(fields_to_ignore);
 
 if generate_new_data
-    make_git_report();
+    make_git_report(behr_paths.behr_core, 'GitReport-Core.txt');
+    make_git_report(behr_paths.behr_utils, 'GitReport-BEHRUtils.txt');
+    make_git_report(behr_paths.utils, 'GitReport-GenUtils.txt');
 end
 switch what_to_test
     case 'reading'
         success = test_reading();
     case 'behrmain'
         success = test_behr_main();
+    case 'publishing'
+        success = test_publishing();
     case 'all'
         success = test_all();
     otherwise
@@ -137,7 +141,8 @@ end
                 % by the GitReport.txt file. If we allow ourselves to only
                 % remove a subset of files, that is no longer guaranteed to
                 % be true.
-                delete(fullfile(dfolder, '*'));
+                
+                remove_contents(dfolder);
             end
         else
             mkdir(dfolder);
@@ -154,24 +159,29 @@ end
        rfile = fullfile(rfolder, rfilename);
     end
 
-    function make_git_report()
-        currdir = cd(behr_repo_dir());
-        % Overall status (current branch, modified/added/deleted/untracked
-        % files). Use --porcelain to remove formatting (bold, color, etc)
-        % and --branch to force it to show the branch. --no-pager means it
-        % won't try to put the output through "less" and avoids a "terminal
-        % not fully functional" warning.
-        [~, gitstat] = system('git --no-pager status --porcelain --branch');
-        
-        % Get the one line commit message for the last, decorated with any
-        % tags or branch heads. Remove color to avoid introducing special
-        % characters into the text.
-        [~, githead] = system('git --no-pager log -1 --pretty=oneline --decorate --no-color');
-        
-        % Get the differenced since the last commit, sans color and pager
-        % for the same reasons as above. By specifically diffing against
-        % HEAD, we get staged and unstaged changes.
-        [~, gitdiff] = system('git --no-pager diff --no-color HEAD');
+    function make_git_report(repo_dir, report_name)
+        currdir = cd(repo_dir);
+        try
+            % Overall status (current branch, modified/added/deleted/untracked
+            % files). Use --porcelain to remove formatting (bold, color, etc)
+            % and --branch to force it to show the branch. --no-pager means it
+            % won't try to put the output through "less" and avoids a "terminal
+            % not fully functional" warning.
+            [~, gitstat] = system('git --no-pager status --porcelain --branch');
+            
+            % Get the one line commit message for the last, decorated with any
+            % tags or branch heads. Remove color to avoid introducing special
+            % characters into the text.
+            [~, githead] = system('git --no-pager log -1 --pretty=oneline --decorate --no-color');
+            
+            % Get the differenced since the last commit, sans color and pager
+            % for the same reasons as above. By specifically diffing against
+            % HEAD, we get staged and unstaged changes.
+            [~, gitdiff] = system('git --no-pager diff --no-color HEAD');
+        catch err
+            cd(currdir)
+            rethrow(err);
+        end
         cd(currdir);
         
         % Extract the branch from the status - with "--porcelain --branch"
@@ -186,8 +196,8 @@ end
         % --git" is bolded so it's easier to see but we removed formatting)
         gitdiff = strrep(gitdiff, 'diff --git', sprintf('\ndiff --git'));
         
-        gfid = fopen(fullfile(save_folder, 'GitReport.txt'), 'w');
-        begin_msg = sprintf('Git report for unit test data generated on %s', datestr(now));
+        gfid = fopen(fullfile(save_folder, report_name), 'w');
+        begin_msg = sprintf('Git report on %s for unit test data generated on %s', repo_dir, datestr(now));
         gborder = repmat('*', size(begin_msg));
         
         fprintf(gfid, '%s\n%s\n%s\n\n', gborder, begin_msg, gborder); 
@@ -201,7 +211,8 @@ end
     function successes = test_all()
         read_success = test_reading();
         behr_success = test_behr_main(save_folder);
-        successes = read_success & behr_success;
+        pub_success = test_publishing(save_folder);
+        successes = read_success & behr_success & pub_success;
     end
 
     function successes = test_reading()
@@ -211,20 +222,16 @@ end
                 read_omno2_v_aug2012('start', test_dates{i}, 'end', test_dates{i}, 'sp_mat_dir', save_folder, 'overwrite', true, 'region', test_region);
             end
         else
-            fprintf('You''ll need to choose the directory with the new OMI_SP files for the following dates:\n  %s\n (press ENTER)\n', strjoin(test_dates, ', '));
-            input('','s'); % wait for the user
-            new_dir = getdir;
+            new_dir = getdir('You''ll need to choose the directory with the new OMI_SP files', test_dates);
             if ~exist('save_folder', 'var')
                 save_folder = new_dir;
             end
         end
         
         if use_behrpaths
-            old_dir = BEHR_paths('sp_mat_dir');
+            old_dir = behr_paths.sp_mat_dir;
         else
-            fprintf('You''ll need to choose the directory with the old OMI_SP files for the following dates:\n  %s\n (press ENTER)\n', strjoin(test_dates, ', '));
-            input('', 's'); % wait for the user
-            old_dir = getdir;
+            old_dir = getdir('You''ll need to choose the directory with the old OMI_SP files', test_dates);
         end
         
         successes = true(size(test_dates));
@@ -276,16 +283,19 @@ end
         end
     end
 
+    
+    %%%%%%%%%%%%%%%%%%%
+    % BEHR MAIN TESTS %
+    %%%%%%%%%%%%%%%%%%%
+    
     function successes = test_behr_main(sp_data_dir)
         if generate_new_data
             new_dir = save_folder;
             if ~exist('sp_data_dir', 'var')
-                if ask_yn('Use the paths specified by BEHR_paths() for the SP files to be read into BEHR_main?');
-                    sp_data_dir = BEHR_paths('sp_mat_dir');
+                if ask_yn('Use the paths specified by behr_paths for the SP files to be read into BEHR_main?');
+                    sp_data_dir = behr_paths.sp_mat_dir;
                 else
-                    fprintf('You''ll need to choose the directory with existing OMI_SP files for the following dates:\n  %s\n (press ENTER)\n', strjoin(test_dates, ', '));
-                    input('','s'); %wait for the user
-                    sp_data_dir = getdir;
+                    sp_data_dir = getdir('You''ll need to choose the directory with existing OMI_SP files', test_dates);
                 end
             end
             
@@ -294,20 +304,16 @@ end
             end
         else
             if ~exist('sp_data_dir', 'var')
-                fprintf('You''ll need to choose the directory with the new OMI_BEHR files for the following dates:\n  %s\n (press ENTER)\n', strjoin(test_dates, ', '));
-                input('','s'); %wait for the user
-                new_dir = getdir;
+                new_dir = getdir('You''ll need to choose the directory with the new OMI_BEHR files', test_dates);
             else
                 new_dir = sp_data_dir;
             end
         end
         
         if use_behrpaths
-            old_dir = BEHR_paths('behr_mat_dir');
+            old_dir = behr_paths.behr_mat_dir;
         else
-            fprintf('You''ll need to choose the directory with the old OMI_BEHR files for the following dates (press ENTER)\n');
-            input('','s'); % wait for the user
-            old_dir = getdir;
+            old_dir = getdir('You''ll need to choose the directory with the old OMI_BEHR files', test_dates);
         end
         
         successes_data = false(size(test_dates));
@@ -364,7 +370,111 @@ end
         successes = successes_data & successes_grid;
     end
 
+
+    %%%%%%%%%%%%%%%%%%%%
+    % PUBLISHING TESTS %
+    %%%%%%%%%%%%%%%%%%%%
+    
+    function successes = test_publishing(behr_data_dir)
+        if generate_new_data
+            new_native_dir = fullfile(save_folder, 'native_hdf');
+            new_gridded_dir = fullfile(save_folder, 'gridded_hdf');
+            if ~exist('behr_data_dir', 'var')
+                if ask_yn('Use the paths specified by behr_paths for the BEHR files to be read into BEHR_publishing_v2?')
+                    behr_data_dir = behr_paths.behr_mat_dir;
+                else
+                    behr_data_dir = getdir('You''ll need to choose the directory with existing OMI_BEHR files', test_dates);
+                end
+            end
+            
+            if ~exist(new_native_dir, 'dir')
+                mkdir(new_native_dir);
+            end
+            if ~exist(new_gridded_dir, 'dir')
+                mkdir(new_gridded_dir)
+            end
+            
+            for i=1:numel(test_dates)
+                BEHR_publishing_v2('start', test_dates{i}, 'end', test_dates{i}, 'output_type', 'hdf', 'pixel_type', 'native', 'mat_dir', behr_data_dir, 'save_dir', new_native_dir,...
+                    'organize', false, 'overwrite', true);
+                BEHR_publishing_v2('start', test_dates{i}, 'end', test_dates{i}, 'output_type', 'hdf', 'pixel_type', 'gridded', 'mat_dir', behr_data_dir, 'save_dir', new_gridded_dir,...
+                    'organize', false, 'overwrite', true);
+            end
+        else
+            if ~exist('behr_data_dir', 'var')
+                new_dir = getdir('You''ll need to choose the directory with the subdirectories "native_hdf" and "gridded_hdf" containing the new HDF files', test_dates);
+            else
+                new_dir = behr_data_dir;
+            end
+            new_native_dir = fullfile(new_dir, 'native_hdf');
+            new_gridded_dir = fullfile(new_dir, 'gridded_hdf');
+        end
+        
+        if use_behrpaths
+            old_root_dir = behr_paths.website_staging_dir;
+            old_native_dir = fullfile(old_root_dir, '..', 'webData', 'behr_hdf');
+            old_gridded_dir = fullfile(old_root_dir, '..', 'webData', 'behr_regridded_hdf');
+        else
+            old_native_dir = getdir('You''ll need to choose the directory with the old native pixel HDF files', test_dates);
+            old_gridded_dir = getdir('You''ll need to choose the directory with the old native gridded HDF files', test_dates);
+        end
+        
+        successes_native = test_publishing_subfunc(old_native_dir, new_native_dir);
+        successes_grid = test_publishing_subfunc(old_gridded_dir, new_gridded_dir);
+        
+        successes = successes_native & successes_grid;
+    end
+
+    function successes = test_publishing_subfunc(old_dir, new_dir)
+        native_or_gridded = regexp(new_dir, '(native)|(gridded)', 'match', 'once');
+        
+        successes = false(size(test_dates));
+        for i=1:numel(test_dates)
+            if DEBUG_LEVEL > 0
+                fprintf(fid, '\n');
+            end
+            filepat = behr_filename(test_dates{i}, '.hdf', true);
+            try
+                [old_data, old_file] = load_hdf_by_glob(fullfile(old_dir, filepat));
+                [new_data, new_file] = load_hdf_by_glob(fullfile(new_dir, filepat));
+            catch err
+                if strcmp(err.identifier, 'load_hdf_by_glob:file_not_found')
+                    if ismember(test_dates{i}, test_dates_no_data)
+                        if DEBUG_LEVEL > 0
+                            fprintf(fid, 'No data for %s as expected\n', test_dates{i});
+                        end
+                        successes(i) = true;
+                    else
+                        if DEBUG_LEVEL > 0
+                            fprintf(fid, 'FAIL: No data produced for %s!!!\n', test_dates{i});
+                        end
+                    end
+                    continue
+                else
+                    rethrow(err);
+                end
+            end
+            if DEBUG_LEVEL > 0
+                fprintf(fid, '\nChecking %s\n', test_dates{i});
+                fprintf(fid, 'Loaded old file: %s\n', old_file{1});
+                fprintf(fid, 'Loaded new file: %s\n', new_file{1});
+            end
+            
+            if DEBUG_LEVEL > 0
+                header_msg = sprintf('***** Running BEHR_publishing unit tests on %s HDFs ****', native_or_gridded);
+                header_border = repmat('*', 1, length(header_msg));
+                fprintf(fid, '\n%1$s\n%2$s\n%1$s\n', header_border, header_msg);
+            end
+            
+            successes(i) = behr_unit_test(new_data.Data, old_data.Data, DEBUG_LEVEL, fid, fields_to_ignore);
+        end
+    end
 end
+
+
+%%%%%%%%%%%%%%%%
+% SUBFUNCTIONS %
+%%%%%%%%%%%%%%%%
 
 function s = passfail(b)
 if b
@@ -374,7 +484,10 @@ else
 end
 end
 
-function d = getdir()
+function d = getdir(prompt, test_dates)
+fprintf('%s for the following dates:\n  %s\n (press ENTER)\n', prompt, strjoin(test_dates, ', '));
+input('','s'); %wait for the user
+
 E=JLLErrors;
 if isDisplay
     d = uigetdir;
@@ -387,6 +500,36 @@ else
             break
         else
             fprintf('That directory does not exist.\n')
+        end
+    end
+end
+end
+
+function [Data, file_name] = load_hdf_by_glob(file_pattern)
+F = dir(file_pattern);
+if numel(F) < 1
+    error('load_hdf_by_glob:file_not_found', 'No file matching "%s" found', file_pattern);
+elseif numel(F) > 1
+    error('load_hdf_by_glob:too_many_files', 'Multiple files matching "%s" found', file_pattern);
+end
+
+hdf_dir = fileparts(file_pattern);
+file_name = fullfile(hdf_dir, F(1).name);
+hdfi = h5info(fullfile(hdf_dir, file_name));
+Data = behrhdf2struct(hdfi);
+
+
+end
+
+function remove_contents(directory)
+F = dir(fullfile(directory, '*'));
+for i=1:numel(F)
+    if ~strcmp(F(i).name, '.') && ~strcmp(F(i).name, '..')
+        if F(i).isdir
+            remove_contents(fullfile(directory, F(i).name));
+            rmdir(fullfile(directory, F(i).name));
+        else
+            delete(fullfile(directory, F(i).name));
         end
     end
 end

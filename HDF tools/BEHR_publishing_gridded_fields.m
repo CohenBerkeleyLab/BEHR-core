@@ -70,6 +70,13 @@ classdef BEHR_publishing_gridded_fields
         % but aren't gridded normally. Usually, as in the case of latitude
         % and longitude, they define the grid itself.
         publish_only_gridded_vars = {'Latitude', 'Longitude'};
+
+        % These are fields that go into each swath's attributes, so they need to be
+        % copied by psm_wrapper into the OMI structure
+        swath_attr_vars = {'Date', 'OMNO2File', 'OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',...
+                           'BEHRWRFFile', 'GitHead_Core_Read', 'GitHead_BEHRUtils_Read',...
+                           'GitHead_GenUtils_Read', 'GitHead_Core_Main', 'GitHead_BEHRUtils_Main',...
+                           'GitHead_GenUtils_Main'};
     end
     
     methods(Static = true)
@@ -88,11 +95,26 @@ classdef BEHR_publishing_gridded_fields
                 BEHR_publishing_gridded_fields.reprocessed_psm_vars];
         end
         
-        function weight_vars = psm_weight_vars()
-            weight_vars = BEHR_publishing_gridded_fields.all_psm_vars;
+        function weight_vars = psm_weight_vars(subset)
+            if ~exist('subset', 'var')
+                subset = 'all';
+            end
+
+            if strcmpi(subset, 'std')
+                weight_vars = BEHR_publishing_gridded_fields.psm_gridded_vars;
+            elseif strcmpi(subset, 'insitu')
+                weight_vars = BEHR_publishing_gridded_fields.reprocessed_psm_vars;
+            else
+                weight_vars = BEHR_publishing_gridded_fields.all_psm_vars;
+            end
+
             for a=1:numel(weight_vars)
                 weight_vars{a} = BEHR_publishing_gridded_fields.make_wts_field(weight_vars{a});
             end
+        end
+
+        function weight_vars = cvm_weight_vars()
+            weight_vars = {'Areaweight'};
         end
         
         function fn = make_wts_field(fn)

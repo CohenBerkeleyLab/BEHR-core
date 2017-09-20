@@ -164,8 +164,6 @@ end
 % options. The pixel type needs to be passed so that it knows whether to
 % keep the pixel specific variables or not.
 
-[vars, savename] = set_variables(pixel_type, output_type, is_reprocessed);
-attr = add_attributes(vars);
 
 global numThreads
 if onCluster
@@ -252,6 +250,8 @@ if ~onCluster
                 fprintf('Saving %s %s for %s\n', pixel_type, output_type, date_string);
             end
 
+            [vars, attr, savename] = set_variables(Data_to_save, pixel_type, output_type, is_reprocessed);
+
             if strcmpi(output_type,'hdf')
                 overwrite = make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
@@ -287,6 +287,8 @@ else
                 fprintf('Saving %s %s for %s\n', pixel_type, output_type, date_string);
             end
 
+            [vars, attr, savename] = set_variables(Data_to_save, pixel_type, output_type, is_reprocessed);
+
             if strcmpi(output_type,'hdf')
                 make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
@@ -302,7 +304,7 @@ end
 % SUBFUNCTIONS %
 %%%%%%%%%%%%%%%%
 
-function [vars, savename] = set_variables(pixel_type, output_type, reprocessed)
+function [vars, attr, savename] = set_variables(Data, pixel_type, output_type, reprocessed)
 % Make a list of variables that should be added to the product. All the
 % standard variables will be added always. Pass any or all of the following
 % strings to add certain variables
@@ -312,48 +314,54 @@ function [vars, savename] = set_variables(pixel_type, output_type, reprocessed)
 %
 % The standard variables to be included (listed in
 % http://behr.cchem.berkeley.edu/TheBEHRProduct.aspx)
+E = JLLErrors;
 
-vars = {'AmfStrat','AmfTrop','BEHRAMFTrop','BEHRAMFTropVisOnly','BEHRColumnAmountNO2Trop','BEHRColumnAmountNO2TropVisOnly',...
-    'BEHRPressureLevels','CloudFraction','CloudPressure','CloudRadianceFraction','ColumnAmountNO2',...
-    'ColumnAmountNO2Trop','ColumnAmountNO2TropStd','ColumnAmountNO2Strat','FoV75Area', 'FoV75CornerLatitude',...
-    'FoV75CornerLongitude','GLOBETerpres','Latitude','Longitude','MODISAlbedo','MODISCloud',...
-    'RelativeAzimuthAngle','Row','SlantColumnAmountNO2','SolarAzimuthAngle','SolarZenithAngle',...
-    'SpacecraftAltitude', 'SpacecraftLatitude', 'SpacecraftLongitude','Swath',...
-    'TerrainHeight','TerrainPressure','TerrainReflectivity','TiledArea','TiledCornerLatitude','TiledCornerLongitude',...
-    'Time','ViewingAzimuthAngle','ViewingZenithAngle','XTrackQualityFlags','VcdQualityFlags',...
-    'BEHRScatteringWeights','BEHRAvgKernels','BEHRNO2apriori', 'BEHRQualityFlags'};
-
-savename = sprintf('OMI_BEHR_%s_',BEHR_version);
-
-% Add additional variable categories here. You'll need to add the variable
-% names to the "vars" variable, and you should consider adding an
-% identifier to the save name to make clear what variables are present.
-% Note two other places you'll need to add variables: in the subfunction
-% "remove_ungridded_variables" if any of the new variables should be
-% included in the gridded products and in the "add_attributes" subfunction
-% - there you'll want to include information like unit, range, fill,
-% product, and description.
-
-% The reprocessing related fields
+% The attribute table contains the list of all variables we expect to provide.
+% Choose the proper subset.
 if reprocessed
-    repro_vars = {'InSituAMF','BEHR_R_ColumnAmountNO2Trop','ProfileCount','InSituFlags'};
-    vars = cat(2,vars,repro_vars);
-    savename = strcat(savename,'InSitu_');
+    attr =  BEHR_publishing_attribute_table('pub-insitu', 'struct');
+    savename = sprintf('OMI_BEHR_InSitu_%s_',BEHR_version);
+else
+    attr = BEHR_publishing_attribute_table('pub', 'struct');
+    savename = sprintf('OMI_BEHR_%s_',BEHR_version);
 end
 
-% Remove pixel specific variables if the pixel type is "gridded". Also add
-% in weighting variables that are only included in the gridded product.
+vars = fieldnames(attr);
+
+% Remove variables not defined as "gridded" by BEHR_publishing_gridded_fields
 if strcmpi('gridded', pixel_type)
     vars = remove_ungridded_variables(vars);
-    vars = cat(2, vars, {'Areaweight'}, BEHR_publishing_gridded_fields.psm_weight_vars);
 end
+
+% Remove any fields not present in the structure. If one of the expected variables is
+% not present, error (because we expect it to be there!) The exception are the PSM weight
+% fields, they will not be present if we are gridding with CVM only.
+vv = isfield(Data, vars);
+
+if sum(~vv) > 0
+    if strcmpi('native', pixel_type)
+        % If not doing the gridded data, then none of the weights fields will be present.
+        pp = pp | ismember(vars, BEHR_publishing_gridded_fields.cvm_weight_vars);
+    end
+    if strcmpi('native', pixel_type) || Data(1).Only_CVM
+        pp = ismember(vars, BEHR_publishing_gridded_fields.psm_weight_vars);
+    end
+
+    missing_vars = vars(~vv & ~pp);
+    if numel(missing_vars) > 0
+        E.callError('missing_variable', 'The following variables are missing: %s', strjoin(missing_vars, ', '));
+    end
+end
+
+vars = vars(vv);
+
+
 
 % Remove variables that cannot be put into a CSV text file because multiple
 % values are required per pixel
 if strcmpi('txt', output_type)
     vars = remove_vector_variables(vars);
 end
-
 
 end
 
@@ -384,23 +392,6 @@ vv = ismember(vars, vector_vars);
 vars = vars(~vv);
 end
 
-function attr = add_attributes(vars)
-E = JLLErrors;
-
-if ~iscell(vars)
-    E.badinput('vars must be a cell array');
-end
-
-
-attr = BEHR_publishing_attribute_table('struct');
-            
-
-xx = ~isfield(attr, vars);
-if any(xx)
-    E.callError('var_attr_def', sprintf('The attributes for the variables %s are not defined in the attr_table', strjoin(vars(xx), ', ')));
-end
-
-end
 
 
 function overwrite = make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, current_git_heads, DEBUG_LEVEL)
@@ -493,9 +484,9 @@ for d=1:numel(Data_in)
             grid_type_attr = 'gridding_method';
             if ~isempty(regexpi(vars{v}, 'weight'))
                 grid_type = 'weight';
-            elseif ismember(vars{v}, BEHR_publishing_gridded_fields.psm_gridded_vars) || ismember(vars{v}, BEHR_publishing_gridded_fields.reprocessed_psm_vars)
+            elseif ismember(vars{v}, BEHR_publishing_gridded_fields.all_psm_vars) && ~Data_in(d).Only_CVM
                 grid_type = 'parabolic spline method';
-            elseif ismember(vars{v}, BEHR_publishing_gridded_fields.cvm_gridded_vars) || ismember(vars{v}, BEHR_publishing_gridded_fields.reprocessed_cvm_vars)
+            elseif ismember(vars{v}, BEHR_publishing_gridded_fields.all_cvm_vars) || (ismember(vars{v}, BEHR_publishing_gridded_fields.all_psm_vars) && Data_in(d).Only_CVM)
                 grid_type = 'constant value method';
             elseif ismember(vars{v}, BEHR_publishing_gridded_fields.flag_vars)
                 grid_type = 'flag, bitwise OR';
@@ -534,24 +525,17 @@ for d=1:numel(Data_in)
     h5writeatt(hdf_fullfilename, group_name, 'Version', BEHR_version());
     
     % Files read in in the process of generating the product
-    h5writeatt(hdf_fullfilename, group_name, 'OMNO2-File', Data_in(d).OMNO2File);
-    h5writeatt(hdf_fullfilename, group_name, 'OMPIXCOR-File', Data_in(d).OMPIXCORFile);
-    h5writeatt(hdf_fullfilename, group_name, 'MODIS-Cloud-Files', strjoin(Data_in(d).MODISCloudFiles, ', '));
-    h5writeatt(hdf_fullfilename, group_name, 'MODIS-Albedo-File', Data_in(d).MODISAlbedoFile);
-    h5writeatt(hdf_fullfilename, group_name, 'WRF-Chem-File', Data_in(d).BEHRWRFFile);
+    swath_attr_fields = BEHR_publishing_gridded_fields.swath_attr_vars;
+    for a=1:numel(swath_attr_fields)
+        attr_val = Data_in(d).(swath_attr_fields{a});
+        if iscellstr(attr_val)
+            attr_val = strjoin(attr_val, ', ');
+        elseif ~ischar(attr_val)
+            E.notimplemented('Attribute values must be a string or cell array of strings');
+        end
+        h5writeatt(hdf_fullfilename, group_name, swath_attr_fields{a}, );
+    end
     
-    % Attributes tracking back to Git HEAD hashes
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-Core-Read', Data_in(d).GitHead_Core_Read);
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-BEHRUtils-Read', Data_in(d).GitHead_BEHRUtils_Read);
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-GenUtils-Read', Data_in(d).GitHead_GenUtils_Read);
-    
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-Core-Main', Data_in(d).GitHead_Core_Main);
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-BEHRUtils-Main', Data_in(d).GitHead_BEHRUtils_Main);
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-GenUtils-Main', Data_in(d).GitHead_GenUtils_Main);
-    
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-Core-Pub', current_git_heads.core);
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-BEHRUtils-Pub', current_git_heads.behr_utils);
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-GenUtils-Pub', current_git_heads.gen_utils);
     if DEBUG_LEVEL > 2; toc; end
 end
 end
