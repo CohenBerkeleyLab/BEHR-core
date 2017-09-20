@@ -309,7 +309,9 @@ onCluster_local = onCluster;
 % indices or which are better calculated outside the loop.
 
 datenums = datenum(date_start):datenum(date_end);
-githead = git_head_hash(behr_repo_dir);
+core_githead = git_head_hash(behr_paths.behr_core);
+behrutils_githead = git_head_hash(behr_paths.behr_utils);
+genutils_githead = git_head_hash(behr_paths.utils);
 behr_grid = GlobeGrid(0.05, 'domain', [lonmin, lonmax, latmin, latmax]);
 
 
@@ -365,8 +367,9 @@ for j=1:length(datenums)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud', 'MODISCloudFiles', 'MODISAlbedo', 'MODISAlbedoFile', 'GLOBETerpres',...
-        'IsZoomModeSwath', 'AlbedoOceanFlag', 'GitHead_Read'};
+        'MODISCloud',  'MODISAlbedo', 'GLOBETerpres', 'IsZoomModeSwath', 'AlbedoOceanFlag',...
+        'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File',...
+        'OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
     Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
@@ -414,6 +417,7 @@ for j=1:length(datenums)
             continue
         end
         
+        this_data.OMNO2File = this_sp_filename;
         
         % If we've gotten here, then there are pixels in the swath that lie
         % within the domain of interest. Add the OMPIXCOR data
@@ -422,7 +426,8 @@ for j=1:length(datenums)
         this_data = read_omi_sp(pixcor_name, '/HDFEOS/SWATHS/OMI Ground Pixel Corners VIS', pixcor_variables, this_data, [lonmin, lonmax], [latmin, latmax], 'match_data', true);
         if DEBUG_LEVEL > 2; fprintf('      Time to read OMPIXCOR data on worker %d: %f\n', this_task.ID, toc(t_pixcor)); end
         
-
+        this_data.OMPIXCORFile = pixcor_name;
+        
         if DEBUG_LEVEL > 2; t_pixclean = tic; end
         this_data = handle_corner_zeros(this_data, DEBUG_LEVEL);
         
@@ -476,7 +481,9 @@ for j=1:length(datenums)
         this_data.Date = datestr(this_dnum, 'yyyy/mm/dd');
         this_data.LonBdy = [lonmin, lonmax];
         this_data.LatBdy = [latmin, latmax];
-        this_data.GitHead_Read = githead;
+        this_data.GitHead_Core_Read = core_githead;
+        this_data.GitHead_BEHRUtils_Read = behrutils_githead;
+        this_data.GitHead_GenUtils_Read = genutils_githead;
         this_data.Grid = behr_grid;
         
         data_ind = data_ind + 1;
