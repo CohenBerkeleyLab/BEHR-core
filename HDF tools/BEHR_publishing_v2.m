@@ -339,12 +339,13 @@ end
 vv = isfield(Data, vars);
 
 if sum(~vv) > 0
+    pp = false(size(vars));
     if strcmpi('native', pixel_type)
         % If not doing the gridded data, then none of the weights fields will be present.
         pp = pp | ismember(vars, BEHR_publishing_gridded_fields.cvm_weight_vars);
     end
     if strcmpi('native', pixel_type) || Data(1).Only_CVM
-        pp = ismember(vars, BEHR_publishing_gridded_fields.psm_weight_vars);
+        pp = pp | ismember(vars, BEHR_publishing_gridded_fields.psm_weight_vars);
     end
 
     missing_vars = vars(~vv & ~pp);
@@ -530,11 +531,22 @@ for d=1:numel(Data_in)
         attr_val = Data_in(d).(swath_attr_fields{a});
         if iscellstr(attr_val)
             attr_val = strjoin(attr_val, ', ');
+        elseif isnumeric(attr_val)
+            if isscalar(attr_val)
+                attr_val = num2str(attr_val);
+            else
+                attr_val = mat2str(attr_val);
+            end
         elseif ~ischar(attr_val)
-            E.notimplemented('Attribute values must be a string or cell array of strings');
+            E.notimplemented('Attribute values must be a number, string, or cell array of strings');
         end
-        h5writeatt(hdf_fullfilename, group_name, swath_attr_fields{a}, );
+        h5writeatt(hdf_fullfilename, group_name, swath_attr_fields{a}, attr_val);
     end
+
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-Core-Pub', current_git_heads.core);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-BEHRUtils-Pub', current_git_heads.behr_utils);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-GenUtils-Pub', current_git_heads.gen_utils);
+
     
     if DEBUG_LEVEL > 2; toc; end
 end

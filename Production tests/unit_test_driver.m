@@ -96,12 +96,16 @@ if generate_new_data
     make_git_report(behr_paths.utils, 'GitReport-GenUtils.txt');
 end
 switch what_to_test
+    % Each of the testing subfunctions allows paths to be given to them 
+    % by test_all() to minimized user interaction if all three steps are
+    % to be run. I've set it up so that if empty strings are passed, it
+    % considers those paths to not be given, but something has to be passed.
     case 'reading'
-        success = test_reading();
+        success = test_reading('', '');
     case 'behrmain'
-        success = test_behr_main();
+        success = test_behr_main('', '');
     case 'publishing'
-        success = test_publishing();
+        success = test_publishing('', '', '', '');
     case 'all'
         success = test_all();
     otherwise
@@ -209,28 +213,74 @@ end
     end
 
     function successes = test_all()
-        read_success = test_reading();
-        behr_success = test_behr_main(save_folder);
-        pub_success = test_publishing(save_folder);
+        % If doing all three tests, give the option to set up all the directories now
+        if ~use_behrpaths
+            if ask_yn('Compare against an old unit test?')
+                old_root = getdir('Choose the root ProducedYYYYMMDD directory', {});
+                old_sp_dir = old_root;
+                old_behr_dir = old_root;
+                old_native_dir = fullfile(old_root, 'native_hdf');
+                old_gridded_dir = fullfile(old_root, 'gridded_hdf');
+            else
+                old_sp_dir = getdir('You''ll need to choose the directory with the old OMI_SP files', test_dates);
+                old_behr_dir = getdir('You''ll need to choose the directory with the old OMI_BEHR files', test_dates);
+                old_native_dir = getdir('You''ll need to choose the directory with the old native pixel HDF files', test_dates);
+                old_gridded_dir = getdir('You''ll need to choose the directory with the old native gridded HDF files', test_dates);
+            end
+        else
+            % if using behr_paths, these will be set automatically
+            old_sp_dir = '';
+            old_behr_dir = '';
+            old_native_hdf_dir = '';
+            old_gridded_hdf_dir = '';
+        end
+
+        if ~generate_new_data
+            new_sp_dir = getdir('You''ll need to choose the directory with the new OMI_SP files', test_dates);
+            new_behr_dir = getdir('You''ll need to choose the directory with the new OMI_BEHR files', test_dates);
+            new_native_dir = getdir('You''ll need to choose the directory containing the new native HDF files', test_dates);
+            new_gridded_dir = getdir('You''ll need to choose the directory containing the new gridded HDF files', test_dates);
+        else
+            % if generating new data, these are set from the save_folder automatically
+            new_sp_dir = '';
+            new_behr_dir = '';
+            new_native_dir = '';
+            new_gridded_dir = '';
+        end
+        read_success = test_reading(old_sp_dir, new_sp_dir);
+        behr_success = test_behr_main(old_behr_dir, new_behr_dir, save_folder);
+        pub_success = test_publishing(old_native_dir, old_gridded_dir, new_native_dir, new_gridded_dir, save_folder);
         successes = read_success & behr_success & pub_success;
     end
 
-    function successes = test_reading()
+    function successes = test_reading(old_dir, new_dir)
         if generate_new_data
+            % If generating new data, then our new_dir will always be the location where we generate the new data.
             new_dir = save_folder;
             for i=1:numel(test_dates)
                 read_omno2_v_aug2012('start', test_dates{i}, 'end', test_dates{i}, 'sp_mat_dir', save_folder, 'overwrite', true, 'region', test_region);
             end
         else
-            new_dir = getdir('You''ll need to choose the directory with the new OMI_SP files', test_dates);
+            % Otherwise, a directory for new files may have already been passed (if running all tests, generally). 
+            % if not, ask now which directory contains the new SP files.
+            if isempty(new_dir)
+                new_dir = getdir('You''ll need to choose the directory with the new OMI_SP files', test_dates);
+            end
+
+            % This fixed some weird bug where "save_folder" wasn't set because we weren't generating data, but
+            % it got used later. That probably shouldn't happen, so that bug should be fixed eventually and this
+            % removed.
             if ~exist('save_folder', 'var')
                 save_folder = new_dir;
             end
         end
         
+        % Since a common use case of this function is to test a new version against the prior version, we gave
+        % the user the option at the beginning of using the standard paths for old data. If that's not what they
+        % chose, or an old directory wasn't already given, we need to ask now.
         if use_behrpaths
             old_dir = behr_paths.sp_mat_dir;
-        else
+        elseif isempty(old_dir)
             old_dir = getdir('You''ll need to choose the directory with the old OMI_SP files', test_dates);
         end
         
@@ -288,9 +338,10 @@ end
     % BEHR MAIN TESTS %
     %%%%%%%%%%%%%%%%%%%
     
-    function successes = test_behr_main(sp_data_dir)
+    function successes = test_behr_main(old_dir, new_dir, sp_data_dir)
         if generate_new_data
             new_dir = save_folder;
+            % If sp_data_dir not already given, give the choice of using behr_paths.sp_mat_dir or a user-specified dir
             if ~exist('sp_data_dir', 'var')
                 if ask_yn('Use the paths specified by behr_paths for the SP files to be read into BEHR_main?');
                     sp_data_dir = behr_paths.sp_mat_dir;
@@ -303,16 +354,18 @@ end
                 BEHR_main('start', test_dates{i}, 'end', test_dates{i}, 'behr_mat_dir', save_folder, 'sp_mat_dir', sp_data_dir, 'overwrite', true);
             end
         else
-            if ~exist('sp_data_dir', 'var')
+            % If we're not generating data, then check if new_dir is not empty (i.e. already given)
+            if isempty(new_dir)
                 new_dir = getdir('You''ll need to choose the directory with the new OMI_BEHR files', test_dates);
-            else
-                new_dir = sp_data_dir;
             end
         end
         
+        % Since a common use case of this function is to test a new version against the prior version, we gave
+        % the user the option at the beginning of using the standard paths for old data. If that's not what they
+        % chose, or an old directory wasn't already given, we need to ask now.
         if use_behrpaths
             old_dir = behr_paths.behr_mat_dir;
-        else
+        elseif isempty(old_dir)
             old_dir = getdir('You''ll need to choose the directory with the old OMI_BEHR files', test_dates);
         end
         
@@ -375,8 +428,10 @@ end
     % PUBLISHING TESTS %
     %%%%%%%%%%%%%%%%%%%%
     
-    function successes = test_publishing(behr_data_dir)
+    function successes = test_publishing(old_native_dir, old_gridded_dir, new_native_dir, new_gridded_dir, behr_data_dir)
         if generate_new_data
+            % If we're generating new data, then our new file directories will always be in the save folder
+            % (where we generate the new data)
             new_native_dir = fullfile(save_folder, 'native_hdf');
             new_gridded_dir = fullfile(save_folder, 'gridded_hdf');
             if ~exist('behr_data_dir', 'var')
@@ -401,22 +456,29 @@ end
                     'organize', false, 'overwrite', true);
             end
         else
-            if ~exist('behr_data_dir', 'var')
-                new_dir = getdir('You''ll need to choose the directory with the subdirectories "native_hdf" and "gridded_hdf" containing the new HDF files', test_dates);
-            else
-                new_dir = behr_data_dir;
+            % Otherwise, this may be already given
+            if isempty(new_native_dir)
+                new_native_dir = getdir('You''ll need to choose the directory containing the new native HDF files', test_dates);
             end
-            new_native_dir = fullfile(new_dir, 'native_hdf');
-            new_gridded_dir = fullfile(new_dir, 'gridded_hdf');
+            if isempty(new_gridded_dir)
+                new_gridded_dir = getdir('You''ll need to choose the directory containing the new gridded HDF files', test_dates);
+            end
         end
         
+        % Since a common use case of this function is to test a new version against the prior version, we gave
+        % the user the option at the beginning of using the standard paths for old data. If that's not what they
+        % chose, or an old directory wasn't already given, we need to ask now.
         if use_behrpaths
             old_root_dir = behr_paths.website_staging_dir;
             old_native_dir = fullfile(old_root_dir, '..', 'webData', 'behr_hdf');
             old_gridded_dir = fullfile(old_root_dir, '..', 'webData', 'behr_regridded_hdf');
         else
-            old_native_dir = getdir('You''ll need to choose the directory with the old native pixel HDF files', test_dates);
-            old_gridded_dir = getdir('You''ll need to choose the directory with the old native gridded HDF files', test_dates);
+            if isempty(old_native_dir)
+                old_native_dir = getdir('You''ll need to choose the directory with the old native pixel HDF files', test_dates);
+            end
+            if isempty(old_gridded_dir)
+                old_gridded_dir = getdir('You''ll need to choose the directory with the old native gridded HDF files', test_dates);
+            end
         end
         
         successes_native = test_publishing_subfunc(old_native_dir, new_native_dir);
@@ -456,8 +518,8 @@ end
             end
             if DEBUG_LEVEL > 0
                 fprintf(fid, '\nChecking %s\n', test_dates{i});
-                fprintf(fid, 'Loaded old file: %s\n', old_file{1});
-                fprintf(fid, 'Loaded new file: %s\n', new_file{1});
+                fprintf(fid, 'Loaded old file: %s\n', old_file);
+                fprintf(fid, 'Loaded new file: %s\n', new_file);
             end
             
             if DEBUG_LEVEL > 0
@@ -466,7 +528,7 @@ end
                 fprintf(fid, '\n%1$s\n%2$s\n%1$s\n', header_border, header_msg);
             end
             
-            successes(i) = behr_unit_test(new_data.Data, old_data.Data, DEBUG_LEVEL, fid, fields_to_ignore);
+            successes(i) = behr_unit_test(new_data, old_data, DEBUG_LEVEL, fid, fields_to_ignore);
         end
     end
 end
@@ -485,7 +547,11 @@ end
 end
 
 function d = getdir(prompt, test_dates)
-fprintf('%s for the following dates:\n  %s\n (press ENTER)\n', prompt, strjoin(test_dates, ', '));
+if ~isempty(test_dates)
+    fprintf('%s for the following dates:\n  %s\n (press ENTER)\n', prompt, strjoin(test_dates, ', '));
+else
+    fprintf('%s\n (press ENTER)\n', prompt);
+end
 input('','s'); %wait for the user
 
 E=JLLErrors;
@@ -515,7 +581,7 @@ end
 
 hdf_dir = fileparts(file_pattern);
 file_name = fullfile(hdf_dir, F(1).name);
-hdfi = h5info(fullfile(hdf_dir, file_name));
+hdfi = h5info(file_name);
 Data = behrhdf2struct(hdfi);
 
 

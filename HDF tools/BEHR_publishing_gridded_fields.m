@@ -95,6 +95,11 @@ classdef BEHR_publishing_gridded_fields
                 BEHR_publishing_gridded_fields.reprocessed_psm_vars];
         end
         
+        function all_cvm_vars = all_cvm_vars()
+            all_cvm_vars = [BEHR_publishing_gridded_fields.cvm_gridded_vars,...
+                BEHR_publishing_gridded_fields.reprocessed_cvm_vars];
+        end
+        
         function weight_vars = psm_weight_vars(subset)
             if ~exist('subset', 'var')
                 subset = 'all';
