@@ -1,6 +1,6 @@
-function [ data ] = read_modis_albedo( modis_directory, coart_lut, date_in, data, varargin )
+function [ data ] = read_modis_albedo( modis_directory, coart_lut, ocean_mask, date_in, data, varargin )
 %READ_MODIS_ALBEDO Reads MODIS MCD43C1 BRDF albedo 
-%   DATA = READ_MODIS_ALBEDO( MODIS_DIR, COART_LUT, DATE_IN, DATA ) Reads
+%   DATA = READ_MODIS_ALBEDO( MODIS_DIR, COART_LUT, OCEAN_MASK, DATE_IN, DATA ) Reads
 %   MODIS MCD43C1 data from MODIS_DIR (which must be the path to the root
 %   MCD43C1 directory, containing each year in a subfolder). It identifies
 %   the proper file to read for the DATE_IN (a date string automatically
@@ -95,15 +95,9 @@ band3_vol = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_A
 band3_geo = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter3_Band3'));
 brdf_quality = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Quality'));
 
-band3_iso = flipud(band3_iso);
-band3_vol = flipud(band3_vol);
-band3_geo = flipud(band3_geo);
-brdf_quality = flipud(brdf_quality);
-
 %MODIS albedo is given in 0.05 degree cells and a single file covers the
 %full globe, so figure out the lat/lon of the middle of the grid cells as:
-band3_lat=-90+0.05/2:0.05:90-0.05/2; band3_lats=band3_lat'; band3_lats=repmat(band3_lats,1,7200);
-band3_lon=-180+0.05/2:0.05:180-0.05/2; band3_lons=repmat(band3_lon,3600,1);
+[band3_lons, band3_lats] = modis_cmg_latlon(0.05, [-180, 180], [-90, 90], true);
 
 %To speed up processing, restrict the MODIS albedo data to
 %only the area we need to worry about.  This will
@@ -118,8 +112,8 @@ lon_max = ceil(max(loncorn));
 lat_min = floor(min(latcorn));
 lat_max = ceil(max(latcorn));
 
-in_lats = find(band3_lat>=lat_min & band3_lat<=lat_max);
-in_lons = find(band3_lon>=lon_min & band3_lon<=lon_max);
+in_lats = find(band3_lats(:,1)>=lat_min & band3_lats(:,1)<=lat_max);
+in_lons = find(band3_lons(1,:)>=lon_min & band3_lons(1,:)<=lon_max);
 
 band3_iso = band3_iso(in_lats,in_lons); 
 band3_vol = band3_vol(in_lats,in_lons);
@@ -153,6 +147,18 @@ for k=1:c;
         continue
     end
     
+    % Next, check if we are over ocean using the ocean mask. If the mask
+    % indicates that more than 50% of the pixel is ocean, then we will
+    % insert a value from the look up table and move on.
+    xx_ocean_mask = inpolygon(ocean_mask.lat, ocean_mask.lon, yall, xall);
+    avg_mask = nanmean(ocean_mask.mask(xx_ocean_mask));
+    if avg_mask > 0.5
+        MODISAlbedo(k) = coart_sea_reflectance(data.SolarZenithAngle(k), coart_lut);
+        ocean_flag(k) = true;
+        continue
+    end
+    
+    % If we're here, we're over a land pixel. 
     % should be able to speed this up by first restricting based on a
     % single lat and lon vector
     xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
@@ -162,7 +168,6 @@ for k=1:c;
     % Lower values for the quality flag are better.
     xx_alb = xx_alb & (brdf_quality <= max_qual_flag | isnan(brdf_quality));
     
-    % If we don't have any data left, set the BRDF value to a NaN. 
     if sum(xx_alb) == 0
         MODISAlbedo(k) = nan;
         continue
@@ -178,17 +183,13 @@ for k=1:c;
     count_modis(k) = numel(band3_vals);
     % ************** %
     
-    % Criteria for when to consider a pixel ocean: if less that 50% of the
-    % MODIS grid cells in the pixel have a non-fill value, then we treat
-    % the pixel as an ocean pixel.
-    if sum(isnan(band3_vals)) < 0.5 * numel(band3_vals)
-        band3_avg = nanmean(band3_vals(band3_vals>0));
-    else
-        band3_avg = coart_sea_reflectance(data.SolarZenithAngle(k), coart_lut);
-        ocean_flag(k) = true;
+    % Since we've already treated ocean pixels specially, we'll just
+    % average the BRDF reflectance values. 
+    if any(band3_vals(:) < 0)
+        E.callError('bad_value', 'BRDF value < 0');
     end
+    MODISAlbedo(k) = nanmean(band3_vals(:));
     
-    MODISAlbedo(k) = band3_avg;
     if DEBUG_LEVEL > 3; telap = toc; fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
 end
 
