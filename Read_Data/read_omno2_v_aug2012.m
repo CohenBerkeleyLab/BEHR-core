@@ -59,7 +59,7 @@ function read_omno2_v_aug2012(varargin)
 % Choose a higher level to keep track of what the script is doing.
 % 3 or less recommended for final products, as 4 will store debugging
 % variables in the output file, increasing its size.
-DEBUG_LEVEL = 4;
+DEBUG_LEVEL = 1;
 
 %****************************%
 
@@ -379,7 +379,7 @@ for j=1:length(datenums)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud',  'MODISAlbedo', 'GLOBETerpres', 'IsZoomModeSwath', 'AlbedoOceanFlag',...
+        'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality', 'GLOBETerpres', 'IsZoomModeSwath', 'AlbedoOceanFlag',...
         'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File',...
         'OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',};
     
@@ -478,7 +478,7 @@ for j=1:length(datenums)
         % Add MODIS albedo info to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS albedo information \n'); end
         if DEBUG_LEVEL > 2; t_modis_alb = tic; end
-        this_data = read_modis_albedo(modis_mcd43_dir, coart_lut, ocean_mask, this_dnum, this_data, 'QualityLimit', 0, 'DEBUG_LEVEL', DEBUG_LEVEL);
+        this_data = read_modis_albedo(modis_mcd43_dir, coart_lut, ocean_mask, this_dnum, this_data, 'QualityLimit', 2, 'DEBUG_LEVEL', DEBUG_LEVEL);
 
         if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS albedo on worker %d: %f\n', this_task.ID, toc(t_modis_alb)); end
         

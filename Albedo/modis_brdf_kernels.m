@@ -107,7 +107,12 @@ cos_t = h_b .* sqrt( (D2 + (tan(sza_prime) .* tan(vza_prime) .* sind(raa)).^2) )
 % shadows of incoming light and from the observer's POV. The term O handles
 % that, and t should vary from 0 to pi, i.e. from no overlap to complete
 % overlap.
-cos_t = min(max(cos_t,0),1);
+
+% according to the MOD43 TBD (p 14), this should be contrained between -1
+% and 1. Previously I'd found 0 and 1 somewhere... If someone happens to
+% find [0,1] again in the future, know that I'd seen [0, 1] too - JLL 22
+% Sept 2017
+cos_t = min(max(cos_t,-1),1); 
 t = acos(cos_t);
 O = 1/pi .* (t - sin(t) .* cos(t)) .* (sec(sza_prime) + sec(vza_prime));
 

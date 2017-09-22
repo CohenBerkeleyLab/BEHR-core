@@ -126,17 +126,14 @@ band3_lons=band3_lons(in_lats,in_lons);
 s=size(data.Latitude);
 c=numel(data.Latitude);
 MODISAlbedo = nan(s);
+MODISAlbedoQuality = nan(s);
 ocean_flag = false(s); 
 
 %Now actually average the MODIS albedo for each OMI pixel
 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
 
-% For debugging only %
-count_nans = zeros(size(data.SolarZenithAngle));
-count_modis = zeros(size(data.SolarZenithAngle));
-% ****************** %
 for k=1:c;
-    if DEBUG_LEVEL > 2; t_total=tic; end
+    if DEBUG_LEVEL > 3; t_total=tic; end
     
     xall=[data.(loncorn_field)(:,k); data.(loncorn_field)(1,k)];
     yall=[data.(latcorn_field)(:,k); data.(latcorn_field)(1,k)];
@@ -150,62 +147,91 @@ for k=1:c;
     % Next, check if we are over ocean using the ocean mask. If the mask
     % indicates that more than 50% of the pixel is ocean, then we will
     % insert a value from the look up table and move on.
-    if DEBUG_LEVEL > 3; t_mask = tic; end
+    if DEBUG_LEVEL > 4; t_cut = tic; end
     
-    xx_ocean_mask = inpolygon_mg(ocean_mask.lon, ocean_mask.lat, xall, yall);
-    avg_mask = nanmean(ocean_mask.mask(xx_ocean_mask));
+    xx_mask_lon = ocean_mask.lon(1,:) >= min(xall) & ocean_mask.lon(1,:) <= max(xall);
+    xx_mask_lat = ocean_mask.lat(:,1) >= min(yall) & ocean_mask.lat(:,1) <= max(yall);
     
-    if DEBUG_LEVEL > 3; fprintf('    Time to average ocean mask = %f\n', toc(t_mask)); end
+    if DEBUG_LEVEL > 4; fprintf('    Time to cut down ocean mask = %f\n', toc(t_cut)); end
+    
+    if DEBUG_LEVEL > 4; t_mask = tic; end
+    xx_ocean_mask = inpolygon(ocean_mask.lon(xx_mask_lat, xx_mask_lon), ocean_mask.lat(xx_mask_lat, xx_mask_lon), xall, yall);
+    if DEBUG_LEVEL > 4; fprintf('    Time to apply inpolygon to mask = %f\n', toc(t_mask)); end
+    
+    if DEBUG_LEVEL > 4; t_avg_mask = tic; end
+    sub_mask = ocean_mask.mask(xx_mask_lat, xx_mask_lon);
+    avg_mask = nanmean(sub_mask(xx_ocean_mask));
+    
+    if DEBUG_LEVEL > 4; fprintf('    Time to average ocean mask = %f\n', toc(t_avg_mask)); end
     
     if avg_mask > 0.5
-        if DEBUG_LEVEL > 3; t_ocean = tic; end
+        if DEBUG_LEVEL > 4; t_ocean = tic; end
         MODISAlbedo(k) = coart_sea_reflectance(data.SolarZenithAngle(k), coart_lut);
         ocean_flag(k) = true;
-        if DEBUG_LEVEL > 3; fprintf('    Time to look up ocean reflectance = %f\n', toc(t_ocean)); end
-        if DEBUG_LEVEL > 2; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+        if DEBUG_LEVEL > 4; fprintf('    Time to look up ocean reflectance = %f\n', toc(t_ocean)); end
+        if DEBUG_LEVEL > 3; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
         continue
     end
     
-    if DEBUG_LEVEL > 3; t_polygon = tic; end
+    if DEBUG_LEVEL > 4; t_polygon = tic; end
     
     % If we're here, we're over a land pixel. 
     % should be able to speed this up by first restricting based on a
     % single lat and lon vector
-    xx_alb = inpolygon_mg(band3_lons,band3_lats,xall,yall);
+    xx = band3_lons(1,:) >= min(xall) & band3_lons(1,:) <= max(xall);
+    yy = band3_lats(:,1) >= min(yall) & band3_lats(:,1) <= max(yall);
+    
+    band3_iso_k = band3_iso(yy,xx);
+    band3_geo_k = band3_geo(yy,xx);
+    band3_vol_k = band3_vol(yy,xx);
+    brdf_quality_k = brdf_quality(yy,xx);
+    
+    xx_alb = inpolygon(band3_lons(yy,xx),band3_lats(yy,xx),xall,yall);
     
     % Also remove data that has too low a quality. The quality values are
     % described in the "Description" attribute for the "BRDF_Quality" SDS.
     % Lower values for the quality flag are better.
-    xx_alb = xx_alb & (brdf_quality <= max_qual_flag | isnan(brdf_quality));
+    xx_alb = xx_alb & (brdf_quality_k <= max_qual_flag | isnan(brdf_quality(yy,xx)));
     
     if sum(xx_alb) == 0
         MODISAlbedo(k) = nan;
-        if DEBUG_LEVEL > 2; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+        if DEBUG_LEVEL > 3; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
         continue
     end
     
-    if DEBUG_LEVEL > 3; fprintf('    Time to identify MODIS albedo in OMI pixel = %f\n', toc(t_polygon)); end
+    if DEBUG_LEVEL > 4; fprintf('    Time to identify MODIS albedo in OMI pixel = %f\n', toc(t_polygon)); end
     
     % The 180-RAA should flip the RAA back to the standard definition (i.e.
     % the supplemental angle of what's in the data product). See the help
     % text for modis_brdf_kernels for why that matters.
-    if DEBUG_LEVEL > 3; t_kernels = tic; end
-    band3_vals = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), 180-data.RelativeAzimuthAngle(k));
-    if DEBUG_LEVEL > 3; fprintf('    Time to calculate BRDF albedo = %f\n', toc(t_kernels)); end
+    if DEBUG_LEVEL > 4; t_kernels = tic; end
+    band3_vals = modis_brdf_alb(band3_iso_k(xx_alb), band3_vol_k(xx_alb), band3_geo_k(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), 180-data.RelativeAzimuthAngle(k));
+    if DEBUG_LEVEL > 4; fprintf('    Time to calculate BRDF albedo = %f\n', toc(t_kernels)); end
+
     
-    % DEBUGGING ONLY %
-    count_nans(k) = sum(isnan(band3_vals));
-    count_modis(k) = numel(band3_vals);
-    % ************** %
-    
-    % Since we've already treated ocean pixels specially, we'll just
-    % average the BRDF reflectance values. 
-    if any(band3_vals(:) < 0)
-        E.callError('bad_value', 'BRDF value < 0');
+    % According to the MOD43 TBD
+    % (https://modis.gsfc.nasa.gov/data/atbd/atbd_mod09.pdf, p. 32) the
+    % Ross-Li kernel occasionally produces slightly negative albedos. In
+    % practice, I have seen negative values around 1e-4 for individual
+    % elements of band3_vals. Since this is apparently expected, I will
+    % keep the negative values in for the average (which both avoids any
+    % potential problem with biasing the albedos high and shouldn't change
+    % the albedo much on average) but if the average itself is negative, we
+    % reject it and insert NaN as a fill value, which should prevent
+    % retrieving that pixel.
+    band3_avg = nanmean(band3_vals(:));
+    if band3_avg < 0
+        warning('Negative average albedo detected. Setting albedo to NaN.');
+        % Although we initialized these as NaNs, forcing this to NaN here
+        % ensures that no changes to the initialization mess this up
+        MODISAlbedo(k) = NaN;
+        MODISAlbedoQuality(k) = NaN;
+    else
+        MODISAlbedo(k) = band3_avg;
+        MODISAlbedoQuality(k) = nanmean(brdf_quality_k(xx_alb));
     end
-    MODISAlbedo(k) = nanmean(band3_vals(:));
     
-    if DEBUG_LEVEL > 2; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+    if DEBUG_LEVEL > 3; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
 end
 
 data.MODISAlbedo = MODISAlbedo;
