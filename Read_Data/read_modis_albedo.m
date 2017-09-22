@@ -136,7 +136,7 @@ count_nans = zeros(size(data.SolarZenithAngle));
 count_modis = zeros(size(data.SolarZenithAngle));
 % ****************** %
 for k=1:c;
-    if DEBUG_LEVEL > 2; tic; end
+    if DEBUG_LEVEL > 2; t_total=tic; end
     
     xall=[data.(loncorn_field)(:,k); data.(loncorn_field)(1,k)];
     yall=[data.(latcorn_field)(:,k); data.(latcorn_field)(1,k)];
@@ -150,18 +150,28 @@ for k=1:c;
     % Next, check if we are over ocean using the ocean mask. If the mask
     % indicates that more than 50% of the pixel is ocean, then we will
     % insert a value from the look up table and move on.
-    xx_ocean_mask = inpolygon(ocean_mask.lat, ocean_mask.lon, yall, xall);
+    if DEBUG_LEVEL > 3; t_mask = tic; end
+    
+    xx_ocean_mask = inpolygon_mg(ocean_mask.lon, ocean_mask.lat, xall, yall);
     avg_mask = nanmean(ocean_mask.mask(xx_ocean_mask));
+    
+    if DEBUG_LEVEL > 3; fprintf('    Time to average ocean mask = %f\n', toc(t_mask)); end
+    
     if avg_mask > 0.5
+        if DEBUG_LEVEL > 3; t_ocean = tic; end
         MODISAlbedo(k) = coart_sea_reflectance(data.SolarZenithAngle(k), coart_lut);
         ocean_flag(k) = true;
+        if DEBUG_LEVEL > 3; fprintf('    Time to look up ocean reflectance = %f\n', toc(t_ocean)); end
+        if DEBUG_LEVEL > 2; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
         continue
     end
+    
+    if DEBUG_LEVEL > 3; t_polygon = tic; end
     
     % If we're here, we're over a land pixel. 
     % should be able to speed this up by first restricting based on a
     % single lat and lon vector
-    xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
+    xx_alb = inpolygon_mg(band3_lons,band3_lats,xall,yall);
     
     % Also remove data that has too low a quality. The quality values are
     % described in the "Description" attribute for the "BRDF_Quality" SDS.
@@ -170,13 +180,18 @@ for k=1:c;
     
     if sum(xx_alb) == 0
         MODISAlbedo(k) = nan;
+        if DEBUG_LEVEL > 2; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
         continue
     end
+    
+    if DEBUG_LEVEL > 3; fprintf('    Time to identify MODIS albedo in OMI pixel = %f\n', toc(t_polygon)); end
     
     % The 180-RAA should flip the RAA back to the standard definition (i.e.
     % the supplemental angle of what's in the data product). See the help
     % text for modis_brdf_kernels for why that matters.
+    if DEBUG_LEVEL > 3; t_kernels = tic; end
     band3_vals = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), 180-data.RelativeAzimuthAngle(k));
+    if DEBUG_LEVEL > 3; fprintf('    Time to calculate BRDF albedo = %f\n', toc(t_kernels)); end
     
     % DEBUGGING ONLY %
     count_nans(k) = sum(isnan(band3_vals));
@@ -190,7 +205,7 @@ for k=1:c;
     end
     MODISAlbedo(k) = nanmean(band3_vals(:));
     
-    if DEBUG_LEVEL > 3; telap = toc; fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+    if DEBUG_LEVEL > 2; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
 end
 
 data.MODISAlbedo = MODISAlbedo;

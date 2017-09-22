@@ -59,7 +59,7 @@ function read_omno2_v_aug2012(varargin)
 % Choose a higher level to keep track of what the script is doing.
 % 3 or less recommended for final products, as 4 will store debugging
 % variables in the output file, increasing its size.
-DEBUG_LEVEL = 1;
+DEBUG_LEVEL = 4;
 
 %****************************%
 
