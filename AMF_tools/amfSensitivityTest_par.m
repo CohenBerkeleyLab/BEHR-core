@@ -170,10 +170,14 @@ end
 
 % If no parallel pool is active, start one. If there wasn't one, go ahead
 % and close it at the end.
-if isempty(gcp('nocreate')) && onCluster
-    parpool(numThreads);
+if onCluster
+    if isempty(gcp('nocreate'))
+        parpool(numThreads);
+        closeparpool = true;
+    else
+        closeparpool = false;
+    end
     n_workers = numThreads;
-    closeparpool = true;
 else
     closeparpool = false;
     n_workers = 0;
@@ -182,7 +186,7 @@ end
 nlon = numel(lon);
 nlat = numel(lat);
 
-
+fprintf('Number of workers = %d; onCluster = %d\n', n_workers, onCluster);
 
 % By constructing the inputs as a matrix we can fully parallelize it rather
 % than only be able to parallelize say the SZA loop.

@@ -9,7 +9,8 @@ us_month = 6;
 data = load(data_file);
 data = data.profs;
 
-warn_state=warning('off');
+%warn_state=warning('off');
+pctRunOnAll warning off
 amfs_dc3 = amfSensitivityTest_par(data.dc3_prof, data.dc3_pres, us_clon, us_clat, us_month, skytype);
 amfs_wrf = amfSensitivityTest_par(data.wrf_prof, data.wrf_pres, us_clon, us_clat, us_month, skytype);
 amfs_dc3_mt_wrf_bl_ut = amfSensitivityTest_par(data.dc3_mt_wrf_bl_ut, data.dc3_pres, us_clon, us_clat, us_month, skytype);
@@ -17,6 +18,6 @@ amfs_dc3_rl_wrf_bl_ft = amfSensitivityTest_par(data.dc3_rl_wrf_bl_ft, data.dc3_p
 amfs_dc3_ft_wrf_bl = amfSensitivityTest_par(data.dc3_ft_wrf_bl, data.dc3_pres, us_clon, us_clat, us_month, skytype);
 amfs_wrf_ft_dc3_bl = amfSensitivityTest_par(data.wrf_ft_dc3_bl, data.wrf_pres, us_clon, us_clat, us_month, skytype);
 amfs_wrf_mt_dc3_bl_ut = amfSensitivityTest_par(data.wrf_mt_dc3_bl_ut, data.wrf_pres, us_clon, us_clat, us_month, skytype);
-warning(warn_state);
+%warning(warn_state);
 end
 
