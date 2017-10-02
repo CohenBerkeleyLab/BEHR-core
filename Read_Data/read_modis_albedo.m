@@ -97,7 +97,7 @@ brdf_quality = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRD
 
 %MODIS albedo is given in 0.05 degree cells and a single file covers the
 %full globe, so figure out the lat/lon of the middle of the grid cells as:
-[band3_lons, band3_lats] = modis_cmg_latlon(0.05, [-180, 180], [-90, 90], true);
+[band3_lons, band3_lats] = modis_cmg_latlon(0.05, [-180, 180], [-90, 90], 'grid');
 
 %To speed up processing, restrict the MODIS albedo data to
 %only the area we need to worry about.  This will
