@@ -207,8 +207,8 @@ else
     n_workers = 0;
 end
 
-%parfor (j=1:length(datenums), n_workers)
-for j=1:length(datenums)
+parfor (j=1:length(datenums), n_workers)
+%for j=1:length(datenums)
     month=datestr(datenums(j),'mm');
     if DEBUG_LEVEL > 0; disp(['Processing data for ', datestr(datenums(j))]); end
     filename = sprintf('OMI_SP_%s_%s.mat',BEHR_version,datestr(datenums(j),'yyyymmdd'));
@@ -277,13 +277,13 @@ for j=1:length(datenums)
                 
                 cldRadFrac = Data(d).CloudRadianceFraction;
                 
-                if DEBUG_LEVEL > 1; disp('   Reading NO2 profiles'); end
+                if DEBUG_LEVEL > 1; fprintf('   Reading NO2 profiles from %s\n', no2_profile_path); end
                 [no2_bins, apriori_bin_mode] = rProfile_WRF(datenums(j), wrf_avg_mode, loncorns, latcorns, time, pTerr, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
                 no2Profile1 = no2_bins;
                 no2Profile2 = no2_bins;
                 
                 if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
-                [amf, amfVis, ~, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+                [amf, amfVis, ~, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile1); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
                 
                 sz = size(Data(d).Longitude);
                 len_vecs = size(scattering_weights,1);  % JLL 26 May 2015 - find out how many pressure levels there are. Will often be 30, but might change.

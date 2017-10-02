@@ -63,6 +63,8 @@ E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %
 
 nearest = true;
 
+fprintf('I am the BEHR-core rProfile_WRF\n');
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -285,7 +287,7 @@ end
         if strcmp(avg_mode,'monthly');
             file_pat = sprintf('WRF_BEHR_%s_%04d-%02d-*.nc', avg_mode, year_in, month_in);
         else
-            file_pat = sprintf('WRF_BEHR_%s_%04d-%02d-%02d.nc', avg_mode, year_in, month_in, day_in);
+            file_pat = sprintf('wrfout_subset_d01_%04d-%02d-%02d_00-00-00', year_in, month_in, day_in);
         end
         
         F = dir(fullfile(wrf_output_mode_path,file_pat));

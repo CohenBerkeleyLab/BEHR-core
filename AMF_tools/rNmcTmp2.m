@@ -25,6 +25,7 @@
 function [temperature, tmpSAVE] = rNmcTmp2(fileTmp,  pressure, lon, lat, mon)
 
 lon=mod(lon,360);
+fprintf('I am the fixed rNmcTmp2\n');
 
 if any(diff(pressure) > 0);
     E.badinput('pressure must be a monotonically decreasing vector of pressures');
