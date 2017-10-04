@@ -247,8 +247,6 @@ for j=1:length(datenums)
         %JLL 17 Mar 2014: Load some of the variables from 'Data' to
         %make referencing them less cumbersome. Also convert some
         %to column vectors to work with rNmcTmp2 and rDamf2
-        lon = Data(d).Longitude;
-        lat = Data(d).Latitude;
         loncorns = Data(d).FoV75CornerLongitude;
         latcorns = Data(d).FoV75CornerLatitude;
         time = Data(d).Time;       
@@ -256,33 +254,26 @@ for j=1:length(datenums)
         sza = Data(d).SolarZenithAngle;
         vza = Data(d).ViewingZenithAngle;
         phi = Data(d).RelativeAzimuthAngle;
-        
-        mon = month(datenums(j)) * ones(size(Data(d).Latitude));
-        pressure = behr_pres_levels();
-        if DEBUG_LEVEL > 1; fprintf('   Interpolating temperature data\n'); end
-        temperature = rNmcTmp2(fileTmp, pressure, lon, lat, mon); %JLL 17 Mar 2014: Interpolates temperature values to the pressures and lat/lon coordinates desired
-        
         surfPres = Data(d).GLOBETerpres;
         albedo = Data(d).MODISAlbedo;
+        cldFrac = Data(d).CloudFraction;
+        cldRadFrac = Data(d).CloudRadianceFraction;
+        
+        pressure = behr_pres_levels();
         
         surfPres(surfPres>=1013)=1013; %JLL 17 Mar 2014: Clamp surface pressure to sea level or less.
         cldPres = Data(d).CloudPressure;
         cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
         
+        if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
+        [no2Profile, temperature, wrf_profile_file] = rProfile_WRF(datenums(j), prof_mode, loncorns, latcorns, time, surfPres, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+        bad_profs = squeeze(all(isnan(no2Profile),1));
+        
         if DEBUG_LEVEL > 1; fprintf('   Calculating clear and cloudy AMFs\n'); end
         dAmfClr = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres); %JLL 18 Mar 2014: Interpolate the values in dAmf to the albedo and other conditions input
         cloudalbedo=0.8*ones(size(Data(d).CloudFraction)); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
         dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
-        
-        if DEBUG_LEVEL > 1; fprintf('   Reading NO2 profiles\n'); end
-        [no2Profile, wrf_profile_file] = rProfile_WRF(datenums(j), prof_mode, loncorns, latcorns, time, surfPres, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
-       
-        bad_profs = squeeze(all(isnan(no2Profile),1));
- 
-        cldFrac = Data(d).CloudFraction;
-        cldRadFrac = Data(d).CloudRadianceFraction;
-        
-        
+
         if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
         [amf, amfVis, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, cldPres, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
         amf(bad_profs)=NaN;
