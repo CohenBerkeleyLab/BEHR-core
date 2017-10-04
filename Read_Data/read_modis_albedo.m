@@ -33,7 +33,7 @@ p = inputParser;
 p.addParameter('DEBUG_LEVEL', 0);
 p.addParameter('LoncornField', 'FoV75CornerLongitude');
 p.addParameter('LatcornField', 'FoV75CornerLatitude');
-p.addParameter('QualityLimit', 2);
+p.addParameter('QualityLimit', Inf);
 p.parse(varargin{:});
 pout = p.Results;
 
@@ -235,6 +235,7 @@ for k=1:c;
 end
 
 data.MODISAlbedo = MODISAlbedo;
+data.MODISAlbedoQuality = MODISAlbedoQuality;
 data.MODISAlbedoFile = mcd43_info.Filename;
 data.AlbedoOceanFlag = ocean_flag;
 

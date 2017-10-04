@@ -504,7 +504,7 @@ for d=1:numel(Data_in)
         % can treat as if it were getting actual data in order to create
         % the flags definition cell array.
         if strcmpi(vars{v}, 'BEHRQualityFlags')
-            [~,flags_definition] = behr_quality_flags(0,0,0,0,false);
+            [~,flags_definition] = behr_quality_flags();
             flags_definition = flags_definition(~iscellcontents(flags_definition, 'isempty'));
             h5writeatt(hdf_fullfilename, var_name, 'FlagMeanings', strjoin(flags_definition, ', '));
         end

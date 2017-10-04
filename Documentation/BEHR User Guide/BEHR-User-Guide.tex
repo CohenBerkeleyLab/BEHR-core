@@ -11,7 +11,7 @@
 \usepackage{braket} %Dirac bra-ket notation
 \usepackage{textcomp}
 \usepackage{tabularx}
-\usepackage[hidelinks]{hyperref} %Allows the use of web links (\url, \href) and computer paths (\path)
+\usepackage[colorlinks,allcolors=black,urlcolor=blue]{hyperref} %Allows the use of web links (\url, \href) and computer paths (\path)
 
 \usepackage{listings} %Way to typeset code; listings respect whitespace. Can be set inline with {\lstinline[breaklines=true]||} or as an environment
 \lstset{basicstyle=\ttfamily} %Causes the code environments to be typeset with a Courier-like font
@@ -190,7 +190,7 @@ equivalent to the one with the period and is used interchangeably.
 	\end{table}
 
 \subsection{BEHRQualityFlags}\label{sec:behr-quality-flags}
-Starting from v3.0A, we have added our own flags field that combine the NASA XTrackQualityFlags and VcdQualityFlags summary bits with processing errors or warnings from the BEHR algorithm. The meaning of each bit is given 
+Starting from v3.0A, we have added our own flags field that combine the NASA XTrackQualityFlags and VcdQualityFlags summary bits with processing errors or warnings from the BEHR algorithm. The meaning of each bit is given in Table \ref{tab:behr-quality-flags}. Discussion of how to use these flags is given in \S\ref{sec:native-filtering}.
 
 \begin{table}
 \def\arraystretch{1.5}
@@ -198,15 +198,19 @@ Starting from v3.0A, we have added our own flags field that combine the NASA XTr
 \hline
 \multicolumn{3}{c}{\textbf{Error bits}} \\
 Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
-1 & 1 & Summary bit: set if any error present \\
-2 & 2 & AMF error: set if either the BEHR AMF or BEHR visible-only AMF is less than or equal to the minimum allowed value \\
-3 & 4 & VcdQualityFlags: set if the VcdQualityFlags field was not an even integer (i.e. its own summary bit was set) \\
-4 & 8 & XTrackFlags: set if the XTrackFlags field was $> 0$, indicating the presence of the row anomaly \\ 
-5--16 & 16--32768 & Unused: reserved for future use \\ \hline
+1 & 1 & Low quality flag: set if this pixel should not be used to generate high quality full tropospheric VCD (visible + ghost column) data. Set for any pixel with the critical error bit set plus cloud fraction $> 20\%$.\\
+2 & 2 & Critical error bit: set if any error present. Do not use either the standard or visible-only VCD from this pixel. \\
+3 & 4 & AMF error: set if either the BEHR AMF or BEHR visible-only AMF is less than or equal to the minimum allowed value \\
+4 & 8 & VcdQualityFlags: set if the VcdQualityFlags field was not an even integer (i.e. its own summary bit was set) \\
+5 & 16 & XTrackFlags: set if the XTrackFlags field was $> 0$, indicating the presence of the row anomaly \\ 
+6--16 & 32--32768 & Unused: reserved for future use \\ \hline
+%
 \multicolumn{3}{c}{\textbf{Warning bits}} \\
 Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
-17 & 65536 & MODIS ocean flag: MODIS albedo data not present for this pixel, used reflectance from \citet{mobley15}, scaled by the ratio of reflectance at 433 nm to 550 nm based on the GOME-2A LER product (\url{http://www.temis.nl/surface/gome2_ler.html}). \\ 
-18--32 & $2^{17}$--$2^{31}$ & Unused: reserved for future use \\ \hline
+17 & 65536 & High cloud fraction: OMI geometric cloud fraction exceeds 20\%. Not recommended for use if trying to retrieve a full tropospheric column (visible + ghost). \\
+18 & 131072 & MODIS ocean flag: MODIS albedo data not present for this pixel, used reflectance from a look up table based on solar zenith angle derived from the Couple Ocean-Atmosphere Radiative Transfer Model (\url{https://cloudsgate2.larc.nasa.gov/jin/coart.html}) \\ 
+19 & 262144 & MODIS BRDF quality flag: the average quality value for the MCD43C1 values averaged to this pixel exceeds 2.5. Accuracy of the surface reflectance used may be lower; use with caution. \\
+20--32 & $2^{19}$--$2^{31}$ & Unused: reserved for future use \\ \hline
 
 \end{tabularx}
 \caption{Meaning of the various bits in the BEHRQualityFlags field.}
@@ -218,28 +222,31 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 \section{Considerations when working with BEHR files}
 	\subsection{Pixel filtering}
 	\subsubsection{Native pixel data} \label{sec:native-filtering}
-	For users wishing to identify high quality \ce{NO2} column information to ground, we have added our own flag field that combines relevant flags from NASA with processing flags from our algorithm. This is the BEHRQualityFlags field.  In general, you should not use pixels for which the BEHRQualityFlags field is not an even integer (the least significant bit is set). For more advanced users, the meaning of each bit is described in Table \ref{tab:behr-quality-flags}.  Additionally, pixels with fill values should clearly not be used.
 	
-	In addition, users should filter pixels by cloud fraction. BEHR contains three cloud fractions: OMI geometric, OMI radiance, and MODIS cloud fraction. We generally filter for OMI geometric or MODIS fraction to be $< 0.2$ (20\%) when interested in total (to ground) columns.  As discussed in Russell et al. 2011, MODIS cloud fraction is often less susceptible to identifying high albedo ground surfaces as clouds. Other applications (e.g. cloud slicing) may require different filtering.
+	For users wishing to identify high quality \ce{NO2} column information to ground, we have added our own flag field that combines relevant flags from NASA with processing flags from our algorithm. This is the BEHRQualityFlags field.  For users who want the simplest way to identify good quality data for full tropospheric columns (i.e. BEHRColumnAmountNO2), only use pixels for which BEHRQualityFlags is an even integer (i.e. the least significant bit is 0). This automatically rejects any pixels that had an error during processing, any pixels for which the NASA VcdQualityFlags or XTrackQualityFlags fields indicate the pixel should not be used, and (as of 3 Oct 2017) any pixels that have an OMI geometric cloud fraction $> 20\%$.
+	
+	More advanced users who want more control over cloud filtering should instead reject pixels for which the second least significant bit of BEHRQualityFlags is non-zero. (One way to check this is to do a bitwise AND of the flag value with 2 and check if the result is $> 0$.) This will remove any pixels with a processing error or a NASA flag. BEHR contains three cloud fractions: OMI geometric, OMI radiance, and MODIS cloud fraction. We generally filter for OMI geometric or MODIS fraction to be $< 0.2$ (20\%) when interested in total (to ground) columns.  As discussed in Russell et al. 2011, MODIS cloud fraction is often less susceptible to identifying high albedo ground surfaces as clouds. Other applications (e.g. cloud slicing) may require different filtering.
+	
+	Users wishing extremely fine-grained control of which pixels are rejected have access to the VcdQualityFlags and XTrackQualityFlags fields as well as BEHRQualityFlags. Please refer to Table \ref{tab:behr-quality-flags} and the \href{https://acdisc.gesdisc.eosdis.nasa.gov/data//Aura_OMI_Level3/OMNO2d.003/doc/README.OMNO2.pdf}{NASA OMI \ce{NO2} Readme} file.
 	
 	A previous version of this document indicated to removing negative VCDs and VCDs $> 1 \times 10^{17}$ molec. cm$^{-2}$; this is no longer recommended as removing negative VCDs can make the error in the stratospheric subtraction systematic instead of random (especially for small VCDs), and removing large VCDs should not be necessary as long as you check that XTrackQualityFlags = 0.
 	
 	For non-\ce{NO2} column density fields, users can be more judicious in the filtering of data. For example, if interested in the value of the MODIS fields, removing pixels for which BEHRQualityFlags indicates an error in the \ce{NO2} algorithm will unnecessarily remove good MODIS data, since MODIS data is not affected by the row anomaly nor by errors in the \ce{NO2} algorithm. If you would like assistance figuring out the best filtering for a particular field, please contact one of the maintainers listed on the BEHR website.
 
 	
-	\subsubsection{Gridded data - PSM fields}\label{sec:gridded:psm}
-	Pixel gridding changed between v2.1C and v3.0A of BEHR. We now use the parabolic spline method (PSM) of gridding \citep{kuhlmann14} for \ce{NO2} column density fields.	As part of this process, pixels are filtered for quality before the gridding, removing pixels with VcdQualityFlags fields or XTrackQualityFlags fields that indicate an error in processing, as well as pixels with a solar zenith angle $> 85^\circ$. The native pixel values are weighted by:
+%	\subsubsection{Gridded data - PSM fields}\label{sec:gridded:psm}
+%	Pixel gridding changed between v2.1C and v3.0A of BEHR. We now use the parabolic spline method (PSM) of gridding \citep{kuhlmann14} for \ce{NO2} column density fields.	As part of this process, pixels are filtered for quality before the gridding, removing pixels with VcdQualityFlags fields or XTrackQualityFlags fields that indicate an error in processing, as well as pixels with a solar zenith angle $> 85^\circ$. The native pixel values are weighted by:
 	
-	\begin{equation}
-	w = \frac{10^{16}}{[A \cdot \sigma_{\ce{NO2}} \cdot (1.3 + 0.87 f)]^2} 
-	\end{equation}
+%	\begin{equation}
+%	w = \frac{10^{16}}{[A \cdot \sigma_{\ce{NO2}} \cdot (1.3 + 0.87 f)]^2} 
+%	\end{equation}
 	
-	where $A$ is the pixel area (FoV75 Area from the OMPIXCOR product), $\sigma_{\ce{NO2}}$ is the standard error of the column (ColumnAmountNO2TropStd from the OMI SP product), and $f$ is the cloud radiance fraction. The dependence on cloud fraction was empirically derived by Annette Sch\"{u}tt and Mark Wenig at LMU Munich.
+%	where $A$ is the pixel area (FoV75 Area from the OMPIXCOR product), $\sigma_{\ce{NO2}}$ is the standard error of the column (ColumnAmountNO2TropStd from the OMI SP product), and $f$ is the cloud radiance fraction. The dependence on cloud fraction was empirically derived by Annette Sch\"{u}tt and Mark Wenig at LMU Munich.
 	
-	Therefore, it is no longer necessary to filter data gridded by the PSM before temporally averaging. Such fields are indicated by the attribute \lstinline$grid_type$ having the value ``parabolic spline method''. Their weights are individually given in fields with the same name + ``Weights,'' i.e. for BEHRColumnAmountNO2Trop, the corresponding weights are given in BEHRColumnAmountNO2TropWeights.
+%	Therefore, it is no longer necessary to filter data gridded by the PSM before temporally averaging. Such fields are indicated by the attribute \lstinline$grid_type$ having the value ``parabolic spline method''. Their weights are individually given in fields with the same name + ``Weights,'' i.e. for BEHRColumnAmountNO2Trop, the corresponding weights are given in BEHRColumnAmountNO2TropWeights.
 	
 	\subsubsection{Gridded data - CVM fields}\label{sec:gridded:cvm}
-	Other fields not containing \ce{NO2} data are gridded by the constant value method (CVM), also available in the \lstinline$omi$ package (\url{https://github.com/gkuhl/omi}). This avoids assuming that the same constraints optimized for \ce{NO2} in the PSM are true for all fields. These fields are not automatically filtered for row anomaly or other processing errors. Consequently, before averaging in time (\S\ref{sec:temporal-averaging}), the user should filter this data similarly to the native pixels (\S\ref{sec:native-filtering}). These fields are indicated by the \lstinline$grid_type$ attribute having the value ``constant value method''.
+	Currently, all fields are gridded by the constant value method (CVM), also available in the \lstinline$omi$ package (\url{https://github.com/gkuhl/omi}). These data must be filtered the same as the native pixels (\S\ref{sec:native-filtering}).  These fields are indicated by the \lstinline$grid_type$ attribute having the value ``constant value method''.
 	
 	\subsubsection{Gridded data - flag fields}
 	Flag fields (BEHRQualityFlags, VcdQualityFlags, XTrackQualityFlags) are put on a grid using the CVM; however, when multiple pixels overlap a single grid cell, their values are combined using a bitwise OR operation, rather than a weighted summation. This ensures that if any pixel contributing to a grid cell has a flag set, that flag will be set for the grid cell. This means that filtering CVM gridded fields by these flags will be conservative about including grid cells with good data. These fields are indicated by the \lstinline$grid_type$ attribute having the value ``flag, bitwise OR''.
@@ -248,19 +255,19 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	Other fields that define the grid, such as Longitude and Latitude, are indicated by the \lstinline$grid_type$ attribute value ``grid property''. If the HDF publishing algorithm cannot identify a field's grid type, the \lstinline$grid_type$ attribute will have the value ``undefined''.
 	
 	\subsection{Weighting temporal averaging}\label{sec:temporal-averaging}
-	Averaging over time is most easily accomplished using the gridded product, since the grid is consistent day-to-day. CVM gridded fields (\S\ref{sec:gridded:cvm}) should be filtered for quality using BEHRQualityFlags or XTrackQualityFlags and VcdQualityFlags and filtered for cloud fraction. The temporal average should weight each grid cell by the weight given in the Areaweight field for that swath.
+	Averaging over time is most easily accomplished using the gridded product, since the grid is consistent day-to-day. CVM gridded fields (\S\ref{sec:gridded:cvm}) should be filtered for quality using BEHRQualityFlags or XTrackQualityFlags, VcdQualityFlags, and cloud fraction. The temporal average should weight each grid cell by the weight given in the Areaweight field for that swath.
 	
-	PSM gridded fields do not need to be filtered, but should be weighted by the correct ``Weights'' field (\S\ref{sec:gridded:psm}).
+	%PSM gridded fields do not need to be filtered, but should be weighted by the correct ``Weights'' field (\S\ref{sec:gridded:psm}).
 	
-	\subsection{Total vs. visible only columns}
-	The field BEHRColumnAmountNO2Trop contains the total column, which includes the estimated ghost column below the cloudy part of the pixel. The field BEHRColumnAmountNO2TropVisOnly does not include the ghost column; only the above-cloud \ce{NO2} is included for the cloudy component of the pixel.
+	\subsection{To-ground vs. visible only columns}
+	The field BEHRColumnAmountNO2Trop contains the to-ground column, which includes the estimated ghost column below the cloudy part of the pixel. The field BEHRColumnAmountNO2TropVisOnly does not include the ghost column; only the above-cloud \ce{NO2} is included for the cloudy component of the pixel.
 	
 	Most users should use the BEHRColumnAmountNO2Trop field. Users interested in cloud slicing approaches should use the BEHRColumnAmountNO2TropVisOnly field. 
 	
-	The difference in the VCDs stems from the difference in the computation of the cloudy AMF. The total-column AMF (BEHRAMFTrop) is ultimately the ratio of a modeled slant column density (accounting for the presence of clouds) to a modeled vertical column density that is integrated from ground to tropopause over the whole pixel:
+	The difference in the VCDs stems from the difference in the computation of the cloudy AMF. The to-ground AMF (BEHRAMFTrop) is ultimately the ratio of a modeled slant column density (accounting for the presence of clouds) to a modeled vertical column density that is integrated from ground to tropopause over the whole pixel:
 	
 	\begin{equation}\label{eqn:total-amf}
-	A_{\mathrm{total}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp}
+	A_{\mathrm{to-ground}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp}
 	\end{equation}
 	
 	where $p_{\mathrm{surf}}$ is the ground surface pressure, $p_{\mathrm{cloud}}$ is the cloud pressure, $p_{\mathrm{tp}}$ is the tropopause pressure, $w_{\mathrm{clear}}(p)$ are the clear-sky scattering weights, $w_{\mathrm{cloudy}}$ are the cloudy-sky scattering weights, $g(p)$ is the \emph{a priori} \ce{NO2} profile, and $f_r$ is the cloud radiance fraction.	
@@ -273,7 +280,7 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	
 	where $f_g$ is the geometric cloud fraction. 
 	
-	Therefore, dividing the satellite slant column by the total AMF from Eq. \eqref{eqn:total-amf} scales it by the ratio of a modeled slant column to a modeled total tropospheric column (including the ghost column). Dividing the same slant column by the visible only AMF from Eq. \eqref{eqn:vis-amf} scales it by the ratio of a modeled slant column to a modeled visible column (\emph{excluding} the ghost column).
+	Therefore, dividing the satellite slant column by the to-ground AMF from Eq. \eqref{eqn:total-amf} scales it by the ratio of a modeled slant column to a modeled total tropospheric column (including the ghost column). Dividing the same slant column by the visible only AMF from Eq. \eqref{eqn:vis-amf} scales it by the ratio of a modeled slant column to a modeled visible column (\emph{excluding} the ghost column).
 
 	
 	\subsection{Using scattering weights/averaging kernels} \label{sec:scweights}
