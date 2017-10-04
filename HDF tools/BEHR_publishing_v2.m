@@ -77,9 +77,9 @@ global mat_file_dir
 global save_dir
 global numThreads
 if ~onCluster
-    mat_file_dir = BEHR_paths('behr_mat_dir');
+    mat_file_dir = behr_paths.behr_mat_dir;
     save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,BEHR_version);
-    save_dir = fullfile(BEHR_paths('website_staging_dir'),save_subdir);
+    save_dir = fullfile(behr_paths.website_staging_dir,save_subdir);
     if ~exist(save_dir,'dir')
         mkdir(save_dir)
     end
