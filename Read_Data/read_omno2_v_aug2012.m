@@ -269,14 +269,25 @@ end
 %%%%% MAIN BODY %%%%%
 %%%%%%%%%%%%%%%%%%%%%
 
-%Go ahead and load the terrain pressure data - only need to do this once
-%Add a little buffer around the edges to make sure we have terrain data
+%Add a little buffer around the edges to make sure we have ancillary data
 %everywhere that we have NO2 profiles.
+ancillary_lonlim = [lonmin - 10, lonmax + 10];
+ancillary_latlim = [latmin - 10, latmax + 10];
+
+%Load the land classification map. We'll use this to decide when to use the
+%ocean surface reflectance parameterization. 
+if DEBUG_LEVEL > 1; fprintf('Loading land/ocean classification map\n'); end
+if DEBUG_LEVEL > 2; t_load_land_ocean = tic; end
+
+[ocean_mask.mask, ocean_mask.lon, ocean_mask.lat] = get_modis_ocean_mask(ancillary_lonlim, ancillary_latlim);
+
+if DEBUG_LEVEL > 2; fprintf('    Time to load land/ocean classification map: %f\n', t_load_land_ocean); end
+
+%Go ahead and load the terrain pressure data - only need to do this once
 if DEBUG_LEVEL > 1; fprintf('Loading globe elevations\n'); end
 if DEBUG_LEVEL > 2; t_load_globe = tic; end
-glonlim = [lonmin - 10, lonmax + 10];
-glatlim = [latmin - 10, latmax + 10];
-[globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(glonlim, glatlim);
+
+[globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(ancillary_lonlim, ancillary_latlim);
 globe_elevations(isnan(globe_elevations)) = 0;
 if DEBUG_LEVEL > 2; fprintf('    Time to load GLOBE elevations: %f\n', toc(t_load_globe)); end
 
@@ -368,7 +379,7 @@ for j=1:length(datenums)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud',  'MODISAlbedo', 'GLOBETerpres', 'IsZoomModeSwath', 'AlbedoOceanFlag',...
+        'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality', 'GLOBETerpres', 'IsZoomModeSwath', 'AlbedoOceanFlag',...
         'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File',...
         'OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',};
     
@@ -467,7 +478,7 @@ for j=1:length(datenums)
         % Add MODIS albedo info to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS albedo information \n'); end
         if DEBUG_LEVEL > 2; t_modis_alb = tic; end
-        this_data = read_modis_albedo(modis_mcd43_dir, coart_lut, this_dnum, this_data, 'DEBUG_LEVEL', DEBUG_LEVEL);
+        this_data = read_modis_albedo(modis_mcd43_dir, coart_lut, ocean_mask, this_dnum, this_data, 'QualityLimit', 2, 'DEBUG_LEVEL', DEBUG_LEVEL);
 
         if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS albedo on worker %d: %f\n', this_task.ID, toc(t_modis_alb)); end
         
