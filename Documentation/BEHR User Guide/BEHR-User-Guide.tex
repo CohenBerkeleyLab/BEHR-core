@@ -198,7 +198,7 @@ Starting from v3.0A, we have added our own flags field that combine the NASA XTr
 \hline
 \multicolumn{3}{c}{\textbf{Error bits}} \\
 Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
-1 & 1 & Low quality flag: set if this pixel should not be used to generate high quality full tropospheric VCD (visible + ghost column) data. Set for any pixel with the critical error bit set plus cloud fraction $> 20\%$.\\
+1 & 1 & Low quality flag: set if this pixel should not be used to generate high quality full tropospheric VCD (visible + ghost column) data. Set for any pixel with the critical error bit set, MODIS BRDF quality warning set, or cloud fraction $> 20\%$.\\
 2 & 2 & Critical error bit: set if any error present. Do not use either the standard or visible-only VCD from this pixel. \\
 3 & 4 & AMF error: set if either the BEHR AMF or BEHR visible-only AMF is less than or equal to the minimum allowed value \\
 4 & 8 & VcdQualityFlags: set if the VcdQualityFlags field was not an even integer (i.e. its own summary bit was set) \\
@@ -208,8 +208,8 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 \multicolumn{3}{c}{\textbf{Warning bits}} \\
 Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 17 & 65536 & High cloud fraction: OMI geometric cloud fraction exceeds 20\%. Not recommended for use if trying to retrieve a full tropospheric column (visible + ghost). \\
-18 & 131072 & MODIS ocean flag: MODIS albedo data not present for this pixel, used reflectance from a look up table based on solar zenith angle derived from the Couple Ocean-Atmosphere Radiative Transfer Model (\url{https://cloudsgate2.larc.nasa.gov/jin/coart.html}) \\ 
-19 & 262144 & MODIS BRDF quality flag: the average quality value for the MCD43C1 values averaged to this pixel exceeds 2.5. Accuracy of the surface reflectance used may be lower; use with caution. \\
+18 & 131072 & MODIS ocean flag: MODIS land use table indicates that this pixel is majority ocean, used reflectance from a look up table based on solar zenith angle derived from the Couple Ocean-Atmosphere Radiative Transfer Model (\url{https://cloudsgate2.larc.nasa.gov/jin/coart.html}) \\ 
+19 & 262144 & MODIS BRDF quality flag: the average quality value for the MCD43D* values averaged to this pixel exceeds 2.5 or $>50\%$ of the MODIS grid cells in this OMI pixel are fill values. Accuracy of the surface reflectance used may be lower; use with caution. \\
 20--32 & $2^{19}$--$2^{31}$ & Unused: reserved for future use \\ \hline
 
 \end{tabularx}
@@ -223,9 +223,11 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	\subsection{Pixel filtering}
 	\subsubsection{Native pixel data} \label{sec:native-filtering}
 	
-	For users wishing to identify high quality \ce{NO2} column information to ground, we have added our own flag field that combines relevant flags from NASA with processing flags from our algorithm. This is the BEHRQualityFlags field.  For users who want the simplest way to identify good quality data for full tropospheric columns (i.e. BEHRColumnAmountNO2), only use pixels for which BEHRQualityFlags is an even integer (i.e. the least significant bit is 0). This automatically rejects any pixels that had an error during processing, any pixels for which the NASA VcdQualityFlags or XTrackQualityFlags fields indicate the pixel should not be used, and (as of 3 Oct 2017) any pixels that have an OMI geometric cloud fraction $> 20\%$.
+	For users wishing to identify high quality \ce{NO2} column information to ground, we have added our own flag field that combines relevant flags from NASA with processing flags from our algorithm. This is the BEHRQualityFlags field.  For users who want the simplest way to identify good quality data for full tropospheric columns (i.e. BEHRColumnAmountNO2), only use pixels for which BEHRQualityFlags is an even integer (i.e. the least significant bit is 0). This automatically rejects any pixels that had an error during processing, any pixels for which the NASA VcdQualityFlags or XTrackQualityFlags fields indicate the pixel should not be used, any pixels with low quality MODIS BRDF data (see below), and (as of 3 Oct 2017) any pixels that have an OMI geometric cloud fraction $> 20\%$.
 	
 	More advanced users who want more control over cloud filtering should instead reject pixels for which the second least significant bit of BEHRQualityFlags is non-zero. (One way to check this is to do a bitwise AND of the flag value with 2 and check if the result is $> 0$.) This will remove any pixels with a processing error or a NASA flag. BEHR contains three cloud fractions: OMI geometric, OMI radiance, and MODIS cloud fraction. We generally filter for OMI geometric or MODIS fraction to be $< 0.2$ (20\%) when interested in total (to ground) columns.  As discussed in Russell et al. 2011, MODIS cloud fraction is often less susceptible to identifying high albedo ground surfaces as clouds. Other applications (e.g. cloud slicing) may require different filtering.
+	
+	A second flag advanced users should be aware of is bit \#19, which indicates that the MODIS MCD43D BRDF data averaged for this pixel is of lower quality. This can happen if, for instance, the ground is snow covered. The first bit is set to true wherever this bit is true; the second bit is not. Users interested in winter retrievals over the northern US will likely need to allow this bit to be true in order to allow sufficient data through the filter. At this time, we do not have a quantitative estimate for how much the lower quality BRDF data increases the uncertainty of the retrieved VCD.
 	
 	Users wishing extremely fine-grained control of which pixels are rejected have access to the VcdQualityFlags and XTrackQualityFlags fields as well as BEHRQualityFlags. Please refer to Table \ref{tab:behr-quality-flags} and the \href{https://acdisc.gesdisc.eosdis.nasa.gov/data//Aura_OMI_Level3/OMNO2d.003/doc/README.OMNO2.pdf}{NASA OMI \ce{NO2} Readme} file.
 	
