@@ -225,7 +225,7 @@ end
 %This is the directory where the MODIS MCD43C3*.hdf files are saved. It
 %should include subfolders organized by year.
 if isempty(modis_mcd43_dir)
-    modis_mcd43_dir = behr_paths.mcd43c1_dir;
+    modis_mcd43_dir = behr_paths.mcd43d_dir;
 end
 
 %This is the directory where the GLOBE data files and their headers
