@@ -224,7 +224,7 @@ end
 %This is the directory where the MODIS MCD43C1*.hdf files are saved. It
 %should include subfolders organized by year.
 if isempty(modis_mcd43_dir)
-    modis_mcd43_dir = behr_paths.mcd43c1_dir;
+    modis_mcd43_dir = behr_paths.mcd43d_dir;
 end
 
 %This is the directory where the GLOBE data files and their headers
@@ -371,9 +371,9 @@ parfor(j=1:length(datenums), n_workers)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality', 'GLOBETerpres', 'IsZoomModeSwath', 'AlbedoOceanFlag',...
-        'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File',...
-        'OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',};
+        'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality','MODISAlbedoFillFlag', 'GLOBETerpres',...
+        'IsZoomModeSwath', 'AlbedoOceanFlag','OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',...
+        'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File'};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
     Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
@@ -393,6 +393,11 @@ parfor(j=1:length(datenums), n_workers)
         fprintf('No data available for %s\n', datestr(this_dnum));
         continue
     end
+    
+    % Read in the MODIS albedo data for this day. We do it outside the loop
+    % over orbits to limit the number of reads of the (fairly large) MCD43D
+    % files.
+    modis_brdf_data = read_modis_albedo(modis_mcd43_dir, this_dnum, ancillary_lonlim, ancillary_latlim);
     
     data_ind = 0;
     for a=1:n %For loop over all the swaths in a given day.
@@ -468,7 +473,7 @@ parfor(j=1:length(datenums), n_workers)
         % Add MODIS albedo info to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS albedo information \n'); end
         if DEBUG_LEVEL > 2; t_modis_alb = tic; end
-        this_data = read_modis_albedo(modis_mcd43_dir, coart_lut, ocean_mask, this_dnum, this_data, 'QualityLimit', 2, 'DEBUG_LEVEL', DEBUG_LEVEL);
+        this_data = avg_modis_alb_to_pixels(modis_brdf_data, coart_lut, ocean_mask, this_data, 'QualityLimit', 2, 'DEBUG_LEVEL', DEBUG_LEVEL);
 
         if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS albedo on worker %d: %f\n', this_task.ID, toc(t_modis_alb)); end
         
