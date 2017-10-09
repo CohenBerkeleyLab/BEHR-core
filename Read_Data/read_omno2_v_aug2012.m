@@ -402,6 +402,11 @@ for j=1:length(datenums)
         continue
     end
     
+    % Read in the MODIS albedo data for this day. We do it outside the loop
+    % over orbits to limit the number of reads of the (fairly large) MCD43D
+    % files.
+    modis_brdf_data = read_modis_albedo(modis_mcd43_dir, this_dnum, ancillary_lonlim, ancillary_latlim);
+    
     data_ind = 0;
     for a=1:n %For loop over all the swaths in a given day.
         if DEBUG_LEVEL > 2; t_orbit = tic; end
@@ -478,7 +483,7 @@ for j=1:length(datenums)
         % Add MODIS albedo info to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS albedo information \n'); end
         if DEBUG_LEVEL > 2; t_modis_alb = tic; end
-        this_data = read_modis_albedo(modis_mcd43_dir, coart_lut, ocean_mask, this_dnum, this_data, 'QualityLimit', 2, 'DEBUG_LEVEL', DEBUG_LEVEL);
+        this_data = avg_modis_alb_to_pixels(modis_brdf_data, coart_lut, ocean_mask, this_data, 'QualityLimit', 2, 'DEBUG_LEVEL', DEBUG_LEVEL);
 
         if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS albedo on worker %d: %f\n', this_task.ID, toc(t_modis_alb)); end
         
