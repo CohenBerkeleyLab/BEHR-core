@@ -26,6 +26,7 @@ s=size(data.Latitude);
 c=numel(data.Latitude);
 MODISAlbedo = nan(s);
 MODISAlbedoQuality = nan(s);
+MODISAlbedoFillFlag = false(s);
 ocean_flag = false(s);
 
 %Now actually average the MODIS albedo for each OMI pixel
@@ -85,12 +86,14 @@ for k=1:c;
     band3_vol_k = band3data.vol(yy,xx);
     brdf_quality_k = band3data.quality(yy,xx);
     
-    xx_alb = inpolygon(band3data.lons(yy,xx),band3data.lats(yy,xx),xall,yall);
+    xx_inpoly = inpolygon(band3data.lons(yy,xx),band3data.lats(yy,xx),xall,yall);
     
     % Also remove data that has too low a quality. The quality values are
     % described in the "Description" attribute for the "BRDF_Quality" SDS.
-    % Lower values for the quality flag are better.
-    xx_alb = xx_alb & (brdf_quality_k <= max_qual_flag | isnan(brdf_quality_k));
+    % Lower values for the quality flag are better. Inequality comparisons
+    % with NaNs are always false, but this explicitly rejects BRDF values
+    % for which the quality value is a NaN (i.e. fill value).
+    xx_alb = xx_inpoly & brdf_quality_k <= max_qual_flag & ~isnan(brdf_quality_k);
     
     if sum(xx_alb) == 0
         MODISAlbedo(k) = nan;
@@ -130,11 +133,19 @@ for k=1:c;
         MODISAlbedoQuality(k) = nanmean(brdf_quality_k(xx_alb));
     end
     
+    % If more than 50% of the quality values are fills, set the fill
+    % warning flag. This will be used in behr_quality_flags to warn of low
+    % quality MODIS data.
+    if sum(isnan(brdf_quality_k(xx_inpoly)))/sum(xx_inpoly(:)) > 0.5
+        MODISAlbedoFillFlag(k) = true;
+    end
+    
     if DEBUG_LEVEL > 3; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
 end
 
 data.MODISAlbedo = MODISAlbedo;
 data.MODISAlbedoQuality = MODISAlbedoQuality;
+data.MODISAlbedoFillFlag = MODISAlbedoFillFlag;
 data.MODISAlbedoFile = band3data.files;
 data.AlbedoOceanFlag = ocean_flag;
 

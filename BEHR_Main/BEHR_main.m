@@ -294,8 +294,7 @@ for j=1:length(datenums)
         Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
         Data(d).BEHRWRFFile = wrf_profile_file;
         Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
-        Data(d).BEHRQualityFlags = behr_quality_flags(Data(d).BEHRAMFTrop, Data(d).BEHRAMFTropVisOnly,...
-            Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag, Data(d).MODISAlbedoQuality, Data(d).CloudFraction); 
+        Data(d).BEHRQualityFlags = behr_quality_flags(Data(d)); 
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

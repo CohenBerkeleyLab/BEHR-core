@@ -93,18 +93,15 @@ modis_files = cell(1,4);
 
 if DEBUG_LEVEL > 2; fprinf('    Reading band 3 f_iso\n'); end
 mcd_filename = sprintf('MCD43D07.A%04d%03d*.hdf', year(date_in), julian_day);
-[band3_iso, modis_files{1}] = read_band_parameter(alb_dir, mcd_filename);
-band3_iso = band3_iso(in_lats,in_lons);
+[band3_iso, modis_files{1}] = read_band_parameter(alb_dir, mcd_filename, {in_lats, in_lons});
 
 if DEBUG_LEVEL > 2; fprinf('    Reading band 3 f_vol\n'); end
 mcd_filename = sprintf('MCD43D08.A%04d%03d*.hdf', year(date_in), julian_day);
-[band3_vol, modis_files{2}] = read_band_parameter(alb_dir, mcd_filename);
-band3_vol = band3_vol(in_lats,in_lons);
+[band3_vol, modis_files{2}] = read_band_parameter(alb_dir, mcd_filename, {in_lats, in_lons});
 
 if DEBUG_LEVEL > 2; fprinf('    Reading band 3 f_geo\n'); end
 mcd_filename = sprintf('MCD43D09.A%04d%03d*.hdf', year(date_in), julian_day);
-[band3_geo, modis_files{3}] = read_band_parameter(alb_dir, mcd_filename);
-band3_geo = band3_geo(in_lats,in_lons);
+[band3_geo, modis_files{3}] = read_band_parameter(alb_dir, mcd_filename, {in_lats, in_lons});
 
 % Unlike the parameter files, the quality file has all seven bands in one
 % file, so we need to handle it differently
@@ -118,8 +115,16 @@ elseif numel(alb_files) > 1
 end
 modis_files{4} = fullfile(alb_dir, alb_files(1).name);
 mcd43_info = hdfinfo(modis_files{4});
-brdf_quality = hdfreadmodis(modis_files{4}, hdfdsetname(mcd43_info,1,1,'BRDF_Quality'));
-brdf_quality = brdf_quality(in_lats,in_lons);
+brdf_quality = hdfreadmodis(modis_files{4}, hdfdsetname(mcd43_info,4,1,'BRDF_Albedo_Band_Quality_Band3'), 'log_index', {in_lats, in_lons});
+
+% Verify that fill are the same in the 3 parameters and the quality flags.
+% This assumption is used in avg_modis_alb_to_pixels in order to remove
+% fill value BRDF coefficients and flag OMI pixels where >50% of the MODIS
+% data is fill values.
+qual_nans = isnan(brdf_quality(:));
+if any(xor(qual_nans, isnan(band3_iso(:)))) || any(xor(qual_nans, isnan(band3_geo(:)))) || any(xor(qual_nans, isnan(band3_vol(:))))
+    E.callError('inconsistent_fills', 'Fill values are not the same in the quality flags and one or more of the BRDF parameters');
+end
 
 band3data.lons = band3_lons;
 band3data.lats = band3_lats;
@@ -130,7 +135,7 @@ band3data.quality = brdf_quality;
 band3data.files = modis_files;
 end
 
-function [band3_param, mcd_filename] = read_band_parameter(file_dir, file_pattern)
+function [band3_param, mcd_filename] = read_band_parameter(file_dir, file_pattern, logical_indices)
 E = JLLErrors;
 
 alb_filename = fullfile(file_dir, file_pattern);
@@ -147,7 +152,7 @@ mcd43_info = hdfinfo(fullfile(file_dir,alb_files(1).name));
 if numel(mcd43_info.Vgroup(1).Vgroup(1).SDS) ~= 1
     E.callError('mcd43d format', 'READ_BAND_PARAMETER assumes there is only a single SDS in the file; that is not true in %s', mcd43_info.Filename);
 end
-band3_param = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,1));
+band3_param = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,1), 'log_index', logical_indices);
 mcd_filename = mcd43_info.Filename;
 end
 
