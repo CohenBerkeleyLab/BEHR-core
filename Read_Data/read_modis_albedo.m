@@ -1,5 +1,5 @@
 function [ data ] = read_modis_albedo( modis_directory, coart_lut, ocean_mask, date_in, data, varargin )
-%READ_MODIS_ALBEDO Reads MODIS MCD43C1 BRDF albedo 
+%READ_MODIS_ALBEDO Reads MODIS MCD43C1 BRDF albedo
 %   DATA = READ_MODIS_ALBEDO( MODIS_DIR, COART_LUT, OCEAN_MASK, DATE_IN, DATA ) Reads
 %   MODIS MCD43C1 data from MODIS_DIR (which must be the path to the root
 %   MCD43C1 directory, containing each year in a subfolder). It identifies
@@ -87,7 +87,7 @@ if numel(alb_files) < 1
     E.filenotfound('MODIS BRDF file matching pattern %s.', alb_filename);
 elseif numel(alb_files) > 1
     E.toomanyfiles('Multiple MODIS BRDF files found matching pattern %s.', alb_filename);
-end 
+end
 
 mcd43_info = hdfinfo(fullfile(alb_dir,alb_files(1).name));
 band3_iso = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter1_Band3'));
@@ -115,7 +115,7 @@ lat_max = ceil(max(latcorn));
 in_lats = find(band3_lats(:,1)>=lat_min & band3_lats(:,1)<=lat_max);
 in_lons = find(band3_lons(1,:)>=lon_min & band3_lons(1,:)<=lon_max);
 
-band3_iso = band3_iso(in_lats,in_lons); 
+band3_iso = band3_iso(in_lats,in_lons);
 band3_vol = band3_vol(in_lats,in_lons);
 band3_geo = band3_geo(in_lats,in_lons);
 brdf_quality = brdf_quality(in_lats,in_lons);
@@ -127,7 +127,8 @@ s=size(data.Latitude);
 c=numel(data.Latitude);
 MODISAlbedo = nan(s);
 MODISAlbedoQuality = nan(s);
-ocean_flag = false(s); 
+MODISAlbedoFillFlag = nan(s);
+ocean_flag = false(s);
 
 %Now actually average the MODIS albedo for each OMI pixel
 if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
@@ -175,7 +176,7 @@ for k=1:c;
     
     if DEBUG_LEVEL > 4; t_polygon = tic; end
     
-    % If we're here, we're over a land pixel. 
+    % If we're here, we're over a land pixel.
     % should be able to speed this up by first restricting based on a
     % single lat and lon vector
     xx = band3_lons(1,:) >= min(xall) & band3_lons(1,:) <= max(xall);
@@ -186,12 +187,12 @@ for k=1:c;
     band3_vol_k = band3_vol(yy,xx);
     brdf_quality_k = brdf_quality(yy,xx);
     
-    xx_alb = inpolygon(band3_lons(yy,xx),band3_lats(yy,xx),xall,yall);
+    xx_inpoly = inpolygon(band3_lons(yy,xx),band3_lats(yy,xx),xall,yall);
     
     % Also remove data that has too low a quality. The quality values are
     % described in the "Description" attribute for the "BRDF_Quality" SDS.
     % Lower values for the quality flag are better.
-    xx_alb = xx_alb & (brdf_quality_k <= max_qual_flag | isnan(brdf_quality(yy,xx)));
+    xx_alb = xx_inpoly & brdf_quality_k <= max_qual_flag & ~isnan(brdf_quality_k);
     
     if sum(xx_alb) == 0
         MODISAlbedo(k) = nan;
@@ -207,7 +208,7 @@ for k=1:c;
     if DEBUG_LEVEL > 4; t_kernels = tic; end
     band3_vals = modis_brdf_alb(band3_iso_k(xx_alb), band3_vol_k(xx_alb), band3_geo_k(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), 180-data.RelativeAzimuthAngle(k));
     if DEBUG_LEVEL > 4; fprintf('    Time to calculate BRDF albedo = %f\n', toc(t_kernels)); end
-
+    
     
     % According to the MOD43 TBD
     % (https://modis.gsfc.nasa.gov/data/atbd/atbd_mod09.pdf, p. 32) the
@@ -231,11 +232,19 @@ for k=1:c;
         MODISAlbedoQuality(k) = nanmean(brdf_quality_k(xx_alb));
     end
     
+    % If more than 50% of the quality values are fills, set the fill
+    % warning flag. This will be used in behr_quality_flags to warn of low
+    % quality MODIS data.
+    if sum(isnan(brdf_quality_k(xx_inpoly)))/sum(xx_inpoly(:)) > 0.5
+        MODISAlbedoFillFlag(k) = true;
+    end
+    
     if DEBUG_LEVEL > 3; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
 end
 
 data.MODISAlbedo = MODISAlbedo;
 data.MODISAlbedoQuality = MODISAlbedoQuality;
+data.MODISAlbedoFillFlag = MODISAlbedoFillFlag;
 data.MODISAlbedoFile = mcd43_info.Filename;
 data.AlbedoOceanFlag = ocean_flag;
 
