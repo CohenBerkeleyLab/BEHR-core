@@ -122,7 +122,7 @@ omi_pixcor_dir = pout.omi_pixcor_dir;
 modis_myd06_dir = pout.modis_myd06_dir;
 modis_mcd43_dir = pout.modis_mcd43_dir;
 globe_dir = pout.globe_dir;
-region = pout.region; 
+region = pout.region;
 overwrite = pout.overwrite;
 
 %%% Validation %%%
@@ -151,16 +151,16 @@ end
 
 % Specify the longitude and latitude ranges of interest for this retrieval.
 % Additionally, set the earliest and latest start time (in UTC) for the
-% swaths that will be allowed. This will help 
+% swaths that will be allowed. This will help
 switch lower(region)
     case 'us'
-        lonmin = -125;    
+        lonmin = -125;
         lonmax = -65;
-        latmin = 25;    
+        latmin = 25;
         latmax = 50;
         earliest_omi_starttime = 1500;
         latest_omi_starttime = Inf;
-    otherwise 
+    otherwise
         E.badinput('Region "%s" not recognized', region)
 end
 
@@ -268,32 +268,6 @@ end
 %%%%% MAIN BODY %%%%%
 %%%%%%%%%%%%%%%%%%%%%
 
-%Add a little buffer around the edges to make sure we have ancillary data
-%everywhere that we have NO2 profiles.
-ancillary_lonlim = [lonmin - 10, lonmax + 10];
-ancillary_latlim = [latmin - 10, latmax + 10];
-
-%Load the land classification map. We'll use this to decide when to use the
-%ocean surface reflectance parameterization. 
-if DEBUG_LEVEL > 1; fprintf('Loading land/ocean classification map\n'); end
-if DEBUG_LEVEL > 2; t_load_land_ocean = tic; end
-
-[ocean_mask.mask, ocean_mask.lon, ocean_mask.lat] = get_modis_ocean_mask(ancillary_lonlim, ancillary_latlim);
-
-if DEBUG_LEVEL > 2; fprintf('    Time to load land/ocean classification map: %f\n', t_load_land_ocean); end
-
-%Go ahead and load the terrain pressure data - only need to do this once
-if DEBUG_LEVEL > 1; fprintf('Loading globe elevations\n'); end
-if DEBUG_LEVEL > 2; t_load_globe = tic; end
-
-[globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(ancillary_lonlim, ancillary_latlim);
-globe_elevations(isnan(globe_elevations)) = 0;
-if DEBUG_LEVEL > 2; fprintf('    Time to load GLOBE elevations: %f\n', toc(t_load_globe)); end
-
-if DEBUG_LEVEL > 1; fprintf('Loading COART sea reflectances\n'); end
-if DEBUG_LEVEL > 2; t_load_coart = tic; end
-[~, coart_lut] = coart_sea_reflectance(0);
-if DEBUG_LEVEL > 2; fprintf('    Time to load COART look up table: %f\n', toc(t_load_coart)); end
 
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the
@@ -322,186 +296,215 @@ genutils_githead = git_head_hash(behr_paths.utils);
 
 if DEBUG_LEVEL > 1; fprintf('Staring main loop\n'); end
 
-parfor(j=1:length(datenums), n_workers)
-%for j=1:length(datenums)
+
+spmd(n_workers)
     this_task = getCurrentTask();
     if isempty(this_task)
         this_task.ID = -1;
     end
-
-    if DEBUG_LEVEL > 2; t_day = tic; end
-
-    %Read the desired year, month, and day
-    this_dnum = datenums(j);
-    this_year = year(this_dnum);
-    this_year_str = sprintf('%04d', this_year);
-    this_month=month(this_dnum);
-    this_month_str = sprintf('%02d', this_month);
-    this_day=day(this_dnum);
-    this_day_str = sprintf('%02d', this_day);
     
-    % Check if the file already exists. If it does, and if we're set
-    % to not overwrite, we don't need to process this day.
-    savename = sp_savename(this_dnum);
-    if exist(fullfile(sp_mat_dir, savename), 'file') && ~overwrite
-        if DEBUG_LEVEL > 0; fprintf('File %s exists, skipping this day\n', savename); end
-        continue
-    end
+    %Add a little buffer around the edges to make sure we have ancillary data
+    %everywhere that we have NO2 profiles.
+    ancillary_lonlim = [lonmin - 10, lonmax + 10];
+    ancillary_latlim = [latmin - 10, latmax + 10];
     
-    % List variables that should be read directly from the OMI OMNO2 files.
-    % If you want an additional variable, adding it here should be
-    % sufficient to make that happen as long as it is under the
-    % /HDFEOS/SWATHS/ColumnAmountNO2 group and is spelled exactly how the
-    % dataset is named.
-    sp_variables = {'Longitude', 'Latitude', 'Time', 'ViewingZenithAngle',...
-        'SolarZenithAngle', 'ViewingAzimuthAngle', 'SolarAzimuthAngle',...
-        'AmfStrat', 'AmfTrop', 'CloudFraction', 'CloudRadianceFraction',...
-        'TerrainHeight', 'TerrainPressure', 'TerrainReflectivity',...
-        'CloudPressure', 'ColumnAmountNO2', 'SlantColumnAmountNO2',...
-        'ColumnAmountNO2Trop', 'ColumnAmountNO2TropStd', 'ColumnAmountNO2Strat',...
-        'TropopausePressure', 'VcdQualityFlags', 'XTrackQualityFlags'};
+    %Load the land classification map. We'll use this to decide when to use the
+    %ocean surface reflectance parameterization.
+    if DEBUG_LEVEL > 1; fprintf('Loading land/ocean classification map\n'); end
+    if DEBUG_LEVEL > 2; t_load_land_ocean = tic; end
     
-    % Variables from the OMPIXCOR files. As with the SP variables, adding a
-    % variable here that is under the '/HDFEOS/SWATHS/OMI Ground Pixel
-    % Corners VIS' group should be sufficient to cause it to be read in.
-    pixcor_variables = {'TiledArea', 'TiledCornerLongitude', 'TiledCornerLatitude',...
-        'FoV75Area', 'FoV75CornerLongitude', 'FoV75CornerLatitude'};
+    [ocean_mask.mask, ocean_mask.lon, ocean_mask.lat] = get_modis_ocean_mask(ancillary_lonlim, ancillary_latlim);
     
-    % Variables that will be added by BEHR. These will need manual
-    % intervention if you choose to add more variables since they're not
-    % being copied directly from existing files.
-    behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality', 'MODISAlbedoFillFlag', 'GLOBETerpres', 'IsZoomModeSwath', 'AlbedoOceanFlag',...
-        'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File',...
-        'OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',};
+    if DEBUG_LEVEL > 2; fprintf('    Time to load land/ocean classification map on worker %d: %f\n', this_task.ID,  t_load_land_ocean); end
     
-    sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
-    Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
+    %Go ahead and load the terrain pressure data - only need to do this once
+    if DEBUG_LEVEL > 1; fprintf('Loading globe elevations\n'); end
+    if DEBUG_LEVEL > 2; t_load_globe = tic; end
     
-    %Set the file path and name, assuming that the file structure is
-    %<he5_directory>/<year>/<month>/...files...  Then figure out how many
-    %files there are
-    short_filename = sprintf('OMI-Aura_L2-OMNO2_%04dm%02d%02d*.he5', this_year, this_month, this_day);
-    file_dir = fullfile(omi_he5_dir, this_year_str, this_month_str); %Used both here to find all he5 files and in the swath for loop to identify each file.
-    file_pattern=fullfile(file_dir,short_filename);
-    sp_files = dir(file_pattern);
-    sp_files = remove_duplicate_orbits(sp_files);
-    n = length(sp_files);
+    [globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(ancillary_lonlim, ancillary_latlim);
+    globe_elevations(isnan(globe_elevations)) = 0;
+    if DEBUG_LEVEL > 2; fprintf('    Time to load GLOBE elevations on worker %d: %f\n', this_task.ID, toc(t_load_globe)); end
     
+    if DEBUG_LEVEL > 1; fprintf('Loading COART sea reflectances\n'); end
+    if DEBUG_LEVEL > 2; t_load_coart = tic; end
+    [~, coart_lut] = coart_sea_reflectance(0);
+    if DEBUG_LEVEL > 2; fprintf('    Time to load COART look up table on worker %d: %f\n', this_task.ID, toc(t_load_coart)); end
     
-    if isempty(sp_files);
-        fprintf('No data available for %s\n', datestr(this_dnum));
-        continue
-    end
-    
-    data_ind = 0;
-    for a=1:n %For loop over all the swaths in a given day.
-        if DEBUG_LEVEL > 2; t_orbit = tic; end
-
-        if DEBUG_LEVEL > 0
-            if a==1 || mod(a,10)==0; fprintf('Swath %u of %s \n', a, datestr(this_dnum)); end
-        end
-        %Read in each file, saving the hierarchy as 'hinfo'
-        this_sp_filename = fullfile(omi_he5_dir, this_year_str, this_month_str, sp_files(a).name);
-        [omi_starttime, omi_next_starttime] = get_omi_swath_times(sp_files, a);
+    for j=spmd_for(1:length(datenums), labindex, numlabs)
+        if DEBUG_LEVEL > 2; t_day = tic; end
         
-        if omi_starttime < earliest_omi_starttime || omi_starttime > latest_omi_starttime
-            %If start time is < 1500 and we want to look at the US, reject
-            %the file, as it is probably descending nodes only.
-            if DEBUG_LEVEL > 0; fprintf(' Swath %d: Nighttime granule skipped\n',a); end
-            continue
-        end
-       
-        if DEBUG_LEVEL > 2; t_sp = tic; end 
-        [this_data, pixels_in_domain] = read_omi_sp(this_sp_filename, '/HDFEOS/SWATHS/ColumnAmountNO2', sp_variables, sub_data, [lonmin, lonmax], [latmin, latmax]);
-        if DEBUG_LEVEL > 2; fprintf('      Time to read SP data on worker %d: %f\n', this_task.ID, toc(t_sp)); end
+        %Read the desired year, month, and day
+        this_dnum = datenums(j);
+        this_year = year(this_dnum);
+        this_year_str = sprintf('%04d', this_year);
+        this_month=month(this_dnum);
+        this_month_str = sprintf('%02d', this_month);
+        this_day=day(this_dnum);
+        this_day_str = sprintf('%02d', this_day);
         
-        if ~pixels_in_domain
-            if DEBUG_LEVEL > 1; disp('No points within lat/lon boundaries'); end
+        % Check if the file already exists. If it does, and if we're set
+        % to not overwrite, we don't need to process this day.
+        savename = sp_savename(this_dnum);
+        if exist(fullfile(sp_mat_dir, savename), 'file') && ~overwrite
+            if DEBUG_LEVEL > 0; fprintf('File %s exists, skipping this day\n', savename); end
             continue
         end
         
+        % List variables that should be read directly from the OMI OMNO2 files.
+        % If you want an additional variable, adding it here should be
+        % sufficient to make that happen as long as it is under the
+        % /HDFEOS/SWATHS/ColumnAmountNO2 group and is spelled exactly how the
+        % dataset is named.
+        sp_variables = {'Longitude', 'Latitude', 'Time', 'ViewingZenithAngle',...
+            'SolarZenithAngle', 'ViewingAzimuthAngle', 'SolarAzimuthAngle',...
+            'AmfStrat', 'AmfTrop', 'CloudFraction', 'CloudRadianceFraction',...
+            'TerrainHeight', 'TerrainPressure', 'TerrainReflectivity',...
+            'CloudPressure', 'ColumnAmountNO2', 'SlantColumnAmountNO2',...
+            'ColumnAmountNO2Trop', 'ColumnAmountNO2TropStd', 'ColumnAmountNO2Strat',...
+            'TropopausePressure', 'VcdQualityFlags', 'XTrackQualityFlags'};
         
-        % If we've gotten here, then there are pixels in the swath that lie
-        % within the domain of interest. Add the OMPIXCOR data
-        if DEBUG_LEVEL > 2; t_pixcor = tic; end
-        pixcor_name = make_pixcorn_name_from_sp(this_sp_filename, fullfile(omi_pixcor_dir, this_year_str, this_month_str));
-        this_data = read_omi_sp(pixcor_name, '/HDFEOS/SWATHS/OMI Ground Pixel Corners VIS', pixcor_variables, this_data, [lonmin, lonmax], [latmin, latmax], 'match_data', true);
-        if DEBUG_LEVEL > 2; fprintf('      Time to read OMPIXCOR data on worker %d: %f\n', this_task.ID, toc(t_pixcor)); end
+        % Variables from the OMPIXCOR files. As with the SP variables, adding a
+        % variable here that is under the '/HDFEOS/SWATHS/OMI Ground Pixel
+        % Corners VIS' group should be sufficient to cause it to be read in.
+        pixcor_variables = {'TiledArea', 'TiledCornerLongitude', 'TiledCornerLatitude',...
+            'FoV75Area', 'FoV75CornerLongitude', 'FoV75CornerLatitude'};
         
-
-        if DEBUG_LEVEL > 2; t_pixclean = tic; end
-        this_data = handle_corner_zeros(this_data, DEBUG_LEVEL);
+        % Variables that will be added by BEHR. These will need manual
+        % intervention if you choose to add more variables since they're not
+        % being copied directly from existing files.
+        behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
+            'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality', 'MODISAlbedoFillFlag', 'GLOBETerpres', 'IsZoomModeSwath', 'AlbedoOceanFlag',...
+            'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File',...
+            'OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',};
         
-        % The OMNO2 and OMPIXCOR products place the zoom-mode pixels
-        % differently in the swath - fix that here.
-        this_data = align_zoom_mode_pixels(this_data);
-        if DEBUG_LEVEL > 2; fprintf('      Time to clean up pixel corners on worker %d: %f\n', this_task.ID, toc(t_pixclean)); end        
-
-
-        % Add a few pieces of additional information
-        % Swath is given in the file name as a five digits number following
-        % the "-o" in the name (swath == orbit number)
-        swath = str2double(regexp(this_sp_filename, '(?<=-o)\d\d\d\d\d', 'match', 'once'));
-        this_data.Swath = swath;
+        sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
+        Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
         
-        raa_tmp=abs(this_data.SolarAzimuthAngle + 180 - this_data.ViewingAzimuthAngle); % the extra factor of 180 corrects for the definition of RAA in the scattering weight lookup table
-        raa_tmp(raa_tmp > 180)=360-raa_tmp(raa_tmp > 180);
-        this_data.RelativeAzimuthAngle = raa_tmp;
-        
-        % Add our calculated lat and lon corners. This should only be
-        % temporary until the unit testing to verify that the version 3
-        % read function produces identical files to the version 2 read
-        % function is complete, since the MODIS and GLOBE variables rely on
-        % the lat/lon corners to be averaged to the pixel.
-        %this_data = add_behr_corners(this_data, this_sp_filename);
-        
-        % Add MODIS cloud info to the files 
-        if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
-        
-        if DEBUG_LEVEL > 2; t_modis_cld = tic; end
-        this_data = read_modis_cloud(modis_myd06_dir, this_dnum, this_data, omi_starttime, omi_next_starttime, [lonmin, lonmax], [latmin, latmax],...
-            'DEBUG_LEVEL', DEBUG_LEVEL);
-        if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS clouds on worker %d: %f\n', this_task.ID, toc(t_modis_cld)); end
+        %Set the file path and name, assuming that the file structure is
+        %<he5_directory>/<year>/<month>/...files...  Then figure out how many
+        %files there are
+        short_filename = sprintf('OMI-Aura_L2-OMNO2_%04dm%02d%02d*.he5', this_year, this_month, this_day);
+        file_dir = fullfile(omi_he5_dir, this_year_str, this_month_str); %Used both here to find all he5 files and in the swath for loop to identify each file.
+        file_pattern=fullfile(file_dir,short_filename);
+        sp_files = dir(file_pattern);
+        sp_files = remove_duplicate_orbits(sp_files);
+        n = length(sp_files);
         
         
-        % Add MODIS albedo info to the files
-        if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS albedo information \n'); end
-        if DEBUG_LEVEL > 2; t_modis_alb = tic; end
-        this_data = read_modis_albedo(modis_mcd43_dir, coart_lut, ocean_mask, this_dnum, this_data, 'QualityLimit', 3, 'DEBUG_LEVEL', DEBUG_LEVEL);
-
-        if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS albedo on worker %d: %f\n', this_task.ID, toc(t_modis_alb)); end
+        if isempty(sp_files);
+            fprintf('No data available for %s\n', datestr(this_dnum));
+            continue
+        end
         
-        % Add GLOBE terrain pressure to the files
-        if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
-        if DEBUG_LEVEL > 2; t_globe = tic; end
-        this_data = avg_globe_data_to_pixels(this_data, globe_elevations, globe_lon_matrix, globe_lat_matrix,...
-            'DEBUG_LEVEL', DEBUG_LEVEL);
-        if DEBUG_LEVEL > 2; fprintf('      Time to average GLOBE data on worker %d: %f\n', this_task.ID, toc(t_globe)); end
+        data_ind = 0;
+        for a=1:n %For loop over all the swaths in a given day.
+            if DEBUG_LEVEL > 2; t_orbit = tic; end
+            
+            if DEBUG_LEVEL > 0
+                if a==1 || mod(a,10)==0; fprintf('Swath %u of %s \n', a, datestr(this_dnum)); end
+            end
+            %Read in each file, saving the hierarchy as 'hinfo'
+            this_sp_filename = fullfile(omi_he5_dir, this_year_str, this_month_str, sp_files(a).name);
+            [omi_starttime, omi_next_starttime] = get_omi_swath_times(sp_files, a);
+            
+            if omi_starttime < earliest_omi_starttime || omi_starttime > latest_omi_starttime
+                %If start time is < 1500 and we want to look at the US, reject
+                %the file, as it is probably descending nodes only.
+                if DEBUG_LEVEL > 0; fprintf(' Swath %d: Nighttime granule skipped\n',a); end
+                continue
+            end
+            
+            if DEBUG_LEVEL > 2; t_sp = tic; end
+            [this_data, pixels_in_domain] = read_omi_sp(this_sp_filename, '/HDFEOS/SWATHS/ColumnAmountNO2', sp_variables, sub_data, [lonmin, lonmax], [latmin, latmax]);
+            if DEBUG_LEVEL > 2; fprintf('      Time to read SP data on worker %d: %f\n', this_task.ID, toc(t_sp)); end
+            
+            if ~pixels_in_domain
+                if DEBUG_LEVEL > 1; disp('No points within lat/lon boundaries'); end
+                continue
+            end
+            
+            
+            % If we've gotten here, then there are pixels in the swath that lie
+            % within the domain of interest. Add the OMPIXCOR data
+            if DEBUG_LEVEL > 2; t_pixcor = tic; end
+            pixcor_name = make_pixcorn_name_from_sp(this_sp_filename, fullfile(omi_pixcor_dir, this_year_str, this_month_str));
+            this_data = read_omi_sp(pixcor_name, '/HDFEOS/SWATHS/OMI Ground Pixel Corners VIS', pixcor_variables, this_data, [lonmin, lonmax], [latmin, latmax], 'match_data', true);
+            if DEBUG_LEVEL > 2; fprintf('      Time to read OMPIXCOR data on worker %d: %f\n', this_task.ID, toc(t_pixcor)); end
+            
+            
+            if DEBUG_LEVEL > 2; t_pixclean = tic; end
+            this_data = handle_corner_zeros(this_data, DEBUG_LEVEL);
+            
+            % The OMNO2 and OMPIXCOR products place the zoom-mode pixels
+            % differently in the swath - fix that here.
+            this_data = align_zoom_mode_pixels(this_data);
+            if DEBUG_LEVEL > 2; fprintf('      Time to clean up pixel corners on worker %d: %f\n', this_task.ID, toc(t_pixclean)); end
+            
+            
+            % Add a few pieces of additional information
+            % Swath is given in the file name as a five digits number following
+            % the "-o" in the name (swath == orbit number)
+            swath = str2double(regexp(this_sp_filename, '(?<=-o)\d\d\d\d\d', 'match', 'once'));
+            this_data.Swath = swath;
+            
+            raa_tmp=abs(this_data.SolarAzimuthAngle + 180 - this_data.ViewingAzimuthAngle); % the extra factor of 180 corrects for the definition of RAA in the scattering weight lookup table
+            raa_tmp(raa_tmp > 180)=360-raa_tmp(raa_tmp > 180);
+            this_data.RelativeAzimuthAngle = raa_tmp;
+            
+            % Add our calculated lat and lon corners. This should only be
+            % temporary until the unit testing to verify that the version 3
+            % read function produces identical files to the version 2 read
+            % function is complete, since the MODIS and GLOBE variables rely on
+            % the lat/lon corners to be averaged to the pixel.
+            %this_data = add_behr_corners(this_data, this_sp_filename);
+            
+            % Add MODIS cloud info to the files
+            if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
+            
+            if DEBUG_LEVEL > 2; t_modis_cld = tic; end
+            this_data = read_modis_cloud(modis_myd06_dir, this_dnum, this_data, omi_starttime, omi_next_starttime, [lonmin, lonmax], [latmin, latmax],...
+                'DEBUG_LEVEL', DEBUG_LEVEL);
+            if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS clouds on worker %d: %f\n', this_task.ID, toc(t_modis_cld)); end
+            
+            
+            % Add MODIS albedo info to the files
+            if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS albedo information \n'); end
+            if DEBUG_LEVEL > 2; t_modis_alb = tic; end
+            this_data = read_modis_albedo(modis_mcd43_dir, coart_lut, ocean_mask, this_dnum, this_data, 'QualityLimit', 3, 'DEBUG_LEVEL', DEBUG_LEVEL);
+            
+            if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS albedo on worker %d: %f\n', this_task.ID, toc(t_modis_alb)); end
+            
+            % Add GLOBE terrain pressure to the files
+            if DEBUG_LEVEL > 0; fprintf('\n Adding GLOBE terrain data \n'); end
+            if DEBUG_LEVEL > 2; t_globe = tic; end
+            this_data = avg_globe_data_to_pixels(this_data, globe_elevations, globe_lon_matrix, globe_lat_matrix,...
+                'DEBUG_LEVEL', DEBUG_LEVEL);
+            if DEBUG_LEVEL > 2; fprintf('      Time to average GLOBE data on worker %d: %f\n', this_task.ID, toc(t_globe)); end
+            
+            % Add the few attribute-like variables
+            this_data.Date = datestr(this_dnum, 'yyyy/mm/dd');
+            this_data.LonBdy = [lonmin, lonmax];
+            this_data.LatBdy = [latmin, latmax];
+            this_data.GitHead_Core_Read = core_githead;
+            this_data.GitHead_BEHRUtils_Read = behrutils_githead;
+            this_data.GitHead_GenUtils_Read = genutils_githead;
+            
+            data_ind = data_ind + 1;
+            Data(data_ind) = this_data;
+            
+            if DEBUG_LEVEL > 2; fprintf('    Time for one orbit on worker %d: %f\n', this_task.ID, toc(t_orbit)); end
+            
+        end %End the loop over all swaths in a day
         
-        % Add the few attribute-like variables
-        this_data.Date = datestr(this_dnum, 'yyyy/mm/dd');
-        this_data.LonBdy = [lonmin, lonmax];
-        this_data.LatBdy = [latmin, latmax];
-        this_data.GitHead_Core_Read = core_githead;
-        this_data.GitHead_BEHRUtils_Read = behrutils_githead;
-        this_data.GitHead_GenUtils_Read = genutils_githead;
+        % Remove preallocated but unused swaths
+        Data(data_ind+1:end) = [];
+        if DEBUG_LEVEL > 2; t_save = tic; end
+        saveData(fullfile(sp_mat_dir,savename), Data); % Saving must be handled as a separate function in a parfor loop because passing a variable name as a string upsets the parallelization monkey (it's not transparent).
+        if DEBUG_LEVEL > 2; fprintf('       Time to save on worker %d: %f\n', this_task.ID, toc(t_save)); end
         
-        data_ind = data_ind + 1;
-        Data(data_ind) = this_data;
-
-        if DEBUG_LEVEL > 2; fprintf('    Time for one orbit on worker %d: %f\n', this_task.ID, toc(t_orbit)); end
-        
-    end %End the loop over all swaths in a day
-    
-    % Remove preallocated but unused swaths
-    Data(data_ind+1:end) = [];
-    if DEBUG_LEVEL > 2; t_save = tic; end
-    saveData(fullfile(sp_mat_dir,savename), Data); % Saving must be handled as a separate function in a parfor loop because passing a variable name as a string upsets the parallelization monkey (it's not transparent).
-    if DEBUG_LEVEL > 2; fprintf('       Time to save on worker %d: %f\n', this_task.ID, toc(t_save)); end
-    
-    if DEBUG_LEVEL > 2; fprintf('    Time for one day on worker %d: %f\n', this_task.ID, toc(t_day)); end
-end %End the loop over all days
+        if DEBUG_LEVEL > 2; fprintf('    Time for one day on worker %d: %f\n', this_task.ID, toc(t_day)); end
+    end %End the loop over all days
+end
 end
 
 function saveData(filename,Data)
@@ -539,7 +542,7 @@ E = JLLErrors;
 % beginning of the swath as Aug 8th, 2013, 17:15 UTC. Checking that it's
 % followed by -o is necessary to distinguish from the processing time of
 % 2013m0809t125937,
-time_regex = '(?<=t)\d\d\d\d(?=-o)'; 
+time_regex = '(?<=t)\d\d\d\d(?=-o)';
 this_swath_time = regexp(sp_files(current_file_index).name, time_regex, 'match', 'once');
 this_swath_time = str2double(this_swath_time);
 
@@ -635,7 +638,7 @@ function data = align_zoom_mode_pixels(data)
 % As of 21 Apr 2017, during zoom mode operation, OMNO2 places the 30
 % available pixels in rows 0-29. OMPIXCOR places them in rows 15-44. Yay
 % consistency. This subfunction fixes that so that the corner coordinates
-% lie in rows 0-29. 
+% lie in rows 0-29.
 %
 % I will assume that any day with entire rows of NaNs in Latitude/Longitude
 % is a zoom mode day.
@@ -643,7 +646,7 @@ function data = align_zoom_mode_pixels(data)
 E = JLLErrors;
 
 corner_fields = {'FoV75CornerLongitude', 'FoV75CornerLatitude';...
-                 'TiledCornerLongitude', 'TiledCornerLatitude'};
+    'TiledCornerLongitude', 'TiledCornerLatitude'};
 area_fields = {'FoV75Area'; 'TiledArea'};
 
 if size(corner_fields, 2) ~= 2
