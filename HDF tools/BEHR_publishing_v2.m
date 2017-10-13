@@ -84,11 +84,12 @@ if ~onCluster
         mat_file_dir = input('Enter the path to the .mat files: ','s');
     end
     ret_id = input('Enter the ID string for the retrieval: ','s');
-    save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,ret_id);
-    save_dir = fullfile(BEHR_paths('website_staging_dir'),save_subdir);
-    if ~exist(save_dir,'dir')
-        mkdir(save_dir)
-    end
+    %save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,ret_id);
+    %save_dir = fullfile(BEHR_paths('website_staging_dir'),save_subdir);
+    %if ~exist(save_dir,'dir')
+    %    mkdir(save_dir)
+    %end
+    save_dir = '/Users/Josh/Documents/MATLAB/BEHR/Workspaces/LNOx-AMFs/HDF Files/BEHR_665LNOx_gridded';
 else
     % Check that all global variables are set
     global_unset = {};
@@ -489,6 +490,12 @@ for d=1:numel(Data_in)
     for v=1:numel(vars)
         var_name = sprintf('%s/%s',group_name,vars{v});
         save_data = Data_in(d).(vars{v});
+        if isempty(save_data)
+            % Some of the gridded variables for the lightning sensitivity
+            % runs are empty (for whatever reason) which causes a problem
+            % writing the HDF file.
+            continue
+        end
         sz = size(save_data);
         
         % Make NaNs into fill values - apparently this is better for HDF
