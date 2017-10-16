@@ -329,8 +329,8 @@ behr_grid = GlobeGrid(0.05, 'domain', [lonmin, lonmax, latmin, latmax]);
 
 if DEBUG_LEVEL > 1; fprintf('Staring main loop\n'); end
 
-%parfor(j=1:length(datenums), n_workers)
-for j=1:length(datenums)
+parfor(j=1:length(datenums), n_workers)
+%for j=1:length(datenums)
     this_task = getCurrentTask();
     if isempty(this_task)
         this_task.ID = -1;
