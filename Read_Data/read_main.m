@@ -1,7 +1,7 @@
-function read_omno2_v_aug2012(varargin)
-% READ_OMNO2_V_AUG2012 Reads in OMI, MODIS, and GLOBE data to .mat files
+function read_main(varargin)
+% READ_MAIN Reads in OMI, MODIS, and GLOBE data to .mat files
 %
-%   READ_OMNO2_V_AUG2012 is the first step in the BEHR workflow. It reads
+%   READ_MAIN is the first step in the BEHR workflow. It reads
 %   in the satellite data from the various sources, include OMI NO2, MODIS
 %   clouds, MODIS albedo, and GLOBE (a database, not a satellite) terrain
 %   elevation. These data are cut down to the US domain and, in the case of
@@ -296,8 +296,6 @@ if DEBUG_LEVEL > 2; t_load_coart = tic; end
 [~, coart_lut] = coart_sea_reflectance(0);
 if DEBUG_LEVEL > 2; fprintf('    Time to load COART look up table: %f\n', toc(t_load_coart)); end
 
-%Load the GOME-2 LER which we'll need to adjust ocean reflectances from 550
-%to ~430 nm.
 %For loop over all days from the starting or last finished date to the end
 %date. We will give the absolute paths to files rather than changing the
 %active directory, as MATLAB seems to run slightly slower if the current

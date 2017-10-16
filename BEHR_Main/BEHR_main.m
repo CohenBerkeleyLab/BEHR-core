@@ -2,7 +2,7 @@ function BEHR_main(varargin)
 % BEHR_MAIN: primary BEHR algorithm
 %
 %   This function is the primary BEHR algorithm, it takes the OMI, MODIS,
-%   and GLOBE data read in by read_omno2_v_aug2012.m and uses it to
+%   and GLOBE data read in by read_main.m and uses it to
 %   recalculated the BEHR AMFs and VCDs. There are a number of input
 %   parameters that control it's operation; the defaults are set such that
 %   it should run if you simply execute this script, but in most cases you
@@ -21,7 +21,7 @@ function BEHR_main(varargin)
 %       behr_paths.m
 %
 %       'sp_mat_dir' - the directory that the .mat files resulting from
-%       read_omno2_v_aug2012.m are stored in. If not given, it defaults to
+%       read_main.m are stored in. If not given, it defaults to
 %       the path stored in behr_paths.m
 %
 %       'amf_tools_path' - the directory that contains the files
@@ -233,10 +233,9 @@ parfor(j=1:length(datenums), n_workers)
     %%%%%%%%%%%%%%%%%%%%%%
     
     for d=1:length(Data);
-        % Data is initialized in read_omno2_v_aug2012 with a single 0
-        % in the Longitude field.  Since points outside the lat/lons of
-        % interest are removed completely, we should also check if all
-        % points are gone.
+        % Data is initialized in read_main with a single 0 in the Longitude
+        % field.  Since points outside the lat/lons of interest are removed
+        % completely, we should also check if all points are gone.
         if numel(Data(d).Longitude)==1 || isempty(Data(d).Longitude);
             if DEBUG_LEVEL > 1; fprintf('  Note: Data(%u) is empty\n',d); end
             continue %JLL 17 Mar 2014: Skip doing anything if there's really no information in this data

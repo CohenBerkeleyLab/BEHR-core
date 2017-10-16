@@ -3,7 +3,7 @@ function [  ] = unit_test_driver( )
 %   This function, when called, asks a series of questions interactively to
 %   determine how the unit tests should proceed. It is capable of
 %   automatically generating OMI_SP and OMI_BEHR files using the current
-%   versions of read_omno2_v_aug2012 and BEHR_main, if this is requested,
+%   versions of read_main and BEHR_main, if this is requested,
 %   it saves the resulting files in a subdirectory of "UnitTestData" which
 %   will be created in the same directory as this function. The
 %   subdirectory will be named "ProducedYYYYMMDD". It will also contain a
@@ -12,7 +12,7 @@ function [  ] = unit_test_driver( )
 %   description of HEAD and the diff against HEAD.
 %
 %   Whether you produce the data with this function or not, it will then
-%   called both BEHR_UNIT_TEST and (if testing read_omno2_v_aug2012)
+%   called both BEHR_UNIT_TEST and (if testing read_main)
 %   READING_PRIORI_TESTS. BEHR_UNIT_TEST takes a pair of Data or OMI
 %   structures and attempts to verify that they are the same. If they are
 %   not the same, the unit test will fail overall for that date, but will
@@ -258,7 +258,7 @@ end
             % If generating new data, then our new_dir will always be the location where we generate the new data.
             new_dir = save_folder;
             for i=1:numel(test_dates)
-                read_omno2_v_aug2012('start', test_dates{i}, 'end', test_dates{i}, 'sp_mat_dir', save_folder, 'overwrite', true, 'region', test_region);
+                read_main('start', test_dates{i}, 'end', test_dates{i}, 'sp_mat_dir', save_folder, 'overwrite', true, 'region', test_region);
             end
         else
             % Otherwise, a directory for new files may have already been passed (if running all tests, generally). 
