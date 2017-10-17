@@ -62,16 +62,17 @@ else
 end
 if do_main
     timer_main = tic;
-    BEHR_main('start', test_date, 'end', test_date, 'sp_mat_dir', out_dir, 'behr_mat_dir', out_dir, 'overwrite', true);
+    BEHR_main('start', test_date, 'end', test_date, 'sp_mat_dir', out_dir, 'behr_mat_dir', out_dir, 'profile_mode', 'monthly', 'overwrite', true);
+    BEHR_main('start', test_date, 'end', test_date, 'sp_mat_dir', out_dir, 'behr_mat_dir', out_dir, 'profile_mode', 'daily', 'overwrite', true);
     t_main = toc(timer_main);
 else 
     t_main = NaN;
 end
 if do_pub
     timer_pub = tic;
-    BEHR_publishing_v2('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'native', 'mat_dir', out_dir, 'save_dir', out_dir,...
+    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'native', 'mat_dir', out_dir, 'save_dir', out_dir,...
         'organize', false, 'overwrite', true);
-    BEHR_publishing_v2('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'gridded', 'mat_dir', out_dir, 'save_dir', out_dir,...
+    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'gridded', 'mat_dir', out_dir, 'save_dir', out_dir,...
         'organize', false, 'overwrite', true);
     t_pub = toc(timer_pub);
 else
