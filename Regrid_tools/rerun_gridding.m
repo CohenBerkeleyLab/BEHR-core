@@ -1,8 +1,10 @@
-function [  ] = rerun_gridding( start_date, end_date, varargin )
+function [  ] = rerun_gridding( start_date, end_date, prof_mode, varargin )
 %RERUN_GRIDDING Runs psm_wrapper on a series of BEHR files, saving the new gridded output
-%   RERUN_GRIDDING( START_DATE, END_DATE ) will load each BEHR file in the
-%   date range given from the standard BEHR directory, regrid the Data
-%   struct into the OMI struct, and save the results to the current
+%   RERUN_GRIDDING( START_DATE, END_DATE, PROF_MODE ) will load each BEHR
+%   file generated using daily or monthly profiles (specified by the string
+%   PROF_MODE, which must match the profile mode in the files to be loaded)
+%   in the date range given from the standard BEHR directory, regrid the
+%   Data struct into the OMI struct, and save the results to the current
 %   directory. START_DATE and END_DATE may be strings understood as dates
 %   by Matlab or date numbers.
 %
@@ -12,6 +14,8 @@ function [  ] = rerun_gridding( start_date, end_date, varargin )
 %
 %       'save_dir' - the directory the new files should be saved to. By
 %       default, the current directory. This directory must already exist.
+%
+%       'region' - which region's files to regrid. Default is 'us'.
 %
 %       'overwrite' - default false, whether to overwrite existing files in
 %       the save directory. Must be a scalar logical (true or false).
@@ -23,6 +27,7 @@ E = JLLErrors;
 p = inputParser;
 p.addParameter('behr_mat_dir', behr_paths.behr_mat_dir);
 p.addParameter('save_dir', '.');
+p.addParameter('region', 'us');
 p.addParameter('overwrite', false);
 p.addParameter('DEBUG_LEVEL', 2);
 
@@ -31,6 +36,7 @@ pout = p.Results;
 
 load_dir = pout.behr_mat_dir;
 save_dir = pout.save_dir;
+region = pout.region;
 overwrite = pout.overwrite;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
@@ -58,7 +64,7 @@ if ~isscalar(DEBUG_LEVEL) || ~isnumeric(DEBUG_LEVEL)
 end
 
 for this_dnum=start_date:end_date
-    behr_file = behr_filename(this_dnum);
+    behr_file = behr_filename(this_dnum, prof_mode, region);
     save_name = fullfile(save_dir, behr_file);
     if ~overwrite && exist(save_name, 'file')
         if DEBUG_LEVEL > 0

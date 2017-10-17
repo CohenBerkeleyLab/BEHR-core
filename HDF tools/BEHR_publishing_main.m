@@ -1,4 +1,4 @@
-function [  ] = BEHR_publishing_v2(varargin)
+function [  ] = BEHR_publishing_main(varargin)
 %BEHR_publishing_v2 Create the HDF files for BEHR products
 %   BEHR_Publishing_v2 can accept a number of input parameters to alter its
 %   behavior. All of these have default values that are set up so that
@@ -26,9 +26,21 @@ function [  ] = BEHR_publishing_v2(varargin)
 %       That is a specialized product that hasn't been updated in years.
 %       Default is false.
 %
+%       'region': a string indicating which region to publish, must match
+%       the directory structure in behr_paths.behr_mat_dir. Only used if
+%       "mat_dir" is not specified. Default is 'us'.
+%
+%       'prof_mode': a string which a priori profiles' retrieval to use,
+%       must match the directory structure in behr_paths.behr_mat_dir
+%       (within each region). Only used if "mat_dir" is not specified.
+%       Default is 'monthly'.
+%
 %       'mat_dir': the directory from which to load the Matlab files with
-%       BEHR output saved in the. Default is the value returned by
-%       behr_paths.behr_mat_dir.
+%       BEHR output saved in the. If not given (or given as an empty
+%       string) then behr_paths.BEHRMatSubdir(region, prof_mode) is called
+%       with the values of the "region" and "prof_mode" parameters to
+%       determine the directory for the given region and profile mode.
+%       Otherwise, BEHR .mat files are read from the directory given.
 %
 %       'save_dir': the directory to which to save the resulting HDF or CSV
 %       files. Default is the value returned by
@@ -74,7 +86,9 @@ p.addParameter('pixel_type', 'native');
 p.addParameter('start', '2005-01-01');
 p.addParameter('end', datestr(today, 'yyyy-mm-dd'));
 p.addParameter('reprocessed', false);
-p.addParameter('mat_dir', behr_paths.behr_mat_dir);
+p.addParameter('mat_dir', '');
+p.addParameter('region', 'us');
+p.addParameter('prof_mode', 'monthly');
 p.addParameter('save_dir', behr_paths.website_staging_dir);
 p.addParameter('organize', true);
 p.addParameter('overwrite', -1);
@@ -136,16 +150,20 @@ end
 mat_file_dir = pout.mat_dir;
 save_dir = pout.save_dir;
 
+if isempty(mat_file_dir)
+    mat_file_dir = behr_paths.BEHRMatSubdir(pout.region, pout.prof_mode);
+end
+
 % Check that the directories exist like this so that a single error message
 % describes if both directories don't exist - handy for running on the
 % cluster so that you don't wait forever for the job to start, only to have
 % it fail b/c you forgot to make the output directory.
 dirs_dne = {};
 if ~exist(mat_file_dir,'dir')
-    dirs_dne{end+1} = 'mat_file_dir';
+    dirs_dne{end+1} = sprintf('mat_file_dir (%s)', mat_file_dir);
 end
 if ~exist(save_dir,'dir')
-    dirs_dne{end+1} = 'save_dir';
+    dirs_dne{end+1} = sprintf('save_dir (%s)', save_dir);
 end
 if ~isempty(dirs_dne)
     E.dir_dne(dirs_dne);
@@ -253,7 +271,7 @@ if ~onCluster
             [vars, attr, savename] = set_variables(Data_to_save, pixel_type, output_type, is_reprocessed);
 
             if strcmpi(output_type,'hdf')
-                overwrite = make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
+                overwrite = make_hdf_file(Data_to_save, vars, attr, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
                 overwrite = make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,overwrite,DEBUG_LEVEL);
             end
@@ -290,7 +308,7 @@ else
             [vars, attr, savename] = set_variables(Data_to_save, pixel_type, output_type, is_reprocessed);
 
             if strcmpi(output_type,'hdf')
-                make_hdf_file(Data_to_save, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
+                make_hdf_file(Data_to_save, vars, attr, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
                 make_txt_file(Data_to_save, vars, attr, date_string, save_dir, savename, overwrite, DEBUG_LEVEL);
             end
@@ -318,12 +336,12 @@ E = JLLErrors;
 
 % The attribute table contains the list of all variables we expect to provide.
 % Choose the proper subset.
+savename = behr_filename(Data(1).Date, Data(1).BEHRProfileMode, Data(1).BEHRRegion, output_type);
 if reprocessed
     attr =  BEHR_publishing_attribute_table('pub-insitu', 'struct');
-    savename = sprintf('OMI_BEHR_InSitu_%s_',BEHR_version);
+    savename = strrep(savename, 'BEHR','BEHR-InSitu');
 else
     attr = BEHR_publishing_attribute_table('pub', 'struct');
-    savename = sprintf('OMI_BEHR_%s_',BEHR_version);
 end
 
 vars = fieldnames(attr);
@@ -395,14 +413,14 @@ end
 
 
 
-function overwrite = make_hdf_file(Data_in, vars, attr, date_string, save_dir, savename, pixel_type, overwrite, current_git_heads, DEBUG_LEVEL)
+function overwrite = make_hdf_file(Data_in, vars, attr, save_dir, savename, pixel_type, overwrite, current_git_heads, DEBUG_LEVEL)
 E = JLLErrors;
 
-if ~strcmp(savename(end),'_')
-    savename = strcat(savename,'_');
+[~,~,ext] = fileparts(savename);
+if ~strcmp(ext,'.hdf')
+    E.badinput('SAVENAME must have the extension .hdf, not %s', ext);
 end
-hdf_filename = strcat(savename, date_string, '.hdf');
-hdf_fullfilename = fullfile(save_dir, hdf_filename);
+hdf_fullfilename = fullfile(save_dir, savename);
 
 % Check if the file exists. We may be already set to automatically
 % overwrite or not, otherwise we have to ask the user what to do.
@@ -555,6 +573,8 @@ end
 
 
 function ask_to_overwrite = make_txt_file(Data_in, vars, attr, date_string, save_dir, savename, ask_to_overwrite, DEBUG_LEVEL) %#ok<INUSD>
+
+warning('make_txt_file has not been validated for BEHR > v2.1C, check the resulting files carefully before use')
 
 if ~strcmp(savename(end),'_')
     savename = strcat(savename,'_');

@@ -199,7 +199,7 @@ estimated_num_swaths = 5;
 
 %This is the directory where the final .mat file will be saved.
 if isempty(sp_mat_dir)
-    sp_mat_dir = behr_paths.sp_mat_dir;
+    sp_mat_dir = behr_paths.SPMatSubdir(region);
 end
 
 %This is the directory where the OMI NASA SP (OMNO2) he5 files are
@@ -349,7 +349,7 @@ parfor(j=1:length(datenums), n_workers)
     
     % Check if the file already exists. If it does, and if we're set
     % to not overwrite, we don't need to process this day.
-    savename = sp_savename(this_dnum);
+    savename = sp_savename(this_dnum, region);
     if exist(fullfile(sp_mat_dir, savename), 'file') && ~overwrite
         if DEBUG_LEVEL > 0; fprintf('File %s exists, skipping this day\n', savename); end
         continue
@@ -381,7 +381,7 @@ parfor(j=1:length(datenums), n_workers)
     behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
         'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality','MODISAlbedoFillFlag', 'GLOBETerpres',...
         'IsZoomModeSwath', 'AlbedoOceanFlag','OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',...
-        'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File'};
+        'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File', 'BEHRRegion'};
     
     sub_data = make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0);
     Data = repmat(make_empty_struct_from_cell([sp_variables, pixcor_variables, behr_variables],0), 1, estimated_num_swaths);
@@ -504,6 +504,7 @@ parfor(j=1:length(datenums), n_workers)
         this_data.GitHead_BEHRUtils_Read = behrutils_githead;
         this_data.GitHead_GenUtils_Read = genutils_githead;
         this_data.Grid = behr_grid;
+        this_data.BEHRRegion = lower(region);
         
         data_ind = data_ind + 1;
         Data(data_ind) = this_data;
