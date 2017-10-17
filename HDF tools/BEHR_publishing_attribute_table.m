@@ -121,9 +121,9 @@ end
         if strcmpi(subset, 'all')
             return
         elseif strcmpi(subset, 'pub')
-            products = {'SP', 'BEHR'};
+            products = {'SP', 'BEHR', 'PIXCOR'};
         elseif strcmpi(subset, 'pub-insitu')
-            products = {'SP', 'BEHR', 'BEHR-InSitu'};
+            products = {'SP', 'BEHR', 'PIXCOR', 'BEHR-InSitu'};
         else
             products = {subset};
         end

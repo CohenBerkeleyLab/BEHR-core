@@ -51,17 +51,50 @@ function read_main(varargin)
 %       corresponding OMI_SP .mat file exists in the directory given as
 %       'omi_he5_dir'. If true, no days will be skipped and the data in
 %       omi_he5_dir will be overwritten.
+%
+%       'DEBUG_LEVEL' - verbosity. Default is 2; i.e. most progress
+%       message, but no timing messages will be printed. 0 = no messages;
+%       greater means more messages.
 
 %****************************%
 % CONSOLE OUTPUT LEVEL - 0 = none, 1 = minimal, 2 = all messages, 3 = times
-%
-% Allows for quick control over the amount of output to the console.
-% Choose a higher level to keep track of what the script is doing.
-% 3 or less recommended for final products, as 4 will store debugging
-% variables in the output file, increasing its size.
-DEBUG_LEVEL = 1;
 
 %****************************%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% INITIALIZATION & INPUT VALIDATION %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+E = JLLErrors;
+
+p = inputParser;
+p.addParameter('start', '');
+p.addParameter('end', '');
+p.addParameter('sp_mat_dir', '');
+p.addParameter('omi_he5_dir', '');
+p.addParameter('omi_pixcor_dir', '');
+p.addParameter('modis_myd06_dir', '');
+p.addParameter('modis_mcd43_dir', '');
+p.addParameter('globe_dir', '');
+p.addParameter('region', 'US');
+p.addParameter('overwrite', false)
+p.addParameter('DEBUG_LEVEL', 2);
+
+p.parse(varargin{:});
+pout = p.Results;
+
+date_start = pout.start;
+date_end = pout.end;
+sp_mat_dir = pout.sp_mat_dir;
+omi_he5_dir = pout.omi_he5_dir;
+omi_pixcor_dir = pout.omi_pixcor_dir;
+modis_myd06_dir = pout.modis_myd06_dir;
+modis_mcd43_dir = pout.modis_mcd43_dir;
+globe_dir = pout.globe_dir;
+region = pout.region; 
+overwrite = pout.overwrite;
+DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% PARALLELIZATION OPTIONS %%%%%
@@ -91,42 +124,9 @@ if isempty(numThreads)
     numThreads = 1;
 end
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% INITIALIZATION & INPUT VALIDATION %%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-if DEBUG_LEVEL > 1; fprintf('Parsing input\n'); end
-
-E = JLLErrors;
-
-p = inputParser;
-p.addParameter('start', '');
-p.addParameter('end', '');
-p.addParameter('sp_mat_dir', '');
-p.addParameter('omi_he5_dir', '');
-p.addParameter('omi_pixcor_dir', '');
-p.addParameter('modis_myd06_dir', '');
-p.addParameter('modis_mcd43_dir', '');
-p.addParameter('globe_dir', '');
-p.addParameter('region', 'US');
-p.addParameter('overwrite', false)
-
-p.parse(varargin{:});
-pout = p.Results;
-
-date_start = pout.start;
-date_end = pout.end;
-sp_mat_dir = pout.sp_mat_dir;
-omi_he5_dir = pout.omi_he5_dir;
-omi_pixcor_dir = pout.omi_pixcor_dir;
-modis_myd06_dir = pout.modis_myd06_dir;
-modis_mcd43_dir = pout.modis_mcd43_dir;
-globe_dir = pout.globe_dir;
-region = pout.region; 
-overwrite = pout.overwrite;
-
-%%% Validation %%%
+%%%%%%%%%%%%%%%%%%%%%%
+%%%%% VALIDATION %%%%%
+%%%%%%%%%%%%%%%%%%%%%%
 
 date_start = validate_date(date_start);
 date_end = validate_date(date_end);
@@ -281,7 +281,7 @@ if DEBUG_LEVEL > 2; t_load_land_ocean = tic; end
 
 [ocean_mask.mask, ocean_mask.lon, ocean_mask.lat] = get_modis_ocean_mask(ancillary_lonlim, ancillary_latlim);
 
-if DEBUG_LEVEL > 2; fprintf('    Time to load land/ocean classification map: %f\n', t_load_land_ocean); end
+if DEBUG_LEVEL > 2; fprintf('    Time to load land/ocean classification map: %f\n', toc(t_load_land_ocean)); end
 
 %Go ahead and load the terrain pressure data - only need to do this once
 if DEBUG_LEVEL > 1; fprintf('Loading globe elevations\n'); end
@@ -327,6 +327,7 @@ behr_grid = GlobeGrid(0.05, 'domain', [lonmin, lonmax, latmin, latmax]);
 
 if DEBUG_LEVEL > 1; fprintf('Staring main loop\n'); end
 
+t_comm = tic;
 parfor(j=1:length(datenums), n_workers)
 %for j=1:length(datenums)
     this_task = getCurrentTask();
@@ -334,6 +335,7 @@ parfor(j=1:length(datenums), n_workers)
         this_task.ID = -1;
     end
 
+    if DEBUG_LEVEL > 2; fprintf('Worker %d: Time to enter parfor loop: %f s\n', this_task.ID, toc(t_comm)); end
     if DEBUG_LEVEL > 2; t_day = tic; end
 
     %Read the desired year, month, and day
@@ -403,7 +405,9 @@ parfor(j=1:length(datenums), n_workers)
     % Read in the MODIS albedo data for this day. We do it outside the loop
     % over orbits to limit the number of reads of the (fairly large) MCD43D
     % files.
+    if DEBUG_LEVEL > 2; t_alb_read = tic; end
     modis_brdf_data = read_modis_albedo(modis_mcd43_dir, this_dnum, ancillary_lonlim, ancillary_latlim);
+    if DEBUG_LEVEL > 2; fprintf('Worker %d: Time to read MODIS BRDF = %f\n', this_task.ID, toc(t_alb_read)); end
     
     data_ind = 0;
     for a=1:n %For loop over all the swaths in a given day.

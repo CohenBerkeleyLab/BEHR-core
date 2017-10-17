@@ -543,9 +543,9 @@ for d=1:numel(Data_in)
         h5writeatt(hdf_fullfilename, group_name, swath_attr_fields{a}, attr_val);
     end
 
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-Core-Pub', current_git_heads.core);
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-BEHRUtils-Pub', current_git_heads.behr_utils);
-    h5writeatt(hdf_fullfilename, group_name, 'GitHead-GenUtils-Pub', current_git_heads.gen_utils);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-Core_Pub', current_git_heads.core);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-BEHRUtils_Pub', current_git_heads.behr_utils);
+    h5writeatt(hdf_fullfilename, group_name, 'GitHead-GenUtils_Pub', current_git_heads.gen_utils);
 
     
     if DEBUG_LEVEL > 2; toc; end
