@@ -1,6 +1,28 @@
-function [ success ] = behr_unit_test( new, old, DEBUG_LEVEL, fid )
-%UNTITLED9 Summary of this function goes here
-%   Detailed explanation goes here
+function [ success ] = behr_unit_test( new, old, DEBUG_LEVEL, fid, fields_to_ignore )
+%BEHR_UNIT_TEST Compare old and new BEHR data 
+%   SUCCESS = BEHR_UNIT_TEST( NEW, OLD )
+%   Takes two Data or OMI structures (NEW and OLD) and compares the values
+%   of each field in the structures. If everything matches, SUCCESS will be
+%   true, if not, it'll be false.
+%
+%   SUCCESS = BEHR_UNIT_TEST( NEW, OLD, DEBUG_LEVEL ) Allows you to control
+%   the verbosity of the function. By default it prints out each individual
+%   comparison (DEBUG_LEVEL == 2). This is useful if you need the detail,
+%   but prints a lot of information. Passing 1 as DEBUG_LEVEL will only
+%   print failed tests, passing 0 will turn it off completely.
+%
+%   SUCCESS = BEHR_UNIT_TEST( NEW, OLD, DEBUG_LEVEL, FID ) Redirects the
+%   output printing from the terminal to the file with file ID FID (from
+%   FOPEN).
+%
+%   SUCCESS = BEHR_UNIT_TEST( NEW, OLD, DEBUG_LEVEL, FID, FIELDS_TO_IGNORE )
+%   FIELDS_TO_IGNORE is a cell array of strings that specifies fields that
+%   should not be compared, usually because you know they will fail for a
+%   good reason. For instance, the GitHead fields will almost always fail
+%   because the new and old data were produced with different versions of
+%   the code.
+
+E = JLLErrors;
 
 if ~exist('DEBUG_LEVEL', 'var')
     DEBUG_LEVEL = 2;
@@ -12,17 +34,32 @@ if ~exist('fid', 'var')
     fid = 1;
 end
 
+if ~exist('fields_to_ignore', 'var')
+    fields_to_ignore = {};
+elseif ~iscellstr(fields_to_ignore)
+    E.badinput('FIELDS_TO_IGNORE must be a cell array of strings');
+end
+
 tol = 1e-6;
 
-[test_field_names, new_old_fields_mapping] = compare_fields_present(new, old, DEBUG_LEVEL, fid);
+[test_field_names, new_old_fields_mapping] = compare_fields_present(new, old, DEBUG_LEVEL, fid, fields_to_ignore);
 test_field_vales = compare_field_values(new, old, new_old_fields_mapping, tol, DEBUG_LEVEL, fid);
 
 success = test_field_names && test_field_vales;
 end
 
-function [success, field_mapping] = compare_fields_present(new, old, DEBUG_LEVEL, fid)
+function [success, field_mapping] = compare_fields_present(new, old, DEBUG_LEVEL, fid, ignore_fields)
 new_fields = fieldnames(new);
 old_fields = fieldnames(old);
+
+if length(ignore_fields) > 0
+    rr = ismember(new_fields, ignore_fields);
+    new_fields(rr) = [];
+    rr = ismember(old_fields, ignore_fields);
+    old_fields(rr) = [];
+
+    fprintf(fid, '  Ignoring fields:\n\t%s\n', strjoin(ignore_fields, '\n\t'));
+end
 
 in_new_only = ~ismember(new_fields, old_fields);
 new_only_fields = new_fields(in_new_only);
@@ -124,26 +161,37 @@ reason = 'reason unspecified';
 % isn't important because the flags are around 0-256 in value) so skip it.
 % One other field is a structure, so that needs skipped too.
 if isnumeric(new_val) && isnumeric(old_val)
-    tolerance = round(tolerance_scale * min(abs([new_val(:); old_val(:)])), 2, 'significant');
-    tolerance = max(tolerance, tolerance_scale);
-end
-if isnumeric(new_val) && isnumeric(old_val)
-    if ~isequal(size(new_val), size(old_val))
-        eq = 0;
-        reason = sprintf('size of numeric field differs - %s vs %s', mat2str(size(new_val)), mat2str(size(old_val)));
+    if isinteger(new_val) && isinteger(old_val)
+        eq = isequal(new_val, old_val);
+        if ~eq
+            reason = 'comparison of field values with "isequal" returned false';
+        end
         return
-    end
-    newnans = isnan(new_val(:));
-    oldnans = isnan(old_val(:));
-    if any(xor(newnans, oldnans))
-        eq = 0;
-        reason = 'NaNs are different';
+    elseif xor(isinteger(new_val), isinteger(old_val))
+        reason = 'fields are not the same type; one is an integer, one is a float';
+        eq = false;
         return
-    end
-    del = new_val(~newnans) - old_val(~oldnans);
-    eq = all(abs(del) <= tolerance);
-    if ~eq
-        reason = sprintf('at least one absolute difference exceeds tolerance of %g; min/max diff = %g/%g', tolerance, min(del), max(del));
+    else
+        tolerance = round(tolerance_scale * min(abs([new_val(:); old_val(:)])), 2, 'significant');
+        tolerance = max(tolerance, tolerance_scale);
+        
+        if ~isequal(size(new_val), size(old_val))
+            eq = 0;
+            reason = sprintf('size of numeric field differs - %s vs %s', mat2str(size(new_val)), mat2str(size(old_val)));
+            return
+        end
+        newnans = isnan(new_val(:));
+        oldnans = isnan(old_val(:));
+        if any(xor(newnans, oldnans))
+            eq = 0;
+            reason = 'NaNs are different';
+            return
+        end
+        del = new_val(~newnans) - old_val(~oldnans);
+        eq = all(abs(del) <= tolerance);
+        if ~eq
+            reason = sprintf('at least one absolute difference exceeds tolerance of %g; min/max diff = %g/%g', tolerance, min(del), max(del));
+        end
     end
 else
     eq = isequal(new_val, old_val);
