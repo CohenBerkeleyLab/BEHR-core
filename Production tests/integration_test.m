@@ -1,6 +1,6 @@
 function [  ] = integration_test( varargin )
 %INTEGRATION_TEST Quick check that all the BEHR code executes
-%   INTEGRATION_TEST() runs read_omno2_v_aug2012, BEHR_main, and
+%   INTEGRATION_TEST() runs read_main, BEHR_main, and
 %   BEHR_publishing_v2 for one day. Data is output to ./UnitTestData/tmp.
 %   The only purpose of this function is a rapid verification that the
 %   primary components of BEHR work; it does not check for correctness.
@@ -55,7 +55,7 @@ test_date = '2012-02-01';
 
 if do_read
     timer_read = tic;
-    read_omno2_v_aug2012('start', test_date, 'end', test_date, 'sp_mat_dir', out_dir, 'overwrite', true);
+    read_main('start', test_date, 'end', test_date, 'sp_mat_dir', out_dir, 'overwrite', true);
     t_read = toc(timer_read);
 else
     t_read = NaN;
