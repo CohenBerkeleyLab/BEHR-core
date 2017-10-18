@@ -169,13 +169,7 @@ if ~isempty(dirs_dne)
     E.dir_dne(dirs_dne);
 end
 
-if organized_subdir
-    save_subdir = sprintf('behr_%s-%s_%s',pixel_type,output_type,BEHR_version);
-    save_dir = fullfile(save_dir, save_subdir);
-    if ~exist(save_dir, 'dir')
-        mkdir(save_dir);
-    end
-end
+
 
 % Make the list of variables to put in the HDF files. Std. variables will
 % be added by default; see the "set_variables" function for additional
@@ -268,12 +262,12 @@ if ~onCluster
                 fprintf('Saving %s %s for %s\n', pixel_type, output_type, date_string);
             end
 
-            [vars, attr, savename] = set_variables(Data_to_save, pixel_type, output_type, is_reprocessed);
+            [vars, attr, savename, full_save_dir] = set_variables(Data_to_save, pixel_type, output_type, is_reprocessed, save_dir, organized_subdir);
 
             if strcmpi(output_type,'hdf')
-                overwrite = make_hdf_file(Data_to_save, vars, attr, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
+                overwrite = make_hdf_file(Data_to_save, vars, attr, full_save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
-                overwrite = make_txt_file(Data_to_save,vars,attr,date_string,save_dir,savename,overwrite,DEBUG_LEVEL);
+                overwrite = make_txt_file(Data_to_save,vars,attr,date_string,full_save_dir,savename,overwrite,DEBUG_LEVEL);
             end
         end
     end
@@ -305,12 +299,12 @@ else
                 fprintf('Saving %s %s for %s\n', pixel_type, output_type, date_string);
             end
 
-            [vars, attr, savename] = set_variables(Data_to_save, pixel_type, output_type, is_reprocessed);
+            [vars, attr, savename, full_save_dir] = set_variables(Data_to_save, pixel_type, output_type, is_reprocessed, save_dir, organized_subdir);
 
             if strcmpi(output_type,'hdf')
-                make_hdf_file(Data_to_save, vars, attr, save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
+                make_hdf_file(Data_to_save, vars, attr, full_save_dir, savename, pixel_type, overwrite, git_heads, DEBUG_LEVEL);
             elseif strcmpi(output_type,'txt')
-                make_txt_file(Data_to_save, vars, attr, date_string, save_dir, savename, overwrite, DEBUG_LEVEL);
+                make_txt_file(Data_to_save, vars, attr, date_string, full_save_dir, savename, overwrite, DEBUG_LEVEL);
             end
         end
     end
@@ -322,7 +316,7 @@ end
 % SUBFUNCTIONS %
 %%%%%%%%%%%%%%%%
 
-function [vars, attr, savename] = set_variables(Data, pixel_type, output_type, reprocessed)
+function [vars, attr, savename, save_dir] = set_variables(Data, pixel_type, output_type, reprocessed, save_dir, organized_subdir)
 % Make a list of variables that should be added to the product. All the
 % standard variables will be added always. Pass any or all of the following
 % strings to add certain variables
@@ -333,6 +327,14 @@ function [vars, attr, savename] = set_variables(Data, pixel_type, output_type, r
 % The standard variables to be included (listed in
 % http://behr.cchem.berkeley.edu/TheBEHRProduct.aspx)
 E = JLLErrors;
+
+if organized_subdir
+    save_subdir = sprintf('behr-%s-%s_%s-%s_%s', Data(1).BEHRProfileMode, Data(1).BEHRRegion, pixel_type, output_type, BEHR_version);
+    save_dir = fullfile(save_dir, save_subdir);
+    if ~exist(save_dir, 'dir')
+        mkdir(save_dir);
+    end
+end
 
 % The attribute table contains the list of all variables we expect to provide.
 % Choose the proper subset.
