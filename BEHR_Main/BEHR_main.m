@@ -212,6 +212,8 @@ end
 core_githead = git_head_hash(behr_paths.behr_core);
 behrutils_githead = git_head_hash(behr_paths.behr_utils);
 genutils_githead = git_head_hash(behr_paths.utils);
+psm_githead = git_head_hash(behr_paths.psm_dir);
+imatpy_githead = git_head_hash(behr_paths.python_interface);
 
 datenums = datenum(date_start):datenum(date_end);
 parfor(j=1:length(datenums), n_workers)
@@ -337,6 +339,8 @@ parfor(j=1:length(datenums), n_workers)
         Data(z).GitHead_Core_Main = core_githead;
         Data(z).GitHead_BEHRUtils_Main = behrutils_githead;
         Data(z).GitHead_GenUtils_Main = genutils_githead;
+        Data(z).GitHead_PSM_Main = psm_githead;
+        Data(z).GitHead_MatPyInt_Main = imatpy_githead;
     end
     
     

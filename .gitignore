@@ -1,0 +1,15 @@
+# Ignore latex auxiliary files anywhere
+**/*.aux
+**/*.bbl
+**/*.blg
+**/*.log
+**/*.out
+**/*.synctex.gz
+**/*.toc
+
+# Ignore matlab autosave files
+**/*.m~
+
+# Ignore unit test output directories
+Production tests/UnitTestData
+Production tests/UnitTestResults

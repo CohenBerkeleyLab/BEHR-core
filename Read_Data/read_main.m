@@ -46,6 +46,9 @@ function read_main(varargin)
 %       "nighttime" orbits. This must be a string. Default (and only option
 %       at present) is 'US'.
 %
+%       'allow_no_myd' - boolean (default false) which allows the run to
+%       process days for which no MODIS cloud fraction data is available.
+%
 %       'overwrite' - scalar logical which controls whether existing files
 %       will be overwritten. If false, a day will be skipped if the
 %       corresponding OMI_SP .mat file exists in the directory given as
@@ -78,6 +81,7 @@ p.addParameter('modis_myd06_dir', '');
 p.addParameter('modis_mcd43_dir', '');
 p.addParameter('globe_dir', '');
 p.addParameter('region', 'US');
+p.addParameter('allow_no_myd', false);
 p.addParameter('overwrite', false)
 p.addParameter('DEBUG_LEVEL', 2);
 
@@ -92,6 +96,7 @@ omi_pixcor_dir = pout.omi_pixcor_dir;
 modis_myd06_dir = pout.modis_myd06_dir;
 modis_mcd43_dir = pout.modis_mcd43_dir;
 globe_dir = pout.globe_dir;
+allow_no_myd = pout.allow_no_myd;
 region = pout.region; 
 overwrite = pout.overwrite;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
@@ -478,7 +483,7 @@ parfor(j=1:length(datenums), n_workers)
         
         if DEBUG_LEVEL > 2; t_modis_cld = tic; end
         this_data = read_modis_cloud(modis_myd06_dir, this_dnum, this_data, omi_starttime, omi_next_starttime, [lonmin, lonmax], [latmin, latmax],...
-            'DEBUG_LEVEL', DEBUG_LEVEL);
+            'AllowNoFile', allow_no_myd, 'DEBUG_LEVEL', DEBUG_LEVEL);
         if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS clouds on worker %d: %f\n', this_task.ID, toc(t_modis_cld)); end
         
         
