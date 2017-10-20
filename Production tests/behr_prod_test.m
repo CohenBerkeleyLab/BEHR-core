@@ -16,6 +16,7 @@ function [ indiv_stats, overall_stats  ] = behr_prod_test( new_dir, new_pattern,
 % only BEHR files of the desired version.
 
 %%%% USER OPTIONS %%%%
+E = JLLErrors;
 if nargin >= 1 && nargin < 4
     E.badinput('Must include all inputs (NEW_DIR, NEW_PATTERN, OLD_DIR, OLD_PATTERN) or none');
 elseif nargin < 1
@@ -163,8 +164,15 @@ while n < n_files
         median_abs_perdiff = nanmedian(abs(perdel));
         
         indiv_stats(n).(fields_to_check{a}).date = datestr(dnums_new(r),'yyyy-mm-dd');
-        indiv_stats(n).(fields_to_check{a}).Longitude = lon(xx_good);
-        indiv_stats(n).(fields_to_check{a}).Latitude = lat(xx_good);
+       
+        if isequal(size(xx_good), size(lon))
+            indiv_stats(n).(fields_to_check{a}).Longitude = lon(xx_good);
+            indiv_stats(n).(fields_to_check{a}).Latitude = lat(xx_good);
+        else
+            indiv_stats(n).(fields_to_check{a}).Longitude = nan(size(lon));
+            indiv_stats(n).(fields_to_check{a}).Latitude = nan(size(lon));
+        end
+        
         
         indiv_stats(n).(fields_to_check{a}).difference_stats.num_dif_vals = num_neq;
         indiv_stats(n).(fields_to_check{a}).difference_stats.mean_difference = mean_diff;
@@ -195,8 +203,14 @@ while n < n_files
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.values_that_replaced_fills = values_replaced_fills;
         end
         
-        overall_stats.(fields_to_check{a}).Longitude = cat(1, overall_stats.(fields_to_check{a}).Longitude, lon(xx_good));
-        overall_stats.(fields_to_check{a}).Latitude = cat(1, overall_stats.(fields_to_check{a}).Latitude, lat(xx_good));
+        if isequal(size(xx_good), size(lon))
+            overall_stats.(fields_to_check{a}).Longitude = cat(1, overall_stats.(fields_to_check{a}).Longitude, lon(xx_good));
+            overall_stats.(fields_to_check{a}).Latitude = cat(1, overall_stats.(fields_to_check{a}).Latitude, lat(xx_good));
+        else
+            overall_stats.(fields_to_check{a}).Longitude = nan;
+            overall_stats.(fields_to_check{a}).Latitude = nan;
+        end
+        
         
         overall_stats.(fields_to_check{a}).difference_stats.num_dif_vals = overall_stats.(fields_to_check{a}).difference_stats.num_dif_vals + num_neq;
         overall_stats.(fields_to_check{a}).difference_stats.differences = cat(1, overall_stats.(fields_to_check{a}).difference_stats.differences, del);
