@@ -244,6 +244,12 @@ parfor(j=1:length(datenums), n_workers)
     S=load(fullfile(sp_mat_dir,sp_mat_name));
     Data=S.Data;
     
+    if isempty(Data)
+        % If there is no data read in from read_main.m, then there's
+        % nothing to do for this day.
+        continue
+    end
+    
     % Double check that the loaded SP file is for the same region as we're
     % trying to process
     if ~strcmpi(Data(1).BEHRRegion, region)
