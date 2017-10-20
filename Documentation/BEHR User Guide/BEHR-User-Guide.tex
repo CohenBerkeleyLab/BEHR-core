@@ -11,7 +11,8 @@
 \usepackage{braket} %Dirac bra-ket notation
 \usepackage{textcomp}
 \usepackage{tabularx}
-\usepackage[hidelinks]{hyperref} %Allows the use of web links (\url, \href) and computer paths (\path)
+\usepackage{longtable}
+\usepackage[colorlinks,allcolors=black,urlcolor=blue]{hyperref} %Allows the use of web links (\url, \href) and computer paths (\path)
 
 \usepackage{listings} %Way to typeset code; listings respect whitespace. Can be set inline with {\lstinline[breaklines=true]||} or as an environment
 \lstset{basicstyle=\ttfamily} %Causes the code environments to be typeset with a Courier-like font
@@ -36,10 +37,13 @@
 
 \emergencystretch 3em
 
+\tableofcontents
+
 \section{Reading}
 
 	\begin{enumerate}
 		\item \citet{russell11} - description of original BEHR algorithm
+		\item \citet{laughner17} - description of v2.1C of the BEHR algorithm
 	\end{enumerate}
 
 
@@ -48,7 +52,6 @@
 	\subsection{Product types}
 	Currently, we have two data products available: one at the native OMI pixel resolution and one in which each swath has been gridded to a $0.05^\circ \times 0.05^\circ$ fixed grid. The gridded product is ideal for users who simply wish to obtain an \ce{NO2} VCD, as the latitude and longitude of each grid point will remain fixed over time, whereas the native OMI pixels do not. However, the native OMI resolution files have additional variables compared to the gridded product, such as scattering weights, averaging kernels, our \ce{NO2} \emph{a priori} profile, etc. that will be useful to users wishing to modify the product in some way.
 	
-	Plans to produce a third product with a single, daily grid are underway and we hope to have this available soon.
 	
 	\subsection{Version numbering}
 	The BEHR version numbering system combines the OMNO2 version number with an
@@ -68,7 +71,7 @@ a filename that is not separating the file extension. This form is completely
 equivalent to the one with the period and is used interchangeably.
 	
 	\subsection{File format}
-	All products will be made available as HDF version 5 (\texttt{.h5}) files (\emph{c.f.} \url{https://www.hdfgroup.org}).  Please note when trying to open these that many programming languages and utilities have different commands and tools for opening version 4 and 5 HDF files. If you are having trouble opening these files:
+	All products will be made available as HDF version 5 files (\url{https://www.hdfgroup.org}).  Please note when trying to open these that many programming languages and utilities have different commands and tools for opening version 4 and 5 HDF files. If you are having trouble opening these files:
 	\begin{enumerate}
 		\item Ensure that you are using the correct command for an HDF5 file, not an HDF4 file.
 		\item Try using HDFView (available from \url{https://www.hdfgroup.org/products/java/index.html} to browse the file. This will confirm that it downloaded properly.
@@ -77,9 +80,9 @@ equivalent to the one with the period and is used interchangeably.
 	
 	For both the native and gridded products, the HDF files are organized similarly. Under the \texttt{/Data} group, each swath is contained within its own group, named as \texttt{Swath\#}. There will be 3--5 swaths per day. Each swath will contain all relevant variables as datasets.
 	
-	Starting with BEHR version 2.1A, fill values will be directly stored in the HDF FillValue information for each dataset, along with four additional attributes: Description, Range, Product, and Unit.  \emph{Description} is a brief, one-line description of the meaning of each variable. \emph{Range} is the range of values that variable may correctly take on. \emph{Product} indicates whether this dataset is copied directly from the NASA standard product (represented by \textbf{SP}) or is added by the BEHR product (unsurprisingly represented by \textbf{BEHR}). Finally, \emph{Unit} is the physical unit assigned to each dataset. 
+	Starting with BEHR version 2.1A, fill values will be directly stored in the HDF FillValue information for each dataset, along with four additional attributes: Description, Range, Product, and Unit.  \emph{Description} is a brief, one-line description of the meaning of each variable. \emph{Range} is the range of values that variable may correctly take on. \emph{Product} indicates whether this dataset is copied directly from the NASA standard product (represented by \textbf{SP}), the OMPIXCOR product (\textbf{PIXCOR}), or is added by the BEHR product (unsurprisingly represented by \textbf{BEHR}). Finally, \emph{Unit} is the physical unit assigned to each dataset. 
 	
-	The native product will also be provided as comma separated value files. Because part of the value of the gridded product is the 2-dimensional structure of the grid reflects the geographic distribution, and because this would be difficult to maintain in a .csv file, we will continue to provide the gridded product in HDF format only.
+	Starting a v3.0A, we are no longer providing the native pixels as comma separated values. With the proliferation of available data into separate products using daily and monthly profiles, providing both .hdf and .txt files was no longer practical.
 	
 	\subsection{Tools for working with HDF files}
 	The following programs or programming languages are known to be able to read HDF files:
@@ -96,11 +99,13 @@ equivalent to the one with the period and is used interchangeably.
 	
 \section{Variables}
 \subsection{List of variables}
-	Table \ref{tab:productvars} will list the attributes of all variables found in the BEHR files. Most categories are fairly self-explanatory. \emph{Product} indicates whether the variable is directly copied from the NASA OMNO2 product (SP) or calculated from BEHR. \emph{Gridding} indicates whether the variable will be contained in the native OMI pixel resolution files (``Native'') or both the native and gridded files (``both'').
+	Table \ref{tab:productvars} will list the attributes of all variables found in the BEHR files. Most categories are fairly self-explanatory. \emph{Product} indicates whether the variable is directly copied from the NASA OMNO2 product (SP), the OMPIXCOR product (PIXCOR) or calculated from BEHR. \emph{Gridding} indicates whether the variable will be contained in the native OMI pixel resolution files (``Native'') or both the native and gridded files (``both'').
 	
-	For more information on the SP variables, see the links at \url{http://disc.sci.gsfc.nasa.gov/Aura/data-holdings/OMI/omno2_v003.shtml}, especially the Readme and OMNO2 Data Format.  Here we will describe primarily the BEHR variables in detail, although we will describe the presentation of some OMNO2 variables where necessary.
+	For more information on the SP variables, see the links at \url{https://disc.sci.gsfc.nasa.gov/datasets/OMNO2_V003/summary?keywords=omno2}, especially the Readme and OMNO2 Data Format. Likewise, see \url{https://disc.sci.gsfc.nasa.gov/datasets/OMPIXCOR_V003/summary?keywords=ompixcor} for information on the PIXCOR variables.  Here we will describe primarily the BEHR variables in detail, although we will describe the presentation of some OMNO2 variables where necessary.
 	
 	\begin{itemize}
+	\item \textbf{Areaweight}: field for weighting the temporal average of the gridded product; calculated as the inverse of the FoV75 Area.	
+	
 	\item \textbf{BEHRAMFTrop}: the tropospheric AMF calculated by the BEHR algorithm using high resolution albedo, terrain pressure, and \ce{NO2} \emph{a priori} inputs.  This AMF estimates a ghost column as well, and corresponds to the VCD in the BEHRColumnAmountNO2Trop field.
 	
 	\item \textbf{BEHRAMFTropVisOnly}: the tropospheric AMF calculated by the BEHR algorithm that does not attempt to estimate a ghost column. This corresponds to the VCD in BEHRColumnAmountNO2VisOnly.
@@ -115,11 +120,14 @@ equivalent to the one with the period and is used interchangeably.
 	
 	\item \textbf{BEHRPressureLevels}: the pressure level that correspond to the BEHRAvgKernels, BEHRNO2Apriori, and BEHRScatteringWeights vectors. See \S\ref{sec:scweights} for more information.
 	
+	\item \textbf{BEHRQualityFlags}: flags field that combines the NASA XTrackQualityFlags and VcdQualityFlags summary bits with processing errors or warnings from the BEHR algorithm. The meaning of each bit is given in Table \ref{tab:behr-quality-flags}. Discussion of how to use these flags is given in \S\ref{sec:native-filtering}.
+	
+	\item \textbf{BEHRScatteringWeights}: the vectors of scattering weights that can be used to recompute AMFs using custom \emph{a priori} profiles. See \S\ref{sec:scweights} for more details.
+	
 	\item \textbf{GLOBETerpress}: The average surface pressure of the pixel calculated from the GLOBE database (\url{http://www.ngdc.noaa.gov/mgg/topo/globe.html}). Currently it is calculated from the GLOBE terrain heights using a simple scale height calculation, with scale height set to 7.4 km.
 	
-	\item \textbf{Latcorn, Loncorn}: corner coordinates of the pixels calculated assuming a 2 second integration period and the sensitivity given as a flat topped Gaussian function, $f(x) = \exp[c(x - x_0)^4]$
 	
-	\item \textbf{MODISAlbedo}: The average albedo of the pixel calculated from Band 3 (459--479 nm) of the MCD43C3 combined MODIS albedo product. Because this product is a 16-day average produced every 8 days, the temporally nearest MCD43C3 file is chosen.
+	\item \textbf{MODISAlbedo}: The average surface reflectance of the pixel calculated from Band 3 of the MCD43D combined MODIS BRDF product for the viewing geometry of this pixel. 
 	
 	\item \textbf{MODISCloud}: The cloud fraction of the pixel averaged from Aqua MODIS MYD06 cloud fraction data.
 	
@@ -133,6 +141,7 @@ equivalent to the one with the period and is used interchangeably.
 				\end{matrix}
 			\right.
 	\end{align*}
+	The extra factor of 180 transforms the RAA into the definition used in the TOMRAD look up table.
 	
 	\item \textbf{XTrackQualityFlags}: directly taken from the OMNO2 product; however, while they should always be considered a bit array (and thus integers) in some version of BEHR these are converted to floating point numbers.  Also, in the gridded product, in any case where more than one pixel contributed to a grid cell, the value given will be the result of a bitwise OR operation applied to the flags from each pixel. Thus, if a flag is set in any contributing pixel, it will be set in the grid cell.
 	
@@ -140,13 +149,26 @@ equivalent to the one with the period and is used interchangeably.
 	
 	\end{itemize}
 
-	\begin{table}
 	\begin{center}
 	
-	\begin{tabular}{lcccc}
+	\begin{longtable}{lcccc}
+	\caption{Variables found in the BEHR files.}
+	\label{tab:productvars}\\
 	Variable				&	Gridding		&	Product		&	Range		& 	Unit \\ \hline
-	\rule{0pt}{3ex}AMFStrat	&Native		 &	SP			&	[0, $\infty$)	&	unitless \\
+	\rule{0pt}{3ex}
+	\endfirsthead
+	\multicolumn{5}{c}{\tablename\ \thetable\ -- \emph{Continued from previous page}} \\	
+	Variable				&	Gridding		&	Product		&	Range		& 	Unit \\ \hline
+	\rule{0pt}{3ex}
+	\endhead	
+	\hline \multicolumn{5}{r}{\emph{Continued on next page}} \\
+	\endfoot
+	\hline
+	\endlastfoot
+	
+	AMFStrat				&	Native		&	SP			&	[0, $\infty$)	&	unitless \\
 	AMFTrop				&	Both	 		&	SP			& 	[0, $\infty$)	& unitless \\
+	Areaweight			&	Gridded		&	BEHR			&	[0, $\infty$) & km$^{-2}$ \\
 	BEHRAMFTrop			&	Both 		& 	BEHR			&	[0, $\infty$)	& unitless \\
 	BEHRAMFTropVisOnly	&	Both 		& 	BEHR			&	[0, $\infty$)	& unitless \\
 	BEHRAvgKernels		&	Native 		&	BEHR			&	[0, $\infty$)	& unitless \\
@@ -154,43 +176,49 @@ equivalent to the one with the period and is used interchangeably.
 	BEHRColumnAmountNO2TropVisOnly & Both	 	& 	BEHR		&	[0, $\infty$) & molec. cm$^{-2}$ \\
 	BEHRNO2Apriori		&	Native 		&	BEHR			& 	($-\infty$, $\infty$) & unscaled mixing ratio\\
 	BEHRPressureLevels	&	Native	 	& 	BEHR			& 	[0, $\infty$) & hPa \\
+	BEHRQualityFlags		& 	Both			& 	BEHR			&	[0, $2^{32}-1$] & bit array flag \\
 	BEHRScatteringWeights & Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
-	CloudFraction		&	Both 		&	SP			&	[0.0, 1.0]	 & unitless \\
+	CloudFraction		&	Both 		&	SP			&	[0, 1]	 & unitless \\
 	CloudPressure		&	Native	 	&	SP			& 	[0, $\infty$) & hPa \\
-	CloudRadianceFraction &	Both 		&	SP			&	[0.0, 1.0]	& unitless \\
+	CloudRadianceFraction &	Both 		&	SP			&	[0, 1]	& unitless \\
 	ColumnAmountNO2		&	Native	 	&	SP			&	[0, $\infty$) & molec. cm$^{-2}$ \\
 	ColumnAmountNO2Strat &	Native 		&	SP			& 	[0, $\infty$) & molec. cm$^{-2}$ \\
 	ColumnAmountNO2Trop 	&	Both		 	&	SP			&	[0, $\infty$) & molec. cm$^{-2}$ \\
 	ColumAmountNO2TropStd &	Native 		& 	SP			&	[0, $\infty$) & molec. cm$^{-2}$ \\
+	FoV75Area			& 	Native		& 	PIXCOR		&	[0, $\infty$)	&km$^2$ \\
+	FoV75CornerLatitude	&	Native		&	PIXCOR		&	[-90, 90]	& degrees \\
+	FoV75CornerLongitude &	Native		&	PIXCOR		&	[-180, 180] 	& degrees \\
 	GLOBETerpres			&	Both		 	&	BEHR			&	[0, $\infty$) & hPa \\
-	Latcorn				&	Native	 	&	BEHR			&	[-90.0, 90.0] & degrees \\
-	Latitude				& 	Both 		&	SP			&	[-90.0, 90.0] & degrees \\
-	Loncorn				&	Native	 	& 	BEHR			&	[-180.0, 180.0] & degrees \\
-	Longitude			& 	Both 		& 	SP			&	[-180.0, 180.0] & degrees \\
-	MODISAlbedo			&	Both		 	&	BEHR			&	[0.0, 1.0]	 & unitless \\
-	MODISCloud			&	Both 		&	BEHR			&	[0.0, 1.0]	 & unitless \\
-	RelativeAzimuthAngle &	Native	 	&	BEHR			&	[0.0, 180.0] & degrees \\
-	Row					&	Both 		&	SP			&   [0.0, 59.0]	& unitless \\
+	Latitude				& 	Both 		&	SP			&	[-90, 90] & degrees \\
+	Longitude			& 	Both 		& 	SP			&	[-180, 180] & degrees \\
+	MODISAlbedo			&	Both		 	&	BEHR			&	[0, 1]	 & unitless \\
+	MODISCloud			&	Both 		&	BEHR			&	[0, 1]	 & unitless \\
+	RelativeAzimuthAngle &	Native	 	&	BEHR			&	[0, 180] & degrees \\
+	Row					&	Both 		&	SP			&   [0, 59]	& unitless \\
 	SlantColumnAmountNO2 & 	Native	 	&	SP			& 	[0, $\infty$) & molec. cm$^{-2}$ \\
-	SolarAzimuthAngle	&	Native	 	&	SP			&	[-180.0, 180.0] & degrees \\
-	SolarZenithAngle		&	Native	 	&	SP			&	[0.0, 90.0]		& degrees \\
+	SolarAzimuthAngle	&	Native	 	&	SP			&	[-180, 180] & degrees \\
+	SolarZenithAngle		&	Native	 	&	SP			&	[0, 90]		& degrees \\
+	SpacecraftAltitude	&	Native		&	SP			&	[0, $\infty$)	& m \\
+	SpacecraftLatitude	&	Native		&	SP			&	[-90, 90]	& degrees \\
+	SpacecraftLongitude	&	Native		&	SP			&	[-180, 180]	& degrees \\
 	Swath				&	Native	 	&	SP			&	[0, $\infty$)	& unitless \\
-	TerrainHeight		&	Native	 	& 	SP			&	[0, $\infty$) 	& hPa \\
-	TerrainReflectivity	&	Native 		&	SP			&	[0.0, 1.0]		& unitless \\
+	TerrainHeight		&	Native	 	& 	SP			&	($-\infty$, $\infty$) 	& m \\
+	TerrainPressure		&	Native	 	& 	SP			&	[0, $\infty$) 	& m \\
+	TerrainReflectivity	&	Native 		&	SP			&	[0, 1]		& unitless \\
+	TerrainPressure		&	Native 		&	SP			&	[0, $\infty$)		& unitless \\
+	TiledArea			&	Native		& 	PIXCOR		&	[0, $\infty$) & km$^{2}$ \\
+	TiledCornerLatitude	&	Native		&	PIXCOR		&	[-90, 90] & degrees \\
+	TiledCornerLongitude &	Native		&	PIXCOR		&	[-180, 180.0] & degrees \\
 	Time					&	Native	 	&	SP			&	[0, $\infty$)	& s \\
-	ViewingAzimuthAngle	&	Native	 	&	SP			&	[-180.0, 180.0]	& degrees \\
-	ViewingZenithAngle	&	Native	 	&	SP			&	[0.0, 90.0]		& degrees \\
+	VcdQualityFlags		&	Both 		&	SP			&	N/A				& bit array flag \\
+	ViewingAzimuthAngle	&	Native	 	&	SP			&	[-180, 180]	& degrees \\
+	ViewingZenithAngle	&	Native	 	&	SP			&	[0, 90]		& degrees \\
 	XTrackQualityFlags	&	Both 		&	SP			&	N/A				& bit array flag \\
-	vcdQualityFlags		&	Both 		&	SP			&	N/A				& bit array flag \\
-	\end{tabular}
+	
+	\end{longtable}
 
 	\end{center}
-	\caption{Variables found in the BEHR files.}
-	\label{tab:productvars}
-	\end{table}
 
-\subsection{BEHRQualityFlags}\label{sec:behr-quality-flags}
-Starting from v3.0A, we have added our own flags field that combine the NASA XTrackQualityFlags and VcdQualityFlags summary bits with processing errors or warnings from the BEHR algorithm. The meaning of each bit is given 
 
 \begin{table}
 \def\arraystretch{1.5}
@@ -198,15 +226,19 @@ Starting from v3.0A, we have added our own flags field that combine the NASA XTr
 \hline
 \multicolumn{3}{c}{\textbf{Error bits}} \\
 Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
-1 & 1 & Summary bit: set if any error present \\
-2 & 2 & AMF error: set if either the BEHR AMF or BEHR visible-only AMF is less than or equal to the minimum allowed value \\
-3 & 4 & VcdQualityFlags: set if the VcdQualityFlags field was not an even integer (i.e. its own summary bit was set) \\
-4 & 8 & XTrackFlags: set if the XTrackFlags field was $> 0$, indicating the presence of the row anomaly \\ 
-5--16 & 16--32768 & Unused: reserved for future use \\ \hline
+1 & 1 & Low quality flag: set if this pixel should not be used to generate high quality full tropospheric VCD (visible + ghost column) data. Set for any pixel with the critical error bit set, MODIS BRDF quality warning set, or cloud fraction $> 20\%$.\\
+2 & 2 & Critical error bit: set if any error present. Do not use either the standard or visible-only VCD from this pixel. \\
+3 & 4 & AMF error: set if either the BEHR AMF or BEHR visible-only AMF is less than or equal to the minimum allowed value \\
+4 & 8 & VcdQualityFlags: set if the VcdQualityFlags field was not an even integer (i.e. its own summary bit was set) \\
+5 & 16 & XTrackFlags: set if the XTrackFlags field was $> 0$, indicating the presence of the row anomaly \\ 
+6--16 & 32--32768 & Unused: reserved for future use \\ \hline
+%
 \multicolumn{3}{c}{\textbf{Warning bits}} \\
 Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
-17 & 65536 & MODIS ocean flag: MODIS albedo data not present for this pixel, used reflectance from \citet{mobley15}, scaled by the ratio of reflectance at 433 nm to 550 nm based on the GOME-2A LER product (\url{http://www.temis.nl/surface/gome2_ler.html}). \\ 
-18--32 & $2^{17}$--$2^{31}$ & Unused: reserved for future use \\ \hline
+17 & 65536 & High cloud fraction: OMI geometric cloud fraction exceeds 20\%. Not recommended for use if trying to retrieve a full tropospheric column (visible + ghost). \\
+18 & 131072 & MODIS ocean flag: MODIS land use table indicates that this pixel is majority ocean, used reflectance from a look up table based on solar zenith angle derived from the Couple Ocean-Atmosphere Radiative Transfer Model (\url{https://cloudsgate2.larc.nasa.gov/jin/coart.html}) \\ 
+19 & 262144 & MODIS BRDF quality flag: the average quality value for the MCD43D* values averaged to this pixel exceeds 2.5 or $>50\%$ of the MODIS grid cells in this OMI pixel are fill values. Accuracy of the surface reflectance used may be lower; use with caution. \\
+20--32 & $2^{19}$--$2^{31}$ & Unused: reserved for future use \\ \hline
 
 \end{tabularx}
 \caption{Meaning of the various bits in the BEHRQualityFlags field.}
@@ -218,28 +250,33 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 \section{Considerations when working with BEHR files}
 	\subsection{Pixel filtering}
 	\subsubsection{Native pixel data} \label{sec:native-filtering}
-	For users wishing to identify high quality \ce{NO2} column information to ground, we have added our own flag field that combines relevant flags from NASA with processing flags from our algorithm. This is the BEHRQualityFlags field.  In general, you should not use pixels for which the BEHRQualityFlags field is not an even integer (the least significant bit is set). For more advanced users, the meaning of each bit is described in Table \ref{tab:behr-quality-flags}.  Additionally, pixels with fill values should clearly not be used.
 	
-	In addition, users should filter pixels by cloud fraction. BEHR contains three cloud fractions: OMI geometric, OMI radiance, and MODIS cloud fraction. We generally filter for OMI geometric or MODIS fraction to be $< 0.2$ (20\%) when interested in total (to ground) columns.  As discussed in Russell et al. 2011, MODIS cloud fraction is often less susceptible to identifying high albedo ground surfaces as clouds. Other applications (e.g. cloud slicing) may require different filtering.
+	For users wishing to identify high quality \ce{NO2} column information to ground, we have added our own flag field that combines relevant flags from NASA with processing flags from our algorithm. This is the BEHRQualityFlags field.  For users who want the simplest way to identify good quality data for full tropospheric columns (i.e. BEHRColumnAmountNO2), only use pixels for which BEHRQualityFlags is an even integer (i.e. the least significant bit is 0). This automatically rejects any pixels that had an error during processing, any pixels for which the NASA VcdQualityFlags or XTrackQualityFlags fields indicate the pixel should not be used, any pixels with low quality MODIS BRDF data (see below), and (as of 3 Oct 2017) any pixels that have an OMI geometric cloud fraction $> 20\%$.
+	
+	More advanced users who want more control over cloud filtering should instead reject pixels for which the second least significant bit of BEHRQualityFlags is non-zero. (One way to check this is to do a bitwise AND of the flag value with 2 and check if the result is $> 0$.) This will remove any pixels with a processing error or a NASA flag. BEHR contains three cloud fractions: OMI geometric, OMI radiance, and MODIS cloud fraction. We generally filter for OMI geometric or MODIS fraction to be $< 0.2$ (20\%) when interested in total (to ground) columns.  As discussed in Russell et al. 2011, MODIS cloud fraction is often less susceptible to identifying high albedo ground surfaces as clouds. Other applications (e.g. cloud slicing) may require different filtering.
+	
+	A second flag advanced users should be aware of is bit \#19, which indicates that the MODIS MCD43D BRDF data averaged for this pixel is of lower quality. This can happen if, for instance, the ground is snow covered. The first bit is set to true wherever this bit is true; the second bit is not. Users interested in winter retrievals over the northern US will likely need to allow this bit to be true in order to allow sufficient data through the filter. At this time, we do not have a quantitative estimate for how much the lower quality BRDF data increases the uncertainty of the retrieved VCD.
+	
+	Users wishing extremely fine-grained control of which pixels are rejected have access to the VcdQualityFlags and XTrackQualityFlags fields as well as BEHRQualityFlags. Please refer to Table \ref{tab:behr-quality-flags} and the \href{https://acdisc.gesdisc.eosdis.nasa.gov/data//Aura_OMI_Level3/OMNO2d.003/doc/README.OMNO2.pdf}{NASA OMI \ce{NO2} Readme} file.
 	
 	A previous version of this document indicated to removing negative VCDs and VCDs $> 1 \times 10^{17}$ molec. cm$^{-2}$; this is no longer recommended as removing negative VCDs can make the error in the stratospheric subtraction systematic instead of random (especially for small VCDs), and removing large VCDs should not be necessary as long as you check that XTrackQualityFlags = 0.
 	
 	For non-\ce{NO2} column density fields, users can be more judicious in the filtering of data. For example, if interested in the value of the MODIS fields, removing pixels for which BEHRQualityFlags indicates an error in the \ce{NO2} algorithm will unnecessarily remove good MODIS data, since MODIS data is not affected by the row anomaly nor by errors in the \ce{NO2} algorithm. If you would like assistance figuring out the best filtering for a particular field, please contact one of the maintainers listed on the BEHR website.
 
 	
-	\subsubsection{Gridded data - PSM fields}\label{sec:gridded:psm}
-	Pixel gridding changed between v2.1C and v3.0A of BEHR. We now use the parabolic spline method (PSM) of gridding \citep{kuhlmann14} for \ce{NO2} column density fields.	As part of this process, pixels are filtered for quality before the gridding, removing pixels with VcdQualityFlags fields or XTrackQualityFlags fields that indicate an error in processing, as well as pixels with a solar zenith angle $> 85^\circ$. The native pixel values are weighted by:
+%	\subsubsection{Gridded data - PSM fields}\label{sec:gridded:psm}
+%	Pixel gridding changed between v2.1C and v3.0A of BEHR. We now use the parabolic spline method (PSM) of gridding \citep{kuhlmann14} for \ce{NO2} column density fields.	As part of this process, pixels are filtered for quality before the gridding, removing pixels with VcdQualityFlags fields or XTrackQualityFlags fields that indicate an error in processing, as well as pixels with a solar zenith angle $> 85^\circ$. The native pixel values are weighted by:
 	
-	\begin{equation}
-	w = \frac{10^{16}}{[A \cdot \sigma_{\ce{NO2}} \cdot (1.3 + 0.87 f)]^2} 
-	\end{equation}
+%	\begin{equation}
+%	w = \frac{10^{16}}{[A \cdot \sigma_{\ce{NO2}} \cdot (1.3 + 0.87 f)]^2} 
+%	\end{equation}
 	
-	where $A$ is the pixel area (FoV75 Area from the OMPIXCOR product), $\sigma_{\ce{NO2}}$ is the standard error of the column (ColumnAmountNO2TropStd from the OMI SP product), and $f$ is the cloud radiance fraction. The dependence on cloud fraction was empirically derived by Annette Sch\"{u}tt and Mark Wenig at LMU Munich.
+%	where $A$ is the pixel area (FoV75 Area from the OMPIXCOR product), $\sigma_{\ce{NO2}}$ is the standard error of the column (ColumnAmountNO2TropStd from the OMI SP product), and $f$ is the cloud radiance fraction. The dependence on cloud fraction was empirically derived by Annette Sch\"{u}tt and Mark Wenig at LMU Munich.
 	
-	Therefore, it is no longer necessary to filter data gridded by the PSM before temporally averaging. Such fields are indicated by the attribute \lstinline$grid_type$ having the value ``parabolic spline method''. Their weights are individually given in fields with the same name + ``Weights,'' i.e. for BEHRColumnAmountNO2Trop, the corresponding weights are given in BEHRColumnAmountNO2TropWeights.
+%	Therefore, it is no longer necessary to filter data gridded by the PSM before temporally averaging. Such fields are indicated by the attribute \lstinline$grid_type$ having the value ``parabolic spline method''. Their weights are individually given in fields with the same name + ``Weights,'' i.e. for BEHRColumnAmountNO2Trop, the corresponding weights are given in BEHRColumnAmountNO2TropWeights.
 	
 	\subsubsection{Gridded data - CVM fields}\label{sec:gridded:cvm}
-	Other fields not containing \ce{NO2} data are gridded by the constant value method (CVM), also available in the \lstinline$omi$ package (\url{https://github.com/gkuhl/omi}). This avoids assuming that the same constraints optimized for \ce{NO2} in the PSM are true for all fields. These fields are not automatically filtered for row anomaly or other processing errors. Consequently, before averaging in time (\S\ref{sec:temporal-averaging}), the user should filter this data similarly to the native pixels (\S\ref{sec:native-filtering}). These fields are indicated by the \lstinline$grid_type$ attribute having the value ``constant value method''.
+	Currently, all fields are gridded by the constant value method (CVM), also available in the \lstinline$omi$ package (\url{https://github.com/gkuhl/omi}). These data must be filtered the same as the native pixels (\S\ref{sec:native-filtering}).  These fields are indicated by the \lstinline$grid_type$ attribute having the value ``constant value method''.
 	
 	\subsubsection{Gridded data - flag fields}
 	Flag fields (BEHRQualityFlags, VcdQualityFlags, XTrackQualityFlags) are put on a grid using the CVM; however, when multiple pixels overlap a single grid cell, their values are combined using a bitwise OR operation, rather than a weighted summation. This ensures that if any pixel contributing to a grid cell has a flag set, that flag will be set for the grid cell. This means that filtering CVM gridded fields by these flags will be conservative about including grid cells with good data. These fields are indicated by the \lstinline$grid_type$ attribute having the value ``flag, bitwise OR''.
@@ -248,19 +285,19 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	Other fields that define the grid, such as Longitude and Latitude, are indicated by the \lstinline$grid_type$ attribute value ``grid property''. If the HDF publishing algorithm cannot identify a field's grid type, the \lstinline$grid_type$ attribute will have the value ``undefined''.
 	
 	\subsection{Weighting temporal averaging}\label{sec:temporal-averaging}
-	Averaging over time is most easily accomplished using the gridded product, since the grid is consistent day-to-day. CVM gridded fields (\S\ref{sec:gridded:cvm}) should be filtered for quality using BEHRQualityFlags or XTrackQualityFlags and VcdQualityFlags and filtered for cloud fraction. The temporal average should weight each grid cell by the weight given in the Areaweight field for that swath.
+	Averaging over time is most easily accomplished using the gridded product, since the grid is consistent day-to-day. CVM gridded fields (\S\ref{sec:gridded:cvm}) should be filtered for quality using BEHRQualityFlags or XTrackQualityFlags, VcdQualityFlags, and cloud fraction. The temporal average should weight each grid cell by the weight given in the Areaweight field for that swath.
 	
-	PSM gridded fields do not need to be filtered, but should be weighted by the correct ``Weights'' field (\S\ref{sec:gridded:psm}).
+	%PSM gridded fields do not need to be filtered, but should be weighted by the correct ``Weights'' field (\S\ref{sec:gridded:psm}).
 	
-	\subsection{Total vs. visible only columns}
-	The field BEHRColumnAmountNO2Trop contains the total column, which includes the estimated ghost column below the cloudy part of the pixel. The field BEHRColumnAmountNO2TropVisOnly does not include the ghost column; only the above-cloud \ce{NO2} is included for the cloudy component of the pixel.
+	\subsection{To-ground vs. visible only columns}
+	The field BEHRColumnAmountNO2Trop contains the to-ground column, which includes the estimated ghost column below the cloudy part of the pixel. The field BEHRColumnAmountNO2TropVisOnly does not include the ghost column; only the above-cloud \ce{NO2} is included for the cloudy component of the pixel.
 	
 	Most users should use the BEHRColumnAmountNO2Trop field. Users interested in cloud slicing approaches should use the BEHRColumnAmountNO2TropVisOnly field. 
 	
-	The difference in the VCDs stems from the difference in the computation of the cloudy AMF. The total-column AMF (BEHRAMFTrop) is ultimately the ratio of a modeled slant column density (accounting for the presence of clouds) to a modeled vertical column density that is integrated from ground to tropopause over the whole pixel:
+	The difference in the VCDs stems from the difference in the computation of the cloudy AMF. The to-ground AMF (BEHRAMFTrop) is ultimately the ratio of a modeled slant column density (accounting for the presence of clouds) to a modeled vertical column density that is integrated from ground to tropopause over the whole pixel:
 	
 	\begin{equation}\label{eqn:total-amf}
-	A_{\mathrm{total}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp}
+	A_{\mathrm{to-ground}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp}
 	\end{equation}
 	
 	where $p_{\mathrm{surf}}$ is the ground surface pressure, $p_{\mathrm{cloud}}$ is the cloud pressure, $p_{\mathrm{tp}}$ is the tropopause pressure, $w_{\mathrm{clear}}(p)$ are the clear-sky scattering weights, $w_{\mathrm{cloudy}}$ are the cloudy-sky scattering weights, $g(p)$ is the \emph{a priori} \ce{NO2} profile, and $f_r$ is the cloud radiance fraction.	
@@ -273,7 +310,7 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	
 	where $f_g$ is the geometric cloud fraction. 
 	
-	Therefore, dividing the satellite slant column by the total AMF from Eq. \eqref{eqn:total-amf} scales it by the ratio of a modeled slant column to a modeled total tropospheric column (including the ghost column). Dividing the same slant column by the visible only AMF from Eq. \eqref{eqn:vis-amf} scales it by the ratio of a modeled slant column to a modeled visible column (\emph{excluding} the ghost column).
+	Therefore, dividing the satellite slant column by the to-ground AMF from Eq. \eqref{eqn:total-amf} scales it by the ratio of a modeled slant column to a modeled total tropospheric column (including the ghost column). Dividing the same slant column by the visible only AMF from Eq. \eqref{eqn:vis-amf} scales it by the ratio of a modeled slant column to a modeled visible column (\emph{excluding} the ghost column).
 
 	
 	\subsection{Using scattering weights/averaging kernels} \label{sec:scweights}
@@ -282,11 +319,34 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	
 	For new users wishing to begin using these variables, several resources will be helpful. \citet{palmer2001} contains the original formulation of the relationship between scattering weights, \emph{a priori} \ce{NO2} profiles, and air mass factors and should definitely be studied. The first several chapters of \emph{The Remote Sensing of Tropospheric Composition from Space} assembled by Burrows, Platt, and Borrell \citep{burrows-platt} also describes the relationship of scattering weights, averaging kernels, and air mass factors.
 	
-	What follows will be a description of why the scattering weights are presented how they are.  BEHRScatteringWeights, BEHRAvgKernels, BEHRPressureLevels, and BEHRNO2apriori are 3D variables; the first dimension is the vertical dimension, the second and third correspond to the dimensions of the normal 2D variables. To put this another way, if $X$ were the array of values for these variables, then $X(:,1,1)$ would be the vector of values for the $(1,1)$ pixel, $X(:,1,2)$ the vector for the $(1,2)$ pixel and so on.
+	What follows will be a description of why the scattering weights are presented how they are.  BEHRScatteringWeights, BEHRAvgKernels, BEHRPressureLevels, and BEHRNO2apriori are 3D variables; the first dimension is the vertical dimension, the second and third correspond to the dimensions of the normal 2D variables. To put this another way, if $X$ were the array of values for these variables, then $X(:,1,1)$ would be the vector of values for the $(1,1)$ pixel, $X(:,1,2)$ the vector for the $(1,2)$ pixel and so on. (Note: some programs may read the data in with C-style ordering and so put the vertical dimension last. The vertical dimension should always be 30 long.)
 	
 	The BEHRPressureLevels variable gives the vertical coordinates for the other three.  28 of the pressure levels will be the same for every pixel; the remaining two will correspond to the terrain and cloud pressure. Should the terrain or cloud pressure match one of the standard 28 pressures, then the vector of values for this pixel will still be 30 elements long, but will end with fill values which should be removed.
 	
-	\subsubsection{Calculation of scattering weights}
+	\subsubsection{Summary of use}
+	Averaging kernels should be applied to model profiles before integrating the model profile to yield a tropospheric column for comparison with the BEHR VCD:
+	
+	\begin{equation}
+	V_{\mathrm{model}} = \sum_i AK_i g_i
+	\end{equation}
+	
+	where $AK_i$ is the averaging kernel and $g_i$ the model \ce{NO2} partial column density for level $i$. The model profile should be interpolated to the pressure levels given in BEHRPressureLevels, rather than the other way around, since the averaging kernels can have sharp transitions at clouds. Since $AK_i = w_i/A$, where $w_i$ is the scattering weight for level $i$ and $A$ the pixel's AMF, this calculation effectively converts the model column to a slant column first, then ``retrieves'' it using the BEHR AMF. \textbf{Note:} since BEHR provides a tropospheric \ce{NO2} column density, it must be compared against a modeled tropospheric column only.
+	
+	Similarly, scattering weights can be used with modified versions of Eq. \eqref{eqn:total-amf} and \eqref{eqn:vis-amf} to calculate custom AMFs with new \emph{a priori} profiles:
+	
+	\begin{equation}\label{eqn:custom-tot-amf}
+	A_{\mathrm{to-ground}} = \frac{\int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{pub}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp}
+	\end{equation}
+	
+	\begin{equation}\label{eqn:custom-vis-amf}
+	A_{\mathrm{vis-only}} = \frac{\int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{pub}}(p) g(p) \: dp}{(1-f_g)\int_{p_{\mathrm{surf}}}^{p_\mathrm{{tp}}} g(p) \: dp + f_g \int_{p_{\mathrm{cld}}}^{p_{\mathrm{tp}}} g(p) \: dp}
+	\end{equation}
+	
+	Because of how the published scattering weights ($w_{\mathrm{pub}}$) are constructed (\S\ref{sec:scattering-wt-calc}) they incorporate the cloud radiance fraction weighting from Eq. \eqref{eqn:total-amf} and \eqref{eqn:vis-amf}.
+	
+	We strongly recommend that users interested in calculating their own AMFs check their code by attempting to reproduce the BEHR AMFs from the published scattering weights and \ce{NO2} profiles. Using \path{integPr2.m} from the \href{https://github.com/CohenBerkeleyLab/BEHR-core-utils}{BEHR core utilities repository}, one should be able to reproduce the BEHR AMFs to within $\sim 5\%$ in most cases. (It will not be exact since we use separate clear and cloudy scattering weights internally.)
+	
+	\subsubsection{Calculation of scattering weights}\label{sec:scattering-wt-calc}
 	The scattering weights presented ($w_{\mathrm{tot}}$) are calculated as the weighted average of a vector of clear and cloudy scattering weights obtained by interpolating the NASA OMNO2 TOMRAD look up table to the appropriate values of SZA, VZA, RAA (relative azimuth angle), albedo, and surface pressure. Mathematically:
 	\begin{align}
 		w_{i, \mathrm{tot}} = f_r w_{i, \mathrm{cld}} + (1 - f_r) w_{i, \mathrm{clr}} \label{eqn-pubSW}\\

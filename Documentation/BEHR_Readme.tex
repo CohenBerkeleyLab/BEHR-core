@@ -260,7 +260,7 @@ This will download the data to a \path{ladsweb.nascom.nasa.gov} subdirectory in 
 	
 		The necessary satellite data for BEHR is being downloaded automatically by the black Compaq computer in room B47. Each week, this computer queries the relevant archives for new files, compares the remote and local file lists, and retrieves any new files from the remote archive.  It will not intelligently acquire new versions, so it will need updated accordingly as new product versions are released, or additional satellite products are required by BEHR.
 		
-		It is also running \lstinline$read_omno2_v_aug2012.m$, \lstinline$BEHR_main.m$, and \lstinline$BEHR_publishing_v2.m$ each week to produce new BEHR files. This is keeping the website (\S\ref{sec:website}) as up-to-date as possible.
+		It is also running \lstinline$read_main.m$, \lstinline$BEHR_main.m$, and \lstinline$BEHR_publishing_v2.m$ each week to produce new BEHR files. This is keeping the website (\S\ref{sec:website}) as up-to-date as possible.
 		
 		Here the downloading process itself will be described. All scripts can be found in the \texttt{Downloading} folder of the BEHR git repository (see \S\ref{sec:version-control}).  For information on how the computer and its OS were configured for this, see Appendix \ref{app:autodl}.
 		
@@ -284,7 +284,7 @@ This will download the data to a \path{ladsweb.nascom.nasa.gov} subdirectory in 
 			
 			\item \textbf{Reading the files:}
 			
-			Finally, \path{run_read_omno2.sh} will find the last OMI\_SP\_yyyymmdd.mat file produced, the last albedo file retrieved, and run the MATLAB function necessary to import all satellite data between those two dates into a format MATLAB can work with. \path{run_behr_main.sh} runs the main BEHR algorithm, and \path{run_publishing.m} converts the .mat files into .hdf and .txt files and places them in the appropriate folder for the website to access them.
+			Finally, \path{run_read_main.sh} will find the last OMI\_SP\_yyyymmdd.mat file produced, the last albedo file retrieved, and run the MATLAB function necessary to import all satellite data between those two dates into a format MATLAB can work with. \path{run_behr_main.sh} runs the main BEHR algorithm, and \path{run_publishing.m} converts the .mat files into .hdf and .txt files and places them in the appropriate folder for the website to access them.
 			
 		\end{itemize}
 		
@@ -372,13 +372,13 @@ git clone ssh://RCCohenLab@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo.
 \section{Program structure}
 	This section describes the key files of code in BEHR to make it run.  Instructions for running it contained within this section are predicated on the idea that you're running BEHR on a desktop computer.  For instructions on running it on a cluster, see \S\ref{sec:Cluster}.
 	
-	The general program flow is outlined in Fig. \ref{fig:curr-pgrm-flow}. The first step is reading in the OMNO2 and ancillary data using \lstinline$read_omno2_v_aug2012.m$. The result of this function is taken by \lstinline$BEHR_main.m$ which computes and applies the BEHR AMF, as well as grids the data to a $0.05^\circ \times 0.05^\circ$ grid. Finally the results can be published to the website using \lstinline$BEHR_publishing_v2.m$.
+	The general program flow is outlined in Fig. \ref{fig:curr-pgrm-flow}. The first step is reading in the OMNO2 and ancillary data using \lstinline$read_main.m$. The result of this function is taken by \lstinline$BEHR_main.m$ which computes and applies the BEHR AMF, as well as grids the data to a $0.05^\circ \times 0.05^\circ$ grid. Finally the results can be published to the website using \lstinline$BEHR_publishing_v2.m$.
 
 	\begin{figure}
 	\begin{tikzpicture}[node distance=0.5cm and 1cm,every text node part/.style={align=center}]
 	% Reading data %
 	\node (start) [startstop] {\textbf{Start}};
-	\node (read) [process, below=of start, yshift=-2cm] {\texttt{read\_omno2\_v\_aug2012.m}};
+	\node (read) [process, below=of start, yshift=-2cm] {\texttt{read\_main.m}};
 	\node (space1l) [spacer, left=of read] {};
 	\node (space1ul) [spacer, above=of space1l] {};
 	\node (space1r) [spacer, right=of read] {};
@@ -413,15 +413,14 @@ git clone ssh://RCCohenLab@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo.
 	\node (wrfbehr) [io, below=of runwrf] {WRF\_BEHR\_monthly*.nc};
 	
 	
-	\node (grid) [subprocess, below=of behrmain,yshift=-1cm] {\texttt{add2grid\_BEHR.m} \\ \texttt{hdf\_quadrangle\_BEHR.m}};
+	\node (grid) [subprocess, below=of behrmain,yshift=-1cm] {\texttt{psm\_wrapper.m} \\ \texttt{PSM\_Main.py}};
 	\node (omibehr) [io, below=of grid] {OMI\_BEHR\_yyyymmdd.mat};
 	
 	% Publishing %
-	\node (publish) [process, below=of omibehr] {\texttt{BEHR\_publishing\_v2.m}};
+	\node (publish) [process, below=of omibehr] {\texttt{BEHR\_publishing\_main.m}};
 	\node (space3) [coordinate, below=of publish] {};
-	\node (behrhdf) [io, below=of space3] {OMI\_BEHR\_yyyymmdd.hdf \\ native HDF5};
-	\node (behrtxt) [io, left=of behrhdf] {OMI\_BEHR\_yyyymmdd.txt \\ native TXT};
-	\node (behrgridded) [io, right=of behrhdf] {OMI\_BEHR\_yyyymmdd.hdf \\ gridded HDF5};
+	\node (behrhdf) [io, below=of space3, xshift=-2cm] {OMI\_BEHR\_yyyymmdd.hdf \\ native HDF5};
+	\node (behrgridded) [io, below=of space3, xshift=2cm] {OMI\_BEHR\_yyyymmdd.hdf \\ gridded HDF5};
 	
 
 	\draw [arrow] (start) -- (read);
@@ -455,8 +454,8 @@ git clone ssh://RCCohenLab@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo.
 	\draw [arrow] (grid) -- (omibehr);
 	\draw [arrow] (omibehr) -- (publish);
 	
-	\draw [arrow] (publish) -- (behrhdf);
-	\draw [arrow] (space3) -| (behrtxt);
+	\draw (publish) -- (space3);
+	\draw [arrow] (space3) -| (behrhdf);
 	\draw [arrow] (space3) -| (behrgridded);
 	
 	\end{tikzpicture}
@@ -478,7 +477,7 @@ git clone ssh://RCCohenLab@128.32.208.13/volume1/share-sat/SAT/BEHR/BEHRGitRepo.
 		 \item It calculates the BRDF albedo from the MCD43C1 BRDF parameters for each pixel.
 		 \item It averages the GLOBE terrain data to each OMI pixel, converting from altitude to terrain pressure.
 		\end{enumerate}
-Each of these operations is carried out by a separate read function (Fig. \ref{fig:curr-pgrm-flow}) so \lstinline$read_omno2_v_aug_2012.m$ is primarily a driver function that iterates over the necessary data.		
+Each of these operations is carried out by a separate read function (Fig. \ref{fig:curr-pgrm-flow}) so \lstinline$read_main.m$ is primarily a driver function that iterates over the necessary data.		
 		
 	For each day that this function processes, a \texttt{.mat} file is saved with a single variable, \texttt{Data}.  This variable is a data structure, in which each OMI swath for that day is stored under a different top-level index (i.e., \texttt{Data(1)} refers to the first swath of that day, and \texttt{Data(2)} the second, etc.).  These data structures contain the data read from the OMNO2, MODIS, and GLOBE files as matrix fields.  Each element of the matrix corresponds to an OMI pixel.
 	
@@ -519,11 +518,11 @@ Each of these operations is carried out by a separate read function (Fig. \ref{f
 	\subsubsection{Standard unit tests---\lstinline$unit_test_driver.m$}
 	\lstinline$unit_test_driver.m$ is the primary function that should be run when a new version of the code is ready.  When run, this code will issue interactive prompts that allow you to determine its operation.
 	\begin{enumerate}
-	\item This code is capable of executing \lstinline$read_omno2_v_aug2012.m$ and \lstinline$BEHR_main.m$ itself for a few specified test days which are chosen to test the code for a number of standard days, plus days which have caused issues in the past.  The generated files are placed in a directory \path{Production Tests/UnitTestData/ProducedYYYYMMDD} where YYYYMMDD is the year, month, and day that the test is run on. It will also produce a file, \path{GitReport.txt} which contains information about the state of the code at the time the files were produced.
+	\item This code is capable of executing \lstinline$read_main.m$ and \lstinline$BEHR_main.m$ itself for a few specified test days which are chosen to test the code for a number of standard days, plus days which have caused issues in the past.  The generated files are placed in a directory \path{Production Tests/UnitTestData/ProducedYYYYMMDD} where YYYYMMDD is the year, month, and day that the test is run on. It will also produce a file, \path{GitReport.txt} which contains information about the state of the code at the time the files were produced.
 	
 	\item Whether or not you generate the data files, it will next run \path{reading_priori_tests.m} and \path{behr_priori_tests.m}. These are not tests of the \emph{a priori} profiles necessarily; just tests that can be run without knowledge of any previous versions of BEHR. For example, one of the things that \path{reading_priori_tests.m} checks is that the corner coordinates of the pixels make sense, that they contain the pixel center. Generally, as you find bugs in the code \emph{or} if there's something that you're concerned about that comes up as you're coding, see if there's a test that can go here to ensure that the bug does not recur.
 	
-	\item Finally, it runs \path{behr_unit_test.m} on the Data structures produced by \path{read_omno2_v_aug2012.m} and/or \path{BEHR_main.m}. It checks the structures to determine if the same fields are present and have the same values in both old and new versions. Since you will most likely \emph{expect} some differences between versions, this will probably result in a ``failed'' unit test. \emph{However}, the important thing is to make sure that only differences that you are expecting occur.
+	\item Finally, it runs \path{behr_unit_test.m} on the Data structures produced by \path{read_main.m} and/or \path{BEHR_main.m}. It checks the structures to determine if the same fields are present and have the same values in both old and new versions. Since you will most likely \emph{expect} some differences between versions, this will probably result in a ``failed'' unit test. \emph{However}, the important thing is to make sure that only differences that you are expecting occur.
 	\end{enumerate}
 	
 	\subsubsection{Detailed data tests---\lstinline$behr_prod_test.m$}
@@ -633,7 +632,7 @@ xx = lon > lon_lim(1) & lon < lon_lim(2);
 	\item Move large but logically connected sections of code out of large, monolithic files into separate function files, or at least a sub-function within the same file.
 	\end{enumerate} 
 	
-	Both of these can be seen in the changes to the main reading code between version 2.1C (\lstinline$read_omno2_v_aug2012$) and v3.0A (\lstinline$read_behr_data$). In version 2.1C, each variable read in had a copied chunk of HDF reading code. This became very difficult to maintain. In v3.0A, this was replaced with the \lstinline$read_omi_sp$ function. This loses some flexibility, but ensures the same behavior is applied to all data read in.
+	Both of these can be seen in the changes to the main reading code between version 2.1C (\lstinline$read_omno2_v_aug2012$) and v3.0A (\lstinline$read_main$). In version 2.1C, each variable read in had a copied chunk of HDF reading code. This became very difficult to maintain. In v3.0A, this was replaced with the \lstinline$read_omi_sp$ function. This loses some flexibility, but ensures the same behavior is applied to all data read in.
 	
 	Likewise, in v2.1C, the blocks of code for reading in MODIS cloud, MODIS albedo, and GLOBE terrain elevation data were all contained directly in the main reading function. By moving these to their own separate function, it is easier to obtain a high-level overview of the main reading function by seeing that it calls, in turn, functions that read in SP data, MODIS cloud data, etc. The details are then contained in each of these functions.
 	
@@ -1057,7 +1056,7 @@ If successful, you should be in a usual ftp prompt in the www directory.
 0 1 * * 6 /home/josh/SatDL/get_modis.sh
 0 4 * * 7 /home/josh/SatDL/get_omi.sh OMNO2
 0 4 * * 5 /home/josh/SatDL/get_omi.sh OMPIXCOR
-0 1 * * 1 /home/josh/SatDL/run_read_omno2.sh
+0 1 * * 1 /home/josh/SatDL/run_read_main.sh
 0 1 * * 2 /home/josh/SatDL/run_behr_main.sh
 0 1 * * 3 /home/josh/SatDL/run_publishing.sh
 	\end{lstlisting}

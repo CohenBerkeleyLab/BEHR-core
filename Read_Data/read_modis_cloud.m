@@ -42,6 +42,9 @@ function [ data ] = read_modis_cloud( modis_directory, date_in, data, omi_swath_
 %       function. Defaults to 0 (i.e. no debugging messages printed).
 %       Higher numbers increase the verbosity.
 %
+%       'AllowNoFile': boolean (default is false); if true, will not error
+%       if no MODIS cloud files are found.
+%
 %       'LoncornField': indicates which field describes the corner points
 %       of the pixels. This field must be 3D and have size == 
 %       [4, size(DATA.Latitude)]. Defaults to 'FoV75CornerLongitude'.
@@ -56,14 +59,18 @@ function [ data ] = read_modis_cloud( modis_directory, date_in, data, omi_swath_
 E = JLLErrors;
 p = inputParser;
 p.addParameter('DEBUG_LEVEL', 0);
+p.addParameter('AllowNoFile', false);
 p.addParameter('LoncornField', 'FoV75CornerLongitude');
 p.addParameter('LatcornField', 'FoV75CornerLatitude');
 p.parse(varargin{:});
 pout = p.Results;
 
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
+allow_no_file = pout.AllowNoFile;
 loncorn_field = pout.LoncornField;
 latcorn_field = pout.LatcornField;
+
+% Validation - positional inputs %
 
 if ~ischar(modis_directory)
     E.badinput('MODIS_DIRECTORY must be a string')
@@ -105,20 +112,26 @@ if ~isnumeric(latlim) || numel(latlim) ~= 2 || latlim(1) > latlim(2)
     E.badinput('LATLIM must be a two element numeric vector with the second element greater than the first')
 end
 
+% Validation - Parameters %
+
 if ~isnumeric(DEBUG_LEVEL) || ~isscalar(DEBUG_LEVEL)
     E.badinput('The parameter DEBUG_LEVEL must be a scalar number')
 end
 
+if ~islogical(allow_no_file) || ~isscalar(allow_no_file)
+    E.badinput('The parameter AllowNoFile must be a scalar logical value');
+end
+
 if ~ischar(loncorn_field) 
-    E.badinput('The parameter LONCORN_FIELD must be a string')
+    E.badinput('The parameter LonconrField must be a string')
 elseif ~isfield(data, loncorn_field)
-    E.badinput('The LONCORN_FIELD "%s" is not in DATA', loncorn_field)
+    E.badinput('The LoncornField "%s" is not in DATA', loncorn_field)
 end
 
 if ~ischar(latcorn_field) 
-    E.badinput('The parameter LATCORN_FIELD must be a string')
+    E.badinput('The parameter LatcornField must be a string')
 elseif ~isfield(data, latcorn_field)
-    E.badinput('The LATCORN_FIELD "%s" is not in DATA', latcorn_field)
+    E.badinput('The LatcornField "%s" is not in DATA', latcorn_field)
 end
 
 % If you ever read more data fields from the Data structure, or save more
@@ -160,8 +173,18 @@ modis_files = dir(fullfile(modis_directory, year_str, modis_filepattern));
 
 % Error if no MODIS cloud files found: this will prevent publishing data
 % without MODIS cloud information.
-if isempty(modis_files) && onCluster_local
-    E.filenotfound(sprintf('MODIS cloud for %s',datestr(date_in)));
+if isempty(modis_files)
+    if allow_no_file
+        % If no MODIS cloud files found, then fill the MODISCloud field
+        % with NaNs (representing no data)
+        data.MODISCloud = nan(size(data.Latitude));
+        return
+    else
+        % In most cases though, if there's no files, we shouldn't be
+        % retrieving this day yet (not until the cloud files are available)
+        % so error.
+        E.filenotfound(sprintf('MODIS cloud for %s',datestr(date_in)));
+    end
 end
 
 % Where in the filename the time for that granule is given. Assumes file
@@ -216,9 +239,9 @@ for a=1:length(modis_files);
     end
 end
 
-%If there is no MODIS cloud data for this swath, fill the output with the
-%fill value used for BEHR fields Otherwise, find all the MODIS cloud pixels
-%in each OMI pixel and average them together.
+%Find all the MODIS cloud pixels in each OMI pixel and average them
+%together. Pixels that have no MODIS clouds available (towards the edge of
+%the swath) should have a NaN.
 data.MODISCloud = nan(size(data.Latitude));
 if ~isempty(all_cldfrac)
     loncorn = data.(loncorn_field);

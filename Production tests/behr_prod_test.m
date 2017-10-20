@@ -1,4 +1,4 @@
-function [ indiv_stats, overall_stats  ] = behr_prod_test( new_dir, new_pattern, old_dir, old_pattern  )
+function [ indiv_stats, overall_stats  ] = behr_prod_test( varargin  )
 %[ INDIV_STATS, OVERALL_STATS] = BEHR_PROD_TEST() 
 %   Tests a sample of OMI_BEHR files for differences. Whenever making a new
 %   version of BEHR, it's good to do some basic checking to make sure that
@@ -10,31 +10,90 @@ function [ indiv_stats, overall_stats  ] = behr_prod_test( new_dir, new_pattern,
 %[ INDIV_STATS, OVERALL_STATS] = BEHR_PROD_TEST( NEW_DIR, NEW_PATTERN, OLD_DIR, OLD_PATTERN )
 %   This version looks for new files matching the glob pattern NEW_PATTERN
 %   in NEW_DIR and old files in OLD_DIR matching OLD_PATTERN.
+%
+% Additional parameters:
+%
+%   'nfiles' - how many files to load and test. Default is 100.
+%
+%   'checkvar' - which variable in .mat files to test. Must be the string
+%   'Data' or 'OMI'. Default is 'Data', but has no effect if not loading
+%   .mat files.
+%
+%   'fields' - a cell array of string indicating which fields in the files
+%   to check. Default is {'BEHRColumnAmountNO2Trop', 'BEHRAMFTrop',
+%   'BEHRColumnAmountNO2TropVisOnly', 'BEHRAMFTropVisOnly'}.
+%
+%   'start', 'end' - start and end dates of the period to draw the data
+%   from. Must be either a date number or a date string that Matlab
+%   recognizes automatically. Default is 2005-01-01 to today.
 
 % Enter the directory and file name pattern for the new and old versions.
 % The pattern must be a string that, when used in dir(), uniquely returns
 % only BEHR files of the desired version.
 
 %%%% USER OPTIONS %%%%
-E = JLLErrors;
-if nargin >= 1 && nargin < 4
-    E.badinput('Must include all inputs (NEW_DIR, NEW_PATTERN, OLD_DIR, OLD_PATTERN) or none');
-elseif nargin < 1
-    new_dir = '/Volumes/share-sat/SAT/BEHR/WEBSITE/webData/behr_hdf';
-    new_pattern = 'OMI_BEHR_*.hdf';
-    
-    old_dir = '/Volumes/share-sat/SAT/BEHR/WEBSITE/webData/behr_txt';
-    old_pattern = 'OMI_BEHR_*.txt';
-end
-n_files = 5;%100;
+p = inputParser;
+p.addOptional('new_dir', '.', @ischar);
+p.addOptional('new_pattern', 'OMI_BEHR*', @ischar);
+p.addOptional('old_dir', behr_paths.behr_mat_dir, @ischar);
+p.addOptional('old_pattern', 'OMI_BEHR*', @ischar);
 
-checkvar = 'Data';
-fields_to_check = {'BEHRColumnAmountNO2Trop','BEHRAMFTrop','BEHRColumnAmountNO2TropVisOnly','BEHRAMFTropVisOnly','CloudRadianceFraction'};
+p.addParameter('nfiles', 100);
+p.addParameter('checkvar', 'Data');
+p.addParameter('fields', {'BEHRColumnAmountNO2Trop','BEHRAMFTrop','BEHRColumnAmountNO2TropVisOnly','BEHRAMFTropVisOnly'});
+p.addParameter('start', '2005-01-01');
+p.addParameter('end', today);
+
+p.parse(varargin{:});
+pout = p.Results;
+
+new_dir = pout.new_dir;
+new_pattern = pout.new_pattern;
+old_dir = pout.old_dir;
+old_pattern = pout.old_pattern;
+
+n_files = pout.nfiles;
+checkvar = pout.checkvar;
+fields_to_check = pout.fields;
+start_date = pout.start;
+end_date = pout.end;
+
+% Validation
+if ~exist(new_dir, 'dir')
+    E.badinput('new_dir "%s" does not exist', new_dir);
+elseif ~exist(old_dir, 'dir')
+    E.badinput('old_dir "%s" does not exist', old_dir);
+end
+
+if ~ischar(new_pattern)
+    E.badinput('NEW_PATTERN must be a string')
+elseif ~ischar(old_pattern)
+    E.badinput('OLD_PATTERN must be a string')
+end
+
+if ~isnumeric(n_files) || ~isscalar(n_files) || n_files < 1 || mod(n_files, 1) ~= 0
+    E.badinput('The value for "nfiles" must be a scalar, positive, whole number')
+end
+
+if ~ismember(checkvar, {'Data', 'OMI'})
+    E.badinput('The value for "checkvar" must be the string "Data" or "OMI"');
+end
+
+if ~iscellstr(fields_to_check)
+    E.badinput('The value for "fields" must be a cell array of strings');
+end
+
+validate_date(start_date);
+validate_date(end_date);
+    
+
 %%%% END USER OPTIONS %%%%
 
 
 F_new = dir(fullfile(new_dir,new_pattern));
+F_new = cut_down_by_date(F_new, start_date, end_date);
 F_old = dir(fullfile(old_dir,old_pattern));
+F_old = cut_down_by_date(F_old, start_date, end_date);
 n_files = min([n_files, numel(F_new), numel(F_old)]);
 
 [~,~,fileext_new] = fileparts(F_new(1).name);
@@ -54,8 +113,10 @@ if mat_hdf_comp_bool;
     fills_struct = struct('num_new_nans_or_fills', 0, 'values_that_became_nans_or_fills', [],...
         'num_old_nans_or_fills', 0, 'values_that_replaced_nans_or_fills', []);
 else
-    fills_struct = struct('num_new_nans', 0, 'values_that_became_nans', [], 'num_new_fills', 0, 'values_that_became_fills', [],...
-        'num_old_nans', 0, 'values_that_replaced_nans', [], 'num_old_fills', [], 'values_that_replaced_fills', []);
+    fills_struct = struct('num_new_nans', 0, 'values_that_became_nans', [], 'lon_for_became_nans', [], 'lat_for_became_nans', [],...
+        'num_new_fills', 0, 'values_that_became_fills', [], 'lon_for_became_fills', [], 'lat_for_became_fills', [],...
+        'num_old_nans', 0, 'values_that_replaced_nans', [], 'lon_for_replaced_nans', [],  'lat_for_replaced_nans', [],...
+        'num_old_fills', [], 'values_that_replaced_fills', [], 'lon_for_replaced_fills', [], 'lat_for_replaced_fills', []);
 end
 %substruct = struct('date','','num_dif_vals',0,'num_new_nans',0,'values_that_became_nans',[],'num_new_fills',0,'values_that_became_fills',[],...
 %    'num_old_nans',0,'values_that_replaced_nans',[],'num_old_fills',0,'values_that_replaced_fills',[],'differences',[],'percent_differences',[],...
@@ -121,31 +182,43 @@ while n < n_files
             xx_newnans = isnan(data_new(:)) & ~isnan(data_old(:));
             num_new_nans = sum(xx_newnans);
             values_now_nans = data_old(xx_newnans);
+            lon_for_now_nans = lon(xx_newnans);
+            lat_for_now_nans = lat(xx_newnans);
             if isnan(fill_vals(a,1))
                 % Cannot test for fill value of NaN using == b/c nan == nan
                 % returns false.
                 is_new_fill = isnan(data_new(:));
                 num_new_fills = num_new_nans;
                 values_now_fills = values_now_nans;
+                lon_for_now_fills = lon_for_now_nans;
+                lat_for_now_fills = lat_for_now_nans;
             else
                 is_new_fill = data_new(:) == fill_vals(a,1);
                 xx_newfills = data_new(:) == fill_vals(a,1) & data_old(:) ~= fill_vals(a,2);
                 num_new_fills = sum(xx_newfills);
                 values_now_fills = data_old(xx_newfills);
+                lon_for_now_fills = lon(xx_newfills);
+                lat_for_now_nans = lat(xx_newfills);
             end
             
             xx_oldnans = ~isnan(data_new(:)) & isnan(data_old(:));
             num_old_nans = sum(xx_oldnans);
             values_replaced_nans = data_new(xx_oldnans);
+            lon_for_rep_nans = lon(xx_oldnans);
+            lat_for_rep_nans = lat(xx_oldnans);
             if isnan(fill_vals(a,2))
                 is_old_fill = isnan(data_old(:));
                 num_old_fills = num_old_nans;
                 values_replaced_fills = values_replaced_nans;
+                lon_for_rep_fills = lon_for_rep_nans;
+                lat_for_rep_fills = lat_for_rep_nans;
             else
                 is_old_fill = data_old(:) == fill_vals(a,2);
                 xx_oldfills = data_new(:) ~= fill_vals(a,1) & data_old(:) == fill_vals(a,2);
                 num_old_fills = sum(xx_oldfills);
                 values_replaced_fills = data_new(xx_oldfills);
+                lon_for_rep_fills = lon(xx_oldfills);
+                lat_for_rep_fills = lat(xx_oldfills);
             end
             
             xx_good = ~(is_new_fill | is_old_fill);
@@ -195,12 +268,23 @@ while n < n_files
         else
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.num_new_nans = num_new_nans;
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.values_that_became_nans = values_now_nans;
+            indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.lon_for_became_nans = lon_for_now_nans;
+            indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.lat_for_became_nans = lat_for_now_nans;
+            
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.num_new_fills = num_new_fills;
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.values_that_became_fills = values_now_fills;
+            indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.lon_for_became_fills = lon_for_now_fills;
+            indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.lat_for_became_fills = lat_for_now_fills;
+            
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.num_old_nans = num_old_nans;
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.values_that_replaced_nans = values_replaced_nans;
+            indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.lon_for_replaced_nans = lon_for_rep_nans;
+            indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.lat_for_replaced_nans = lat_for_rep_nans;
+            
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.num_old_fills = num_old_fills;
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.values_that_replaced_fills = values_replaced_fills;
+            indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.lon_for_replaced_fills = lon_for_rep_fills;
+            indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.lat_for_replaced_fills = lat_for_rep_fills;
         end
         
         if isequal(size(xx_good), size(lon))
@@ -225,12 +309,23 @@ while n < n_files
         else
             overall_stats.(fields_to_check{a}).fill_and_nan_changes.num_new_nans = overall_stats.(fields_to_check{a}).fill_and_nan_changes.num_new_nans + num_new_nans;
             overall_stats.(fields_to_check{a}).fill_and_nan_changes.values_that_became_nans = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.values_that_became_nans, values_now_nans);
+            overall_stats.(fields_to_check{a}).fill_and_nan_changes.lon_for_became_nans = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.lon_for_became_nans, lon_for_now_nans);
+            overall_stats.(fields_to_check{a}).fill_and_nan_changes.lat_for_became_nans = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.lat_for_became_nans, lat_for_now_nans);
+            
             overall_stats.(fields_to_check{a}).fill_and_nan_changes.num_new_fills = overall_stats.(fields_to_check{a}).fill_and_nan_changes.num_new_fills + num_new_fills;
             overall_stats.(fields_to_check{a}).fill_and_nan_changes.values_that_became_fills = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.values_that_became_fills, values_now_fills);
+            overall_stats.(fields_to_check{a}).fill_and_nan_changes.lon_for_became_fills = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.lon_for_became_fills, lon_for_now_fills);
+            overall_stats.(fields_to_check{a}).fill_and_nan_changes.lat_for_became_fills = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.lat_for_became_fills, lat_for_now_fills);
+            
             overall_stats.(fields_to_check{a}).fill_and_nan_changes.num_old_nans = overall_stats.(fields_to_check{a}).fill_and_nan_changes.num_old_nans + num_old_nans;
             overall_stats.(fields_to_check{a}).fill_and_nan_changes.values_that_replaced_nans = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.values_that_replaced_nans, values_replaced_nans);
+            overall_stats.(fields_to_check{a}).fill_and_nan_changes.lon_for_replaced_nans = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.lon_for_replaced_nans, lon_for_rep_nans);
+            overall_stats.(fields_to_check{a}).fill_and_nan_changes.lat_for_replaced_nans = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.lat_for_replaced_nans, lat_for_rep_nans);
+            
             overall_stats.(fields_to_check{a}).fill_and_nan_changes.num_old_fills = overall_stats.(fields_to_check{a}).fill_and_nan_changes.num_old_fills + num_old_fills;
             overall_stats.(fields_to_check{a}).fill_and_nan_changes.values_that_replaced_fills =  cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.values_that_replaced_fills, values_replaced_fills);
+            overall_stats.(fields_to_check{a}).fill_and_nan_changes.lon_for_replaced_fills = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.lon_for_replaced_fills, lon_for_rep_fills);
+            overall_stats.(fields_to_check{a}).fill_and_nan_changes.lat_for_replaced_fills = cat(1, overall_stats.(fields_to_check{a}).fill_and_nan_changes.lat_for_replaced_fills, lat_for_rep_fills);
         end
     end
     
@@ -282,6 +377,14 @@ for a=1:numel(F)
     [s,e] = regexp(F(a).name,'\d\d\d\d\d\d\d\d');
     dnums(a) = datenum(F(a).name(s:e),'yyyymmdd');
 end
+end
+
+function F = cut_down_by_date(F, start_date, end_date)
+sdnum = datenum(start_date);
+ednum = datenum(end_date);
+fdates = get_file_datenums(F);
+xx = fdates >= sdnum & fdates <= ednum;
+F = F(xx);
 end
 
 function [Data, fill_vals] = load_data(filename, fields, varname)

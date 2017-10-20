@@ -2,7 +2,7 @@ function BEHR_main(varargin)
 % BEHR_MAIN: primary BEHR algorithm
 %
 %   This function is the primary BEHR algorithm, it takes the OMI, MODIS,
-%   and GLOBE data read in by read_omno2_v_aug2012.m and uses it to
+%   and GLOBE data read in by read_main.m and uses it to
 %   recalculated the BEHR AMFs and VCDs. There are a number of input
 %   parameters that control it's operation; the defaults are set such that
 %   it should run if you simply execute this script, but in most cases you
@@ -17,12 +17,12 @@ function BEHR_main(varargin)
 %       starting date. If not given, defaults to today.
 %
 %       'behr_mat_dir' - the directory that the final .mat file should be
-%       saved in. If not given, it defaults to the path stored in
-%       behr_paths.m
+%       saved in. If not given, it defaults to
+%       fullfile(behr_paths.behr_mat_dir, lower(region), lower(prof_mode)).
 %
 %       'sp_mat_dir' - the directory that the .mat files resulting from
-%       read_omno2_v_aug2012.m are stored in. If not given, it defaults to
-%       the path stored in behr_paths.m
+%       read_main.m are stored in. If not given, it defaults to
+%       fullfile(behr_paths.sp_mat_dir, lower(region))
 %
 %       'amf_tools_path' - the directory that contains the files
 %       nmcTmpYr.txt and damf.txt. If not given, defaults to the path
@@ -71,10 +71,11 @@ E = JLLErrors;
 p = inputParser;
 p.addParameter('start', '2005-01-01');
 p.addParameter('end', today);
-p.addParameter('behr_mat_dir', behr_paths.behr_mat_dir);
-p.addParameter('sp_mat_dir', behr_paths.sp_mat_dir);
+p.addParameter('behr_mat_dir', '');
+p.addParameter('sp_mat_dir', '');
 p.addParameter('amf_tools_path', behr_paths.amf_tools_dir);
 p.addParameter('no2_profile_path', '');
+p.addParameter('region', 'us');
 p.addParameter('overwrite', false);
 p.addParameter('profile_mode', 'monthly');
 p.addParameter('use_psm_gridding', false);
@@ -89,13 +90,14 @@ behr_mat_dir = pout.behr_mat_dir;
 sp_mat_dir = pout.sp_mat_dir;
 amf_tools_path = pout.amf_tools_path;
 no2_profile_path = pout.no2_profile_path;
+region = pout.region;
 overwrite = pout.overwrite;
 prof_mode = pout.profile_mode;
 use_psm = pout.use_psm_gridding;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 %%% Validation %%%
-allowed_prof_modes = {'hourly','daily','monthly','hybrid'};
+allowed_prof_modes = {'daily','monthly'};
 
 date_start = validate_date(date_start);
 date_end = validate_date(date_end);
@@ -114,6 +116,18 @@ elseif ~ismember(prof_mode,allowed_prof_modes)
    	E.badinput('prof_mode (if given) must be one of %s', strjoin(allowed_prof_modes,', '));
 elseif ~isscalar(use_psm) || (~islogical(use_psm) && ~isnumeric(use_psm))
     E.badinput('use_psm_gridding must be a scalar logical or number')
+end
+
+% If using the default SP file directory, look in the right region
+% subfolder.
+if isempty(sp_mat_dir)
+    sp_mat_dir = behr_paths.SPMatSubdir(region);
+end
+
+% Set behr_mat_dir to the daily or monthly directory, with region
+% subdirectory, if using the default path
+if isempty(behr_mat_dir)
+    behr_mat_dir = behr_paths.BEHRMatSubdir(region, prof_mode);
 end
 
 % Verify the paths integrity.
@@ -198,11 +212,13 @@ end
 core_githead = git_head_hash(behr_paths.behr_core);
 behrutils_githead = git_head_hash(behr_paths.behr_utils);
 genutils_githead = git_head_hash(behr_paths.utils);
+psm_githead = git_head_hash(behr_paths.psm_dir);
+imatpy_githead = git_head_hash(behr_paths.python_interface);
 
 datenums = datenum(date_start):datenum(date_end);
-%parfor(j=1:length(datenums), n_workers)
-for j=1:length(datenums)
-    savename = behr_filename(datenums(j));
+parfor(j=1:length(datenums), n_workers)
+%for j=1:length(datenums)
+    savename = behr_filename(datenums(j), prof_mode, region);
     
     if exist(fullfile(behr_mat_dir, savename),'file') && ~overwrite
         fprintf('%s already exists, skipping\n', savename);
@@ -213,7 +229,7 @@ for j=1:length(datenums)
     if DEBUG_LEVEL > 0
         fprintf('Processing data for %s\n', datestr(datenums(j)));
     end
-    sp_mat_name = sp_savename(datenums(j));
+    sp_mat_name = sp_savename(datenums(j), region);
     
     if DEBUG_LEVEL > 1
         fprintf('Looking for SP file %s ...', fullfile(sp_mat_dir,sp_mat_name));
@@ -228,15 +244,20 @@ for j=1:length(datenums)
     S=load(fullfile(sp_mat_dir,sp_mat_name));
     Data=S.Data;
     
+    % Double check that the loaded SP file is for the same region as we're
+    % trying to process
+    if ~strcmpi(Data(1).BEHRRegion, region)
+        E.callError('behr_region', 'Somehow I loaded a file with a different region specified in Data.BEHRRegion (%s) than I am trying to process (%s)', Data(1).BEHRRegion, region)
+    end
+    
     %%%%%%%%%%%%%%%%%%%%%%
     % CALCULATE OUR AMFS %
     %%%%%%%%%%%%%%%%%%%%%%
     
     for d=1:length(Data);
-        % Data is initialized in read_omno2_v_aug2012 with a single 0
-        % in the Longitude field.  Since points outside the lat/lons of
-        % interest are removed completely, we should also check if all
-        % points are gone.
+        % Data is initialized in read_main with a single 0 in the Longitude
+        % field.  Since points outside the lat/lons of interest are removed
+        % completely, we should also check if all points are gone.
         if numel(Data(d).Longitude)==1 || isempty(Data(d).Longitude);
             if DEBUG_LEVEL > 1; fprintf('  Note: Data(%u) is empty\n',d); end
             continue %JLL 17 Mar 2014: Skip doing anything if there's really no information in this data
@@ -247,8 +268,6 @@ for j=1:length(datenums)
         %JLL 17 Mar 2014: Load some of the variables from 'Data' to
         %make referencing them less cumbersome. Also convert some
         %to column vectors to work with rNmcTmp2 and rDamf2
-        lon = Data(d).Longitude;
-        lat = Data(d).Latitude;
         loncorns = Data(d).FoV75CornerLongitude;
         latcorns = Data(d).FoV75CornerLatitude;
         time = Data(d).Time;       
@@ -256,33 +275,26 @@ for j=1:length(datenums)
         sza = Data(d).SolarZenithAngle;
         vza = Data(d).ViewingZenithAngle;
         phi = Data(d).RelativeAzimuthAngle;
-        
-        mon = month(datenums(j)) * ones(size(Data(d).Latitude));
-        pressure = behr_pres_levels();
-        if DEBUG_LEVEL > 1; fprintf('   Interpolating temperature data\n'); end
-        temperature = rNmcTmp2(fileTmp, pressure, lon, lat, mon); %JLL 17 Mar 2014: Interpolates temperature values to the pressures and lat/lon coordinates desired
-        
         surfPres = Data(d).GLOBETerpres;
         albedo = Data(d).MODISAlbedo;
+        cldFrac = Data(d).CloudFraction;
+        cldRadFrac = Data(d).CloudRadianceFraction;
+        
+        pressure = behr_pres_levels();
         
         surfPres(surfPres>=1013)=1013; %JLL 17 Mar 2014: Clamp surface pressure to sea level or less.
         cldPres = Data(d).CloudPressure;
         cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
         
+        if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
+        [no2Profile, temperature, wrf_profile_file] = rProfile_WRF(datenums(j), prof_mode, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+        bad_profs = squeeze(all(isnan(no2Profile),1));
+        
         if DEBUG_LEVEL > 1; fprintf('   Calculating clear and cloudy AMFs\n'); end
         dAmfClr = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres); %JLL 18 Mar 2014: Interpolate the values in dAmf to the albedo and other conditions input
         cloudalbedo=0.8*ones(size(Data(d).CloudFraction)); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
         dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
-        
-        if DEBUG_LEVEL > 1; fprintf('   Reading NO2 profiles\n'); end
-        [no2Profile, wrf_profile_file] = rProfile_WRF(datenums(j), prof_mode, loncorns, latcorns, time, surfPres, pressure); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
-       
-        bad_profs = squeeze(all(isnan(no2Profile),1));
- 
-        cldFrac = Data(d).CloudFraction;
-        cldRadFrac = Data(d).CloudRadianceFraction;
-        
-        
+
         if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
         [amf, amfVis, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, cldPres, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
         amf(bad_profs)=NaN;
@@ -302,9 +314,9 @@ for j=1:length(datenums)
         Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
         Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
         Data(d).BEHRWRFFile = wrf_profile_file;
+        Data(d).BEHRProfileMode = prof_mode;
         Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
-        Data(d).BEHRQualityFlags = behr_quality_flags(Data(d).BEHRAMFTrop, Data(d).BEHRAMFTropVisOnly,...
-        Data(d).VcdQualityFlags, Data(d).XTrackQualityFlags, Data(d).AlbedoOceanFlag); % the false value for the MODIS flags is only temporary until I get the ocean model in.
+        Data(d).BEHRQualityFlags = behr_quality_flags(Data(d)); 
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -327,6 +339,8 @@ for j=1:length(datenums)
         Data(z).GitHead_Core_Main = core_githead;
         Data(z).GitHead_BEHRUtils_Main = behrutils_githead;
         Data(z).GitHead_GenUtils_Main = genutils_githead;
+        Data(z).GitHead_PSM_Main = psm_githead;
+        Data(z).GitHead_MatPyInt_Main = imatpy_githead;
     end
     
     
@@ -340,7 +354,6 @@ for j=1:length(datenums)
     % SAVE FILE %
     %%%%%%%%%%%%%
     
-    savename = behr_filename(datenums(j));
     if DEBUG_LEVEL > 0; disp(['   Saving data as',fullfile(behr_mat_dir,savename)]); end
     saveData(fullfile(behr_mat_dir,savename),Data,OMI)
     

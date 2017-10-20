@@ -1,6 +1,6 @@
-function [ data ] = read_modis_albedo( modis_directory, coart_lut, date_in, data, varargin )
-%READ_MODIS_ALBEDO Reads MODIS MCD43C1 BRDF albedo 
-%   DATA = READ_MODIS_ALBEDO( MODIS_DIR, COART_LUT, DATE_IN, DATA ) Reads
+function [ band3data ] = read_modis_albedo( modis_directory, date_in, lonlim, latlim, varargin )
+%READ_MODIS_ALBEDO Reads MODIS MCD43C1 BRDF albedo
+%   DATA = READ_MODIS_ALBEDO( MODIS_DIR, COART_LUT, OCEAN_MASK, DATE_IN, DATA ) Reads
 %   MODIS MCD43C1 data from MODIS_DIR (which must be the path to the root
 %   MCD43C1 directory, containing each year in a subfolder). It identifies
 %   the proper file to read for the DATE_IN (a date string automatically
@@ -20,6 +20,9 @@ function [ data ] = read_modis_albedo( modis_directory, coart_lut, date_in, data
 %       'LoncornField', 'LatcornField' - change which fields in DATA are
 %       used as the definition of the pixel corners
 %
+%       'band3data' - supply the days MCD43D Band 3 parameters so that they
+%       don't have to be read in again.
+%
 % Important references for MODIS BRDF v006 product:
 %   V006 User Guide: https://www.umb.edu/spectralmass/terra_aqua_modis/v006
 %
@@ -30,15 +33,12 @@ function [ data ] = read_modis_albedo( modis_directory, coart_lut, date_in, data
 
 E = JLLErrors;
 p = inputParser;
-p.addParameter('DEBUG_LEVEL', 0);
-p.addParameter('LoncornField', 'FoV75CornerLongitude');
-p.addParameter('LatcornField', 'FoV75CornerLatitude');
+p.addParameter('DEBUG_LEVEL', 2);
+
 p.parse(varargin{:});
 pout = p.Results;
 
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
-loncorn_field = pout.LoncornField;
-latcorn_field = pout.LatcornField;
 
 if ~ischar(modis_directory)
     E.badinput('MODIS_DIRECTORY must be a string')
@@ -73,109 +73,86 @@ this_year = sprintf('%04d', year(date_in));
 alb_dir = fullfile(modis_directory, this_year);
 julian_day = modis_date_to_day(date_in);
 
-% As of version 6 of MCD43C1, a 16-day average is produced every day, so
-% unlike version 5 of MCD43C3 where we had to look forward and back in time
+%To speed up processing, restrict the MODIS albedo data to only the area we
+%need to worry about.  This will significantly speed up the search for
+%albedo values within each pixel, plus speed up loading, since fewer IO
+%reads are necessary.
+[band3_lons, band3_lats, in_lons, in_lats] = modis_cmg_latlon(1/120, lonlim, latlim, 'grid');
+
+% As of version 6 of MCD43, a 16-day average is produced every day, so
+% unlike version 5 of MCD43 where we had to look forward and back in time
 % from the current date, we should be able to just pick the file for this
 % day.
 
-mcd_filename = sprintf('MCD43C1.A%04d%03d*.hdf', year(date_in), julian_day);
+if DEBUG_LEVEL > 0
+    fprintf('Reading MODIS BRDF data\n');
+end
+
+% Store the four MCD43D files used for traceability
+modis_files = cell(1,4);
+
+if DEBUG_LEVEL > 2; fprinf('    Reading band 3 f_iso\n'); end
+mcd_filename = sprintf('MCD43D07.A%04d%03d*.hdf', year(date_in), julian_day);
+[band3_iso, modis_files{1}] = read_band_parameter(alb_dir, mcd_filename, {in_lats, in_lons});
+
+if DEBUG_LEVEL > 2; fprinf('    Reading band 3 f_vol\n'); end
+mcd_filename = sprintf('MCD43D08.A%04d%03d*.hdf', year(date_in), julian_day);
+[band3_vol, modis_files{2}] = read_band_parameter(alb_dir, mcd_filename, {in_lats, in_lons});
+
+if DEBUG_LEVEL > 2; fprinf('    Reading band 3 f_geo\n'); end
+mcd_filename = sprintf('MCD43D09.A%04d%03d*.hdf', year(date_in), julian_day);
+[band3_geo, modis_files{3}] = read_band_parameter(alb_dir, mcd_filename, {in_lats, in_lons});
+
+% Unlike the parameter files, the quality file has all seven bands in one
+% file, so we need to handle it differently
+mcd_filename = sprintf('MCD43D31.A%04d%03d*.hdf', year(date_in), julian_day);
 alb_filename = fullfile(alb_dir, mcd_filename);
 alb_files = dir(alb_filename);
 if numel(alb_files) < 1
     E.filenotfound('MODIS BRDF file matching pattern %s.', alb_filename);
 elseif numel(alb_files) > 1
     E.toomanyfiles('Multiple MODIS BRDF files found matching pattern %s.', alb_filename);
-end 
+end
+modis_files{4} = fullfile(alb_dir, alb_files(1).name);
+mcd43_info = hdfinfo(modis_files{4});
+brdf_quality = hdfreadmodis(modis_files{4}, hdfdsetname(mcd43_info,4,1,'BRDF_Albedo_Band_Quality_Band3'), 'log_index', {in_lats, in_lons});
 
-mcd43_info = hdfinfo(fullfile(alb_dir,alb_files(1).name));
-band3_iso = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter1_Band3'));
-band3_vol = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter2_Band3'));
-band3_geo = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,'BRDF_Albedo_Parameter3_Band3'));
-
-band3_iso = flipud(double(band3_iso));
-band3_vol = flipud(double(band3_vol));
-band3_geo = flipud(double(band3_geo));
-
-%MODIS albedo is given in 0.05 degree cells and a single file covers the
-%full globe, so figure out the lat/lon of the middle of the grid cells as:
-band3_lat=-90+0.05/2:0.05:90-0.05/2; band3_lats=band3_lat'; band3_lats=repmat(band3_lats,1,7200);
-band3_lon=-180+0.05/2:0.05:180-0.05/2; band3_lons=repmat(band3_lon,3600,1);
-
-%To speed up processing, restrict the MODIS albedo data to
-%only the area we need to worry about.  This will
-%significantly speed up the search for albedo values within
-%each pixel.
-loncorn = data.(loncorn_field)(:);
-latcorn = data.(latcorn_field)(:);
-loncorn(loncorn==0) = [];
-latcorn(latcorn==0) = [];
-lon_min = floor(min(loncorn));
-lon_max = ceil(max(loncorn));
-lat_min = floor(min(latcorn));
-lat_max = ceil(max(latcorn));
-
-in_lats = find(band3_lat>=lat_min & band3_lat<=lat_max);
-in_lons = find(band3_lon>=lon_min & band3_lon<=lon_max);
-
-band3_iso = band3_iso(in_lats,in_lons); 
-band3_vol = band3_vol(in_lats,in_lons);
-band3_geo = band3_geo(in_lats,in_lons);
-
-band3_lats=band3_lats(in_lats,in_lons);
-band3_lons=band3_lons(in_lats,in_lons);
-
-s=size(data.Latitude);
-c=numel(data.Latitude);
-MODISAlbedo = nan(s);
-ocean_flag = false(s); 
-
-%Now actually average the MODIS albedo for each OMI pixel
-if DEBUG_LEVEL > 0; disp(' Averaging MODIS albedo to OMI pixels'); end
-
-% For debugging only %
-count_nans = zeros(size(data.SolarZenithAngle));
-count_modis = zeros(size(data.SolarZenithAngle));
-% ****************** %
-for k=1:c;
-    if DEBUG_LEVEL > 2; tic; end
-    
-    xall=[data.(loncorn_field)(:,k); data.(loncorn_field)(1,k)];
-    yall=[data.(latcorn_field)(:,k); data.(latcorn_field)(1,k)];
-    
-    % If there is an invalid corner coordinate, skip because we cannot
-    % be sure the correct polygon will be used.
-    if any(isnan(xall)) || any(isnan(yall))
-        continue
-    end
-    
-    % should be able to speed this up by first restricting based on a
-    % single lat and lon vector
-    xx_alb = inpolygon(band3_lats,band3_lons,yall,xall);
-    
-    % The 180-RAA should flip the RAA back to the standard definition (i.e.
-    % the supplemental angle of what's in the data product). See the help
-    % text for modis_brdf_kernels for why that matters.
-    band3_vals = modis_brdf_alb(band3_iso(xx_alb), band3_vol(xx_alb), band3_geo(xx_alb), data.SolarZenithAngle(k), data.ViewingZenithAngle(k), 180-data.RelativeAzimuthAngle(k));
-    
-    % DEBUGGING ONLY %
-    count_nans(k) = sum(isnan(band3_vals));
-    count_modis(k) = numel(band3_vals);
-    % ************** %
-    
-    if sum(isnan(band3_vals)) < 0.5 * numel(band3_vals)
-        band3_avg = nanmean(band3_vals(band3_vals>0));
-    else
-        band3_avg = coart_sea_reflectance(data.SolarZenithAngle(k), coart_lut);
-        ocean_flag(k) = true;
-    end
-    
-    MODISAlbedo(k) = band3_avg;
-    if DEBUG_LEVEL > 3; telap = toc; fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+% Verify that fill are the same in the 3 parameters and the quality flags.
+% This assumption is used in avg_modis_alb_to_pixels in order to remove
+% fill value BRDF coefficients and flag OMI pixels where >50% of the MODIS
+% data is fill values.
+qual_nans = isnan(brdf_quality(:));
+if any(xor(qual_nans, isnan(band3_iso(:)))) || any(xor(qual_nans, isnan(band3_geo(:)))) || any(xor(qual_nans, isnan(band3_vol(:))))
+    E.callError('inconsistent_fills', 'Fill values are not the same in the quality flags and one or more of the BRDF parameters');
 end
 
-data.MODISAlbedo = MODISAlbedo;
-data.MODISAlbedoFile = mcd43_info.Filename;
-data.AlbedoOceanFlag = ocean_flag;
+band3data.lons = band3_lons;
+band3data.lats = band3_lats;
+band3data.iso = band3_iso;
+band3data.geo = band3_geo;
+band3data.vol = band3_vol;
+band3data.quality = brdf_quality;
+band3data.files = modis_files;
+end
 
+function [band3_param, mcd_filename] = read_band_parameter(file_dir, file_pattern, logical_indices)
+E = JLLErrors;
+
+alb_filename = fullfile(file_dir, file_pattern);
+alb_files = dir(alb_filename);
+if numel(alb_files) < 1
+    E.filenotfound('MODIS BRDF file matching pattern %s.', alb_filename);
+elseif numel(alb_files) > 1
+    E.toomanyfiles('Multiple MODIS BRDF files found matching pattern %s.', alb_filename);
+end
+
+% Each MCD43D file has only a single SDS representing a single BRDF
+% parameter in a single band.
+mcd43_info = hdfinfo(fullfile(file_dir,alb_files(1).name));
+if numel(mcd43_info.Vgroup(1).Vgroup(1).SDS) ~= 1
+    E.callError('mcd43d format', 'READ_BAND_PARAMETER assumes there is only a single SDS in the file; that is not true in %s', mcd43_info.Filename);
+end
+band3_param = hdfreadmodis(mcd43_info.Filename, hdfdsetname(mcd43_info,1,1,1), 'log_index', logical_indices);
+mcd_filename = mcd43_info.Filename;
 end
 
