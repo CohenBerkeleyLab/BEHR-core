@@ -67,7 +67,9 @@ test_dates = {'2005-06-02';... % pre-row anomaly summertime day, at least one da
               '2010-01-29';... % day mentioned in the 2.1Arev1 changelog with no NO2 data
               '2005-05-04';... % the center lon/lat for the OMPIXCOR product just different enough that cutting down by bounds results in different size arrays, so switched to find_submatrix2
               '2005-05-14';... % Has both a row that is only partially fill values in lon/lat and the OMPIXCOR corners are mostly 0
-              '2010-05-09'... % day where the first swath is only 4 long in the along track dimension, which previously caused an error in the gridding algorithm, since it matches the length of the corner dimension
+              '2010-05-09';... % day where the first swath is only 4 long in the along track dimension, which previously caused an error in the gridding algorithm, since it matches the length of the corner dimension
+              '2006-04-26';... % day where along and across track dimensions in the first orbit are both 60, which previously screwed up the dimension checking in the gridding algorithm
+              '2009-02-15'...  % day where the along track dimension is cut all the way down to one, which exposed a bug in the matlab-python interface
               };
 
 % These are dates that the algorithm should be run for, but for which it is
@@ -313,7 +315,7 @@ end
         % the user the option at the beginning of using the standard paths for old data. If that's not what they
         % chose, or an old directory wasn't already given, we need to ask now.
         if use_behrpaths
-            old_dir = behr_paths.sp_mat_dir;
+            old_dir = behr_paths.SPMatSubdir(test_region);
         elseif isempty(old_dir)
             old_dir = getdir('You''ll need to choose the directory with the old OMI_SP files', test_dates);
         end
@@ -379,7 +381,7 @@ end
             % If sp_data_dir not already given, give the choice of using behr_paths.sp_mat_dir or a user-specified dir
             if ~exist('sp_data_dir', 'var')
                 if ask_yn('Use the paths specified by behr_paths for the SP files to be read into BEHR_main?');
-                    sp_data_dir = behr_paths.sp_mat_dir;
+                    sp_data_dir = behr_paths.SPMatSubdir(test_region);
                 else
                     sp_data_dir = getdir('You''ll need to choose the directory with existing OMI_SP files', test_dates);
                 end
