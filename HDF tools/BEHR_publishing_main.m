@@ -88,7 +88,7 @@ p.addParameter('end', datestr(today, 'yyyy-mm-dd'));
 p.addParameter('reprocessed', false);
 p.addParameter('mat_dir', '');
 p.addParameter('region', 'us');
-p.addParameter('prof_mode', 'monthly');
+p.addParameter('profile_mode', 'monthly');
 p.addParameter('save_dir', behr_paths.website_staging_dir);
 p.addParameter('organize', true);
 p.addParameter('overwrite', -1);
@@ -179,6 +179,7 @@ end
 
 global numThreads
 if onCluster
+    global_unset = cell();
     % Check that all global variables are set
     if isempty(numThreads)
         global_unset{end+1} = 'numThreads';
