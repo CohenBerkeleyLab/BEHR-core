@@ -30,17 +30,18 @@ function [  ] = BEHR_publishing_main(varargin)
 %       the directory structure in behr_paths.behr_mat_dir. Only used if
 %       "mat_dir" is not specified. Default is 'us'.
 %
-%       'prof_mode': a string which a priori profiles' retrieval to use,
+%       'profile_mode': a string which a priori profiles' retrieval to use,
 %       must match the directory structure in behr_paths.behr_mat_dir
 %       (within each region). Only used if "mat_dir" is not specified.
 %       Default is 'monthly'.
 %
 %       'mat_dir': the directory from which to load the Matlab files with
 %       BEHR output saved in the. If not given (or given as an empty
-%       string) then behr_paths.BEHRMatSubdir(region, prof_mode) is called
-%       with the values of the "region" and "prof_mode" parameters to
-%       determine the directory for the given region and profile mode.
-%       Otherwise, BEHR .mat files are read from the directory given.
+%       string) then behr_paths.BEHRMatSubdir(region, profile_mode) is
+%       called with the values of the "region" and "profile_mode"
+%       parameters to determine the directory for the given region and
+%       profile mode. Otherwise, BEHR .mat files are read from the
+%       directory given.
 %
 %       'save_dir': the directory to which to save the resulting HDF or CSV
 %       files. Default is the value returned by
@@ -151,7 +152,7 @@ mat_file_dir = pout.mat_dir;
 save_dir = pout.save_dir;
 
 if isempty(mat_file_dir)
-    mat_file_dir = behr_paths.BEHRMatSubdir(pout.region, pout.prof_mode);
+    mat_file_dir = behr_paths.BEHRMatSubdir(pout.region, pout.profile_mode);
 end
 
 % Check that the directories exist like this so that a single error message
