@@ -13,14 +13,15 @@ fork="CohenBerkeleyLab"
 github_repos=("${fork}/BEHR-core-utils.git" \
     "${fork}/Matlab-Gen-Utils.git" \
     "${fork}/BEHR-PSM-Gridding" \
-    "${fork}/MatlabPythonInterface.git" )
+    "${fork}/MatlabPythonInterface.git" \
+    "${fork}/WRF_Utils" )
 
 
 manual_setup () {
     >&2 echo  "GIT does not appear to be installed on this computer.
 If you are running this setup as a grad student on the BEHR project
 at Berkeley, you should install GIT and properly clone BEHR from
-the file server.
+the the CohenBerkeleyLab GitHub organization.
 
 If you have obtained BEHR by downloading a release from GitHub, you'll
 need to also download the following repositories:"

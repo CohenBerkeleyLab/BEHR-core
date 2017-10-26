@@ -88,7 +88,6 @@ date_start = pout.start;
 date_end = pout.end;
 behr_mat_dir = pout.behr_mat_dir;
 sp_mat_dir = pout.sp_mat_dir;
-amf_tools_path = pout.amf_tools_path;
 no2_profile_path = pout.no2_profile_path;
 region = pout.region;
 overwrite = pout.overwrite;
@@ -105,9 +104,7 @@ date_end = validate_date(date_end);
 if ~ischar(behr_mat_dir)
     E.badinput('Parameter "behr_mat_dir" must be a string');
 elseif ~ischar(sp_mat_dir)
-    E.badinput('Parameter "behr_mat_dir" must be a string');
-elseif ~ischar(amf_tools_path)
-    E.badinput('Parameter "amf_tools_path" must be a string');
+    E.badinput('Parameter "sp_mat_dir" must be a string');
 elseif ~ischar(no2_profile_path)
     E.badinput('Parameter "no2_profile_path" must be a string');
 elseif (~islogical(overwrite) && ~isnumeric(overwrite)) || ~isscalar(overwrite)
@@ -129,6 +126,9 @@ end
 if isempty(behr_mat_dir)
     behr_mat_dir = behr_paths.BEHRMatSubdir(region, prof_mode);
 end
+
+% Bring the AMF tools path (where damf.txt is) into this workspace
+amf_tools_path = behr_paths.amf_tools_dir;
 
 % Verify the paths integrity.
 nonexistant = {};
@@ -153,8 +153,6 @@ if numel(nonexistant)>0
 end
 
 %Store paths to relevant files
-addpath(amf_tools_path)
-fileTmp = fullfile(amf_tools_path,'nmcTmpYr.txt');
 fileDamf = fullfile(amf_tools_path,'damf.txt');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -214,6 +212,7 @@ behrutils_githead = git_head_hash(behr_paths.behr_utils);
 genutils_githead = git_head_hash(behr_paths.utils);
 psm_githead = git_head_hash(behr_paths.psm_dir);
 imatpy_githead = git_head_hash(behr_paths.python_interface);
+wrfutils_githead = git_head_hash(behr_paths.wrf_utils);
 
 datenums = datenum(date_start):datenum(date_end);
 parfor(j=1:length(datenums), n_workers)
@@ -293,7 +292,7 @@ parfor(j=1:length(datenums), n_workers)
         cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
         
         if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
-        [no2Profile, temperature, wrf_profile_file] = rProfile_WRF(datenums(j), prof_mode, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+        [no2Profile, temperature, wrf_profile_file, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(datenums(j), prof_mode, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
         bad_profs = squeeze(all(isnan(no2Profile),1));
         
         if DEBUG_LEVEL > 1; fprintf('   Calculating clear and cloudy AMFs\n'); end
@@ -320,6 +319,8 @@ parfor(j=1:length(datenums), n_workers)
         Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
         Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
         Data(d).BEHRWRFFile = wrf_profile_file;
+        Data(d).BEHRWRFPressureMode = wrf_pres_mode;
+        Data(d).BEHRWRFTemperatureMode = wrf_temp_mode;
         Data(d).BEHRProfileMode = prof_mode;
         Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
         Data(d).BEHRQualityFlags = behr_quality_flags(Data(d)); 
@@ -347,6 +348,7 @@ parfor(j=1:length(datenums), n_workers)
         Data(z).GitHead_GenUtils_Main = genutils_githead;
         Data(z).GitHead_PSM_Main = psm_githead;
         Data(z).GitHead_MatPyInt_Main = imatpy_githead;
+        Data(z).GitHead_WRFUtils_Main = wrfutils_githead;
     end
     
     
