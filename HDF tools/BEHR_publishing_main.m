@@ -180,7 +180,7 @@ end
 
 global numThreads
 if onCluster
-    global_unset = cell();
+    global_unset = {};
     % Check that all global variables are set
     if isempty(numThreads)
         global_unset{end+1} = 'numThreads';
