@@ -1,4 +1,5 @@
-**************************************
+*
+************************************
 ****   Berkeley High Resolution   ****
 **** (BEHR) NO2 Product Changelog ****
 **************************************
@@ -14,8 +15,8 @@ Current maintainer: Josh Laughner (jlaughner@berkeley.edu)
 The BEHR version numbering system combines the OMNO2 version number with an
 internal version letter. So, v2.1A represents the first BEHR product based on
 version 2.1 of the NASA OMNO2 product. A subsequent version of BEHR still based
-on version 2.1 of OMNO2 would be v2.1B. If OMNO2 were to update to version 3,
-the BEHR product based on that would be v3.0A.
+on version 2.1 of OMNO2 would be v2.1B. When OMNO2 updated to version 3, the BEHR 
+product based on that was named v3.0A.
 
 Should a minor change be made (e.g. one that adds information to the output but
 does not change the core algorithm), a revision number will be appended to the
@@ -32,18 +33,33 @@ equivalent to the one with the period and is used interchangeably.
 ============
 
 **** 3.0A ****
+-- We will no longer produce the csv file version of BEHR due to the increasing number
+   of products that must be produced (monthly and daily profiles, additional regions).
 -- Base tropospheric SCDs updated to NASA OMI SP v3.0
 -- Pixel corners now derived from the OMPIXCOR product; the old "Loncorn" and "Latcorn"
    fields have been removed. All non-OMI data products (MODIS, GLOBE, WRF-Chem) are 
    averaged to OMI pixels using the FoV75Corner fields. Tiled fields are included as
    well.
--- MODISAlbedo is now derived from the MCD43C1 BRDF product rather than the MCD43C3 black
-   sky albedo product. Since v006 of MCD43C1 is available for each day, we use the MCD43C1
+-- MODISAlbedo is now derived from the MCD43D BRDF product rather than the MCD43C3 black
+   sky albedo product. Since v006 of MCD43D is available for each day, we use the MCD43D
    file corresponding to each day retrieved, rather than the nearest of the 16-day averages.
    The BRDF kernels are calculated according to the Eq. (38) and (39) of the MOD43 Theoretical
    basis document (https://modis.gsfc.nasa.gov/data/atbd/atbd_mod09.pdf, accessed 18 Sept 2017).
-   Combined with the MCD43C1 coefficients, these provide the BRDF reflectivities within each
-   OMI pixel, which are then averaged to the OMI pixel.
+   Combined with the MCD43D coefficients, these provide the BRDF reflectivities within each
+   OMI pixel, which are then averaged to the OMI pixel. (Band 3 data from MCD43D07, MCD43D08, and
+   MCD43D09 used, with quality flag information from MCD43D31.)
+-- All non-fill MCD43D data is used to calculate the average BRDF coefficients for each pixel; 
+   however, if the average quality for the BRDF data is >= 2.5, the OMI pixel in question is flagged
+   as low quality. (MCD43D quality is denoted as 0-3, 0 is best quality, 3 is lowest.) Likewise,
+   if more than half of the MCD43D data in a pixel are fill values, the OMI pixel is also flagged
+   as low quality.
+-- OMI pixels are now classified as land or ocean based on the MODIS land-water map available
+   from ftp://rsftp.eeos.umb.edu/data02/Gapfilled/. If more than half of the OMI pixel is defined
+   as shallow ocean (class 0), moderate or continental ocean (class 6) or deep ocean (class 7) by
+   the land-water map, the pixel is classified as ocean and surface reflectance calculated based
+   on solar zenith angle and a parameterization derived from the Coupled Ocean-Atmosphere Radiative
+   Transfer (COART) model (https://cloudsgate2.larc.nasa.gov/jin/coart.html). This replaces the
+   previous SZA look up table.
 -- The formulation of the visible-only AMF has been changed: now the visible only AMF is
    calculated as the ratio of the model slant column to the model visible VCD. Previously,
    a cloudy visible-only AMF was calculated as the ratio of the model above-cloud slant 
@@ -53,12 +69,24 @@ equivalent to the one with the period and is used interchangeably.
    weights and NO2 profiles.
 -- New a priori profiles: the NO2 a priori profiles were generated with WRF-Chem at 12 km
    resolution using 2012 emissions and the lightning configuration discussed in Laughner
-   and Cohen, AMT, 2017, doi: 10.5194/amt-2017-263. The previous profiles did not include
-   lightning. Version 3.0B is planned to include daily a priori profiles for 2005--2007 and
-   2012--2014 as a separate product.
+   and Cohen, AMTD, 2017, doi: 10.5194/amt-2017-263. The previous profiles did not include
+   lightning. 
+-- A product using daily NO2 profiles will be added as the simulation of those profiles is completed.
+   We expect to provide data using daily NO2 profiles for 2007-2009 and 2012-2014, possibly including
+   2005 and 2006 as well. NOTE: 2005 and 2006 profiles will be generated using boundary conditions 
+   from a different global CTM than 2007+, so caution is advised using 2005 and 2006 in studies of
+   NO2 trends.
+-- New temperature profiles: the temperature profiles are now taken from the same WRF-Chem simulations
+   as the NO2 profiles. This provides higher resolution and (IMPORTANT) fixes a bug in v2.1C in the
+   lookup of the NASA standard temperature profiles. That bug resulted in a ~5% bias in the v2.1C 
+   columns.
 -- New gridding method: BEHR fields are now gridded using the constant value method of the
    omi python package (https://github.com/gkuhl/omi). This corrects an issue where some grid
    cells would not be assigned a value using the previous gridding method.
+-- New BEHRQualityFlags field available that summarizes errors in the NASA and BEHR algorithms. Please
+   see the user guide for a full description.
+-- Additional swath-level attributes added that describe the input data files and the state of the code
+   at the time of production. See the user guide for more details.
 
 **** 2.1C ****
 -- Change to how ghost columns are handled
