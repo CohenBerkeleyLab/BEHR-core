@@ -166,6 +166,13 @@ switch lower(region)
         latmax = 50;
         earliest_omi_starttime = 1500;
         latest_omi_starttime = Inf;
+    case 'hk'
+        lonmin = 108;
+        lonmax = 118;
+        latmin = 19;
+        latmax = 26;
+        earliest_omi_starttime = -Inf;
+        latest_omi_starttime = 1300;
     otherwise 
         E.badinput('Region "%s" not recognized', region)
 end

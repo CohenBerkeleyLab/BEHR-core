@@ -292,7 +292,7 @@ parfor(j=1:length(datenums), n_workers)
         cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
         
         if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
-        [no2Profile, temperature, wrf_profile_file, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(datenums(j), prof_mode, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+        [no2Profile, temperature, wrf_profile_file, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(datenums(j), prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
         bad_profs = squeeze(all(isnan(no2Profile),1));
         
         if DEBUG_LEVEL > 1; fprintf('   Calculating clear and cloudy AMFs\n'); end
