@@ -15,18 +15,18 @@ testAMFs = nan(size(Data.BEHRAMFTrop));
 testVisAMFs = nan(size(Data.BEHRAMFTrop));
 
 for a=1:numel(testAMFs)
-%notnans = ~isnan(Data.BEHRScatteringWeights(:,a));
-notnans = true(size(Data.BEHRScatteringWeights(:,a)));
-if sum(notnans) > 0
-tmp_amf = integPr2(Data.BEHRScatteringWeights(notnans,a) .* Data.BEHRNO2apriori(notnans,a), Data.BEHRPressureLevels(notnans,a), Data.GLOBETerpres(a));
-tmp_model_ground_vcd = integPr2(Data.BEHRNO2apriori(notnans,a), Data.BEHRPressureLevels(notnans,a), Data.GLOBETerpres(a));
-tmp_model_cloud_vcd = integPr2(Data.BEHRNO2apriori(notnans,a), Data.BEHRPressureLevels(notnans,a), Data.CloudPressure(a));
-
-testAMFs(a) = tmp_amf / tmp_model_ground_vcd;
-
-tmp_model_vis_vcd = tmp_model_cloud_vcd * Data.CloudRadianceFraction(a) + tmp_model_ground_vcd * (1-Data.CloudRadianceFraction(a));
-testVisAMFs(a) = tmp_amf / tmp_model_vis_vcd;
-end
+    notnans = ~isnan(Data.BEHRScatteringWeights(:,a)) & ~isnan(Data.BEHRNO2apriori(:,a));
+    %notnans = true(size(Data.BEHRScatteringWeights(:,a)));
+    if sum(notnans) > 1
+        tmp_amf = integPr2(Data.BEHRScatteringWeights(notnans,a) .* Data.BEHRNO2apriori(notnans,a), Data.BEHRPressureLevels(notnans,a), Data.GLOBETerpres(a));
+        tmp_model_ground_vcd = integPr2(Data.BEHRNO2apriori(notnans,a), Data.BEHRPressureLevels(notnans,a), Data.GLOBETerpres(a));
+        tmp_model_cloud_vcd = integPr2(Data.BEHRNO2apriori(notnans,a), Data.BEHRPressureLevels(notnans,a), Data.CloudPressure(a));
+        
+        testAMFs(a) = tmp_amf / tmp_model_ground_vcd;
+        
+        tmp_model_vis_vcd = tmp_model_cloud_vcd * Data.CloudFraction(a) + tmp_model_ground_vcd * (1-Data.CloudFraction(a));
+        testVisAMFs(a) = tmp_amf / tmp_model_vis_vcd;
+    end
 end
 
 end
