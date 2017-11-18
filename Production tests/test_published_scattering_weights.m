@@ -11,21 +11,28 @@ function [ testAMFs, testVisAMFs ] = test_published_scattering_weights( Data )
 %   pressure where the combined scattering weights have a sharp
 %   discontinuity.
 
+if ~isscalar(Data) || ~isstruct(Data)
+    error('input:bad_type', 'DATA must be a scalar structure');
+end
+
 testAMFs = nan(size(Data.BEHRAMFTrop));
 testVisAMFs = nan(size(Data.BEHRAMFTrop));
 
-for a=1:numel(testAMFs)
-    notnans = ~isnan(Data.BEHRScatteringWeights(:,a)) & ~isnan(Data.BEHRNO2apriori(:,a));
-    %notnans = true(size(Data.BEHRScatteringWeights(:,a)));
+for i=1:numel(Data.BEHRAMFTrop)
+    notnans = ~isnan(Data.BEHRPressureLevels(:,i));
     if sum(notnans) > 1
-        tmp_amf = integPr2(Data.BEHRScatteringWeights(notnans,a) .* Data.BEHRNO2apriori(notnans,a), Data.BEHRPressureLevels(notnans,a), Data.GLOBETerpres(a));
-        tmp_model_ground_vcd = integPr2(Data.BEHRNO2apriori(notnans,a), Data.BEHRPressureLevels(notnans,a), Data.GLOBETerpres(a));
-        tmp_model_cloud_vcd = integPr2(Data.BEHRNO2apriori(notnans,a), Data.BEHRPressureLevels(notnans,a), Data.CloudPressure(a));
-        
-        testAMFs(a) = tmp_amf / tmp_model_ground_vcd;
-        
-        tmp_model_vis_vcd = tmp_model_cloud_vcd * Data.CloudFraction(a) + tmp_model_ground_vcd * (1-Data.CloudFraction(a));
-        testVisAMFs(a) = tmp_amf / tmp_model_vis_vcd;
+        % The published scattering weights already include the temperature
+        % correction. Since the correction is calculated as 1 - 0.003*(T -
+        % 220) in omiAmfAK2, passing a temperature profile of 220 at all
+        % pressures will apply a temperature correction of 1 (i.e. no
+        % correction).
+        temperature = 220*ones(sum(notnans),1);
+        % In BEHR, we have to restrict surface pressure to >= 1013 due to
+        % the limitation of the scattering weight look up table. 
+        surfPres = min(Data.GLOBETerpres(i), 1013);
+        cldPres = min(Data.CloudPressure(i), 1013);
+        [testAMFs(i), testVisAMFs(i)] = omiAmfAK2(surfPres, cldPres, Data.CloudFraction(i), Data.CloudRadianceFraction(i),...
+            Data.BEHRPressureLevels(notnans, i), Data.BEHRScatteringWeightsClear(notnans,i), Data.BEHRScatteringWeightsCloudy(notnans,i), temperature, Data.BEHRNO2apriori(notnans,i));
     end
 end
 

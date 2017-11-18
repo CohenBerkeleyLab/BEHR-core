@@ -215,8 +215,8 @@ imatpy_githead = git_head_hash(behr_paths.python_interface);
 wrfutils_githead = git_head_hash(behr_paths.wrf_utils);
 
 datenums = datenum(date_start):datenum(date_end);
-parfor(j=1:length(datenums), n_workers)
-%for j=1:length(datenums)
+%parfor(j=1:length(datenums), n_workers)
+for j=1:length(datenums)
     savename = behr_filename(datenums(j), prof_mode, region);
     
     if exist(fullfile(behr_mat_dir, savename),'file') && ~overwrite
@@ -301,21 +301,23 @@ parfor(j=1:length(datenums), n_workers)
         dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
 
         if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
-        [amf, amfVis, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, cldPres, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+        [amf, amfVis, ~, ~, scattering_weights_clear, scattering_weights_cloudy, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, cldPres, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
         amf(bad_profs)=NaN;
         amfVis(bad_profs)=NaN;
-        scattering_weights(:,bad_profs)=NaN;
+        scattering_weights_clear(:,bad_profs)=NaN;
+        scattering_weights_cloudy(:,bad_profs)=NaN;
         avg_kernels(:,bad_profs)=NaN;
         sw_plevels(:,bad_profs)=NaN;
         no2_prof_interp(:,bad_profs)=NaN;
         
         sz = size(Data(d).Longitude);
-        len_vecs = size(scattering_weights,1);  % JLL 26 May 2015 - find out how many pressure levels there are. Will often be 30, but might change.
+        len_vecs = size(scattering_weights_clear,1);  % JLL 26 May 2015 - find out how many pressure levels there are. Will often be 30, but might change.
         % Need this to properly reshape the scattering weights, AKs, pressure levels, and (soon) profiles
         
         Data(d).BEHRAMFTrop = reshape(amf,sz); %JLL 18 Mar 2014: Save the resulting AMF of the pixel
         Data(d).BEHRAMFTropVisOnly = reshape(amfVis,sz);
-        Data(d).BEHRScatteringWeights = reshape(scattering_weights, [len_vecs, sz]);
+        Data(d).BEHRScatteringWeightsClear = reshape(scattering_weights_clear, [len_vecs, sz]);
+        Data(d).BEHRScatteringWeightsCloudy = reshape(scattering_weights_cloudy, [len_vecs, sz]);
         Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
         Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
         Data(d).BEHRWRFFile = wrf_profile_file;
