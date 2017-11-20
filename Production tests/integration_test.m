@@ -50,6 +50,14 @@ out_dir = fullfile(mydir, 'UnitTestData', 'tmp');
 if ~exist(out_dir, 'dir')
     mkdir(out_dir);
 end
+pub_native_dir = fullfile(out_dir, 'native');
+if ~exist(pub_native_dir, 'dir')
+    mkdir(pub_native_dir);
+end
+pub_gridded_dir = fullfile(out_dir, 'gridded');
+if ~exist(pub_gridded_dir, 'dir')
+    mkdir(pub_gridded_dir);
+end
 
 test_date = '2012-02-01';
 
@@ -70,9 +78,9 @@ else
 end
 if do_pub
     timer_pub = tic;
-    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'native', 'mat_dir', out_dir, 'save_dir', out_dir,...
+    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'native', 'mat_dir', out_dir, 'save_dir', pub_native_dir,...
         'organize', false, 'overwrite', true);
-    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'gridded', 'mat_dir', out_dir, 'save_dir', out_dir,...
+    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'gridded', 'mat_dir', out_dir, 'save_dir', pub_gridded_dir,...
         'organize', false, 'overwrite', true);
     t_pub = toc(timer_pub);
 else
