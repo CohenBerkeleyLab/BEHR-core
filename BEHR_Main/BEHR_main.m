@@ -215,8 +215,8 @@ imatpy_githead = git_head_hash(behr_paths.python_interface);
 wrfutils_githead = git_head_hash(behr_paths.wrf_utils);
 
 datenums = datenum(date_start):datenum(date_end);
-%parfor(j=1:length(datenums), n_workers)
-for j=1:length(datenums)
+parfor(j=1:length(datenums), n_workers)
+%for j=1:length(datenums)
     savename = behr_filename(datenums(j), prof_mode, region);
     
     if exist(fullfile(behr_mat_dir, savename),'file') && ~overwrite
