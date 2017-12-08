@@ -1,6 +1,11 @@
 function [  ] = fix_add_pres_temp_modes( behr_dir )
-%UNTITLED Summary of this function goes here
-%   Detailed explanation goes here
+%FIX_ADD_PRES_TEMP_MODES Fix to add 3 attributes to BEHR files
+%   FIX_ADD_PRES_TEMP_MODES( BEHR_DIR ) Loops over all .mat files in
+%   BEHR_DIR and adds the fields BEHRWRFTemperatureMode,
+%   BEHRWRFPressureMode, and GitHead_WRFUtils_Main to the Data and OMI
+%   structures. The two "Mode" fields are given the value "precomputed" and
+%   the GitHead field "N/A". These attributes needed to be added after
+%   v3.0A had been run.
 
 F = dirff(fullfile(behr_dir, '*.mat'));
 for a=1:numel(F)

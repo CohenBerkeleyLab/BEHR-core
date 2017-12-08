@@ -1,6 +1,32 @@
 function [ data ] = avg_modis_alb_to_pixels( band3data, coart_lut, ocean_mask, data, varargin )
-%UNTITLED2 Summary of this function goes here
-%   Detailed explanation goes here
+%AVG_MODIS_ALB_TO_PIXELS Calculate surface reflectivity from MODIS BRDFs
+%   DATA = AVG_MODIS_ALB_TO_PIXELS( BAND3DATA, COART_LUT, OCEAN_MASK, DATA
+%   ) Handles calculating surface reflectivity from MODIS BRDF kernels and
+%   averaging the result to OMI pixels. BAND3DATA must be the structure
+%   returned from READ_MODIS_ALBEDO for the correct day. COART_LUT is the
+%   look up table of ocean reflectivity returned as the second output of
+%   COART_SEA_REFLECTANCE. OCEAN_MASK must be a structure containing the
+%   fields "mask", "lon", and "lat" that define a boolean mask for ocean
+%   (true for ocean). DATA is the structure containing native OMI pixel
+%   data. This function returns that structure with fields MODISAlbedo,
+%   MODISAlbedoQuality, MODISAlbedoFillFlag, MODISAlbedoFile, and
+%   AlbedoOceanFlag added.
+%
+%   Additional parameters:
+%
+%   'DEBUG_LEVEL' - scalar number that controls level of output to
+%   terminal. 0 (default) is none, high values give more output.
+%
+%   'LoncornField' - string that indicates which field of Data to use for
+%   longitude corners of pixels. Default is 'FoV75CornerLongitude'.
+%
+%   'LatcornField' - string that indicates which field of Data to use for
+%   latitude corners of pixels. Default is 'FoV75CornerLatitude'.
+%
+%   'QualityLimit' - controls which MODIS BRDF grid cells will be used by
+%   filtering for quality. In MCD43D31, 0 = best quality and 3 = low
+%   quality. Only data with quality <= QualityLimit will be used. Default
+%   is Inf, i.e. all data is used.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% INPUT VALIDATION %%%%%
