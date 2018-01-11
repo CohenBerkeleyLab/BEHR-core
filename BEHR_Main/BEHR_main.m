@@ -259,7 +259,7 @@ parfor(j=1:length(datenums), n_workers)
     % CALCULATE OUR AMFS %
     %%%%%%%%%%%%%%%%%%%%%%
     
-    [Data, OMI] = BEHR_main_one_day(Data, 'no2_profile_path', no2_profile_path, 'region', region, 'profile_mode', prof_mode, 'use_psm_gridding', use_psm);
+    [Data, OMI] = BEHR_main_one_day(Data, 'no2_profile_path', no2_profile_path, 'profile_mode', prof_mode, 'use_psm_gridding', use_psm);
     
     %%%%%%%%%%%%%
     % SAVE FILE %

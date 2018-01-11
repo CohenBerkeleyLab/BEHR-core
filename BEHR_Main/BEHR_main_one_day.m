@@ -59,7 +59,6 @@ p.parse(varargin{:});
 pout = p.Results;
 
 no2_profile_path = pout.no2_profile_path;
-region = pout.region;
 prof_mode = pout.profile_mode;
 use_psm = pout.use_psm_gridding;
 lookup_sweights = pout.lookup_sweights;
