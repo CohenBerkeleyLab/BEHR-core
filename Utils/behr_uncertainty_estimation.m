@@ -31,7 +31,7 @@ for a=1:numel(Delta)
 end
 
 % Now run BEHR but for the modified parameters
-[Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'region', Delta(1).BEHRRegion, 'lookup_profile', false);
+[Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', false);
 
 
 % Calculate the percent differences in the NO2 columns and AMFs
