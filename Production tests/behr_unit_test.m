@@ -53,9 +53,9 @@ new_fields = fieldnames(new);
 old_fields = fieldnames(old);
 
 if length(ignore_fields) > 0
-    rr = ismember(new_fields, ignore_fields);
+    rr = regmember(new_fields, ignore_fields);
     new_fields(rr) = [];
-    rr = ismember(old_fields, ignore_fields);
+    rr = regmember(old_fields, ignore_fields);
     old_fields(rr) = [];
 
     fprintf(fid, '  Ignoring fields:\n\t%s\n', strjoin(ignore_fields, '\n\t'));
