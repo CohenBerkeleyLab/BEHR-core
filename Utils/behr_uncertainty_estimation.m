@@ -1,4 +1,4 @@
-function [ Delta, DeltaGrid ] = behr_uncertainty_estimation( Data, OMI, parameter, percent_change )
+function [ Delta, DeltaGrid ] = behr_uncertainty_estimation( Data, OMI, parameter, percent_change, varargin )
 %BEHR_UNCERTAINTY_ESTIMATION Estimate the uncertainty in BEHR NO2
 %   [ DELTA, DELTAGRID ] = BEHR_UNCERTAINTY_ESTIMATION( DATA, PARAMETER, PERCENT_CHANGE )
 %   This function will run the BEHR retrieval for the structure DATA but
@@ -9,6 +9,14 @@ function [ Delta, DeltaGrid ] = behr_uncertainty_estimation( Data, OMI, paramete
 %   AMFs.
 
 E = JLLErrors;
+
+p = inputParser;
+p.addParameter('DEBUG_LEVEL', 2);
+
+p.parse(varargin{:});
+pout = p.Results;
+
+DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 if ~isstruct(Data)
     E.badinput('DATA must be a structure')
@@ -31,7 +39,7 @@ for a=1:numel(Delta)
 end
 
 % Now run BEHR but for the modified parameters
-[Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', false);
+[Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', false, 'DEBUG_LEVEL', DEBUG_LEVEL);
 
 
 % Calculate the percent differences in the NO2 columns and AMFs
