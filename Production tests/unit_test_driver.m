@@ -37,6 +37,11 @@ function [  ] = unit_test_driver( self_test )
 %   algorithm to error or behave strangely, but you should not remove
 %   existing days.
 %
+%   Internally, the ranges of dates that have daily profiles are specified,
+%   so as more daily profiles become available, one should modify this
+%   function to update that. It will only generate and test daily profile
+%   files within those specified ranges.
+%
 %   UNIT_TEST_DRIVER( true ) runs a self test, so it only tries to do one
 %   day. This is useful if you've made changes to the unit test code itself
 %   and just want to make sure it works.
@@ -66,14 +71,25 @@ test_dates = {'2005-06-02';... % pre-row anomaly summertime day, at least one da
               '2005-07-13';... % day mentioned in the 2.1Arev1 changelog with no NO2 data
               '2010-01-29';... % day mentioned in the 2.1Arev1 changelog with no NO2 data
               '2005-05-04';... % the center lon/lat for the OMPIXCOR product just different enough that cutting down by bounds results in different size arrays, so switched to find_submatrix2
-              '2005-05-14'... % Has both a row that is only partially fill values in lon/lat and the OMPIXCOR corners are mostly 0
+              '2005-05-14';... % Has both a row that is only partially fill values in lon/lat and the OMPIXCOR corners are mostly 0
+              '2010-05-09';... % day where the first swath is only 4 long in the along track dimension, which previously caused an error in the gridding algorithm, since it matches the length of the corner dimension
+              '2006-04-26';... % day where along and across track dimensions in the first orbit are both 60, which previously screwed up the dimension checking in the gridding algorithm
+              '2009-02-15'...  % day where the along track dimension is cut all the way down to one, which exposed a bug in the matlab-python interface
               };
 
 % These are dates that the algorithm should be run for, but for which it is
 % okay if no data is produced. This allows the unit tests to skip them
-test_dates_no_data = {'2016-05-30'};  % OMI was in safe mode; algorithm should gracefully handle the lack of data
+test_dates_no_data = {'2016-05-30';... % OMI was in safe mode; algorithm should gracefully handle the lack of data
+                      '2007-12-19'};   % Should read in an empty structure from read_main.m, BEHR_main should just skip it and not try to produce anything
               
-
+% These are the date ranges for which daily profiles are available. When
+% running in daily mode, only test dates within these ranges will be
+% produced. The first column represents the beginning of each range; the
+% second column the end.
+daily_profiles_available = {'2005-01-01', '2005-12-31';...
+                            '2007-01-01', '2007-12-31';...
+                            '2012-01-01', '2013-12-31'};
+                  
 test_dates = unique(cat(1,test_dates,test_dates_no_data));
 
 if self_test
@@ -103,8 +119,21 @@ else
     fid = 1;
 end
 
-fields_to_ignore = input('Specify any fields to ignore in unit testing, separated by a space: ', 's');
+prompt_str = ['\nSpecify any fields to ignore in unit testing, separated by a space.\n',...
+              'Regular expressions can be used. By default, fields beginning with\n',...
+              '"GitHead" are ignored because they are expected to be different if the\n',...
+              'algorithm has changed. To override this, make one of the strings input\n',...
+              '"keepgit" (without the quotes), i.e. entering "keepgit .*File" will\n',...
+              'ignore any field ending in "File" but do compare the GitHead fields: '];
+fields_to_ignore = input(prompt_str, 's');
 fields_to_ignore = strsplit(fields_to_ignore);
+
+xx = strcmpi('keepgit', fields_to_ignore);
+if ~any(xx)
+    fields_to_ignore = veccat({'GitHead.*'},fields_to_ignore);
+else
+    fields_to_ignore(xx) = [];
+end
 
 if generate_new_data
     make_git_report(behr_paths.behr_core, 'GitReport-Core.txt');
@@ -311,7 +340,7 @@ end
         % the user the option at the beginning of using the standard paths for old data. If that's not what they
         % chose, or an old directory wasn't already given, we need to ask now.
         if use_behrpaths
-            old_dir = behr_paths.sp_mat_dir;
+            old_dir = behr_paths.SPMatSubdir(test_region);
         elseif isempty(old_dir)
             old_dir = getdir('You''ll need to choose the directory with the old OMI_SP files', test_dates);
         end
@@ -376,20 +405,24 @@ end
             mkdir(new_dir)
             % If sp_data_dir not already given, give the choice of using behr_paths.sp_mat_dir or a user-specified dir
             if ~exist('sp_data_dir', 'var')
-                if ask_yn('Use the paths specified by behr_paths for the SP files to be read into BEHR_main?');
-                    sp_data_dir = behr_paths.sp_mat_dir;
+                if ask_yn('Use the paths specified by behr_paths for the SP files to be read into BEHR_main?')
+                    sp_data_dir = behr_paths.SPMatSubdir(test_region);
                 else
                     sp_data_dir = getdir('You''ll need to choose the directory with existing OMI_SP files', test_dates);
                 end
             end
             
             for i=1:numel(test_dates)
+                if strcmpi(prof_mode, 'daily') && ~can_do_daily(test_dates{i})
+                    continue
+                end
+                
                 BEHR_main('start', test_dates{i}, 'end', test_dates{i}, 'behr_mat_dir', new_dir, 'sp_mat_dir', sp_data_dir, 'profile_mode', prof_mode, 'overwrite', true);
             end
         else
             % If we're not generating data, then check if new_dir is not empty (i.e. already given)
             if isempty(new_dir)
-                new_dir = getdir('You''ll need to choose the directory with the new OMI_BEHR files', test_dates);
+                new_dir = getdir(sprintf('You''ll need to choose the directory with the new %s OMI_BEHR files', prof_mode), test_dates);
             end
         end
         
@@ -405,6 +438,12 @@ end
         successes_data = false(size(test_dates));
         successes_grid = false(size(test_dates));
         for i=1:numel(test_dates)
+            if strcmpi(prof_mode, 'daily') && ~can_do_daily(test_dates{i})
+                successes_data(i) = true;
+                successes_grid(i) = true;
+                continue
+            end
+            
             if DEBUG_LEVEL > 0
                 fprintf(fid, '\n');
             end
@@ -483,6 +522,10 @@ end
             end
             
             for i=1:numel(test_dates)
+                if strcmpi(prof_mode, 'daily') && ~can_do_daily(test_dates{i})
+                    continue
+                end
+                
                 BEHR_publishing_main('start', test_dates{i}, 'end', test_dates{i}, 'output_type', 'hdf', 'pixel_type', 'native', 'mat_dir', behr_data_dir, 'save_dir', new_native_dir,...
                     'organize', false, 'overwrite', true);
                 BEHR_publishing_main('start', test_dates{i}, 'end', test_dates{i}, 'output_type', 'hdf', 'pixel_type', 'gridded', 'mat_dir', behr_data_dir, 'save_dir', new_gridded_dir,...
@@ -528,6 +571,10 @@ end
         
         successes = false(size(test_dates));
         for i=1:numel(test_dates)
+            if strcmpi(prof_mode, 'daily') && ~can_do_daily(test_dates{i})
+                continue
+            end
+            
             if DEBUG_LEVEL > 0
                 fprintf(fid, '\n');
             end
@@ -566,6 +613,13 @@ end
             
             successes(i) = behr_unit_test(new_data, old_data, DEBUG_LEVEL, fid, fields_to_ignore);
         end
+    end
+
+    % NESTED UTILITY FUNCTIONS %
+    function b = can_do_daily(date_in)
+        dnums = cellfun(@datenum, daily_profiles_available);
+        date_check = datenum(date_in) >= dnums(:,1) & datenum(date_in) <= dnums(:,2);
+        b = any(date_check);
     end
 end
 
@@ -636,3 +690,5 @@ for i=1:numel(F)
     end
 end
 end
+
+

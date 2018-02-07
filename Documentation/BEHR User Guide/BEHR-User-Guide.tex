@@ -203,9 +203,8 @@ equivalent to the one with the period and is used interchangeably.
 	SpacecraftLongitude	&	Native		&	SP			&	[-180, 180]	& degrees \\
 	Swath				&	Native	 	&	SP			&	[0, $\infty$)	& unitless \\
 	TerrainHeight		&	Native	 	& 	SP			&	($-\infty$, $\infty$) 	& m \\
-	TerrainPressure		&	Native	 	& 	SP			&	[0, $\infty$) 	& m \\
+	TerrainPressure		&	Native	 	& 	SP			&	[0, $\infty$) 	& hPa \\
 	TerrainReflectivity	&	Native 		&	SP			&	[0, 1]		& unitless \\
-	TerrainPressure		&	Native 		&	SP			&	[0, $\infty$)		& unitless \\
 	TiledArea			&	Native		& 	PIXCOR		&	[0, $\infty$) & km$^{2}$ \\
 	TiledCornerLatitude	&	Native		&	PIXCOR		&	[-90, 90] & degrees \\
 	TiledCornerLongitude &	Native		&	PIXCOR		&	[-180, 180.0] & degrees \\
@@ -244,6 +243,64 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 \caption{Meaning of the various bits in the BEHRQualityFlags field.}
 \label{tab:behr-quality-flags}
 \end{table}
+
+\subsection{Attributes}
+\subsubsection{Swath level}
+	Each orbit group (\path{/Data/SwathN}) has a number of attributes that describe important aspects of the BEHR algorithm that relate to that swath.
+	
+	\begin{itemize}
+	\item \textbf{Simple metadata:}
+		\begin{itemize}
+		\item \emph{Description} generic description of the data; indicates if at native pixel or regridded resolution
+		\item \emph{Version} gives the BEHR version used to produce this file
+		\item \emph{Date} gives the date the data in the file is of
+		
+		\item \emph{BEHRRegion} gives which region the product is for; current values as ``us'' (continental United States) and ``hk'' (Hong Kong).
+		\end{itemize}
+		
+	\item \textbf{Input files:}
+		\begin{itemize}
+		\item \emph{OMNO2File} gives the NASA SP file ingested as the base of the retrieval
+		\item \emph{OMPIXCORFile} gives the OMPIXCOR file ingested for the FoV and Tiled pixel corners and areas.
+		\item \emph{MODISCloudFiles} gives the MODIS MYD06\_L2 files ingested to provide the data in the MODISCloud dataset.
+		\item \emph{MODISAlbedoFile} lists the MCD43D files ingested to calculate the surface reflectivity given in the MODISAlbedo field
+		\item \emph{BEHRWRFFile} gives the WRF-Chem file ingested to provide \ce{NO2} and temperature profiles
+		\end{itemize}
+		
+	\item \textbf{Processing decisions:}
+		\begin{itemize}
+		\item \emph{BEHRProfileMode} will be the string ``monthly'' or ``daily'' indicating whether monthly or daily \ce{NO2} and temperature profiles were used.
+		\item \emph{BEHRWRFPressureMode} will be the string ``precomputed'' or ``online''.  ``precomputed'' indicates that total pressure (for the vertical coordinate) was calculated with \path{calculated_met_quantities.nco} from \url{https://github.com/CohenBerkeleyLab/WRF-nco-tools} during subsetting or averaging of WRF output files.  ``online'' indicates that total pressure was calculated from WRF \lstinline$P$ and \lstinline$PB$ variables within the Matlab code (\path{rProfile_WRF.m}).
+		\item \emph{BEHRWRFTemperatureMode} will be the string ``precomputed'' or ``online''. Like BEHRWRFPressureMode, this indicates whether WRF's temperature output was converted from perturbation potential temperature to absolute temperature with \path{calculated_met_quantities.nco} (``precomputed'') or in the Matlab code (\path{convert_wrf_temperature.m}).
+		\end{itemize}
+		
+	\item \textbf{Code commit IDs:}
+		\begin{itemize}
+		\item Each of these attributes begins with \emph{GitHead}
+		\item The middle segment indicates the repository that the commit is from:
+			\begin{itemize}
+			\item \lstinline$Core$: BEHR-core at \url{https://github.com/CohenBerkeleyLab/BEHR-core}
+			\item \lstinline$BEHRUtils$: BEHR-core-utils at \url{https://github.com/CohenBerkeleyLab/BEHR-core-utils}
+			\item \lstinline$GenUtils$: Matlab-Gen-Utils at \url{https://github.com/CohenBerkeleyLab/Matlab-Gen-Utils}
+			\item \lstinline$PSM$: BEHR-PSM-Gridding at \url{https://github.com/CohenBerkeleyLab/BEHR-PSM-Gridding}
+			\item \lstinline$MatPyInt$: MatlabPythonInterface at \url{https://github.com/CohenBerkeleyLab/MatlabPythonInterface}
+			\item \lstinline$WRFUtils$: WRF\_Utils at \url{https://github.com/CohenBerkeleyLab/WRF_Utils}
+			\end{itemize}
+		
+		\item The last segment indicates which step of the algorithm that commit was the active commit for:
+			\begin{itemize}
+			\item \lstinline$Read$: reading in ancillary data (\path{read_main.m} in BEHR-core).
+			\item \lstinline$Main$: BEHR AMF and VCD \ce{NO2} calculation (\path{BEHR_main.m} in BEHR-core).
+			\item \lstinline$Pub$: publishing, writing the .hdf files from the Matlab .mat files (\path{BEHR_publishing_main.m} in BEHR-core).
+			\end{itemize}
+			
+		\item The hash given as the attribute value is the Git SHA-1 hash of the commit that was HEAD at the time that step was run.
+			\begin{itemize}
+			\item So \lstinline$GitHead_Core_Main = 82f51557e00b8227cd7ca5490d9b77112a72df4f$ means that \href{https://github.com/CohenBerkeleyLab/BEHR-core/commit/82f51557e00b8227cd7ca5490d9b77112a72df4f}{commit 82f5155 of the BEHR-core repository} was the most recent commit when \path{BEHR_main.m} was run to produce the data for that file.
+			\item If the value is ``N/A'' that means that repository was not used at the time to produce that file.
+			\end{itemize}
+		\end{itemize}
+	\end{itemize}
 
 \FloatBarrier
 

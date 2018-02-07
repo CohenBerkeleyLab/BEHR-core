@@ -88,7 +88,6 @@ date_start = pout.start;
 date_end = pout.end;
 behr_mat_dir = pout.behr_mat_dir;
 sp_mat_dir = pout.sp_mat_dir;
-amf_tools_path = pout.amf_tools_path;
 no2_profile_path = pout.no2_profile_path;
 region = pout.region;
 overwrite = pout.overwrite;
@@ -105,9 +104,7 @@ date_end = validate_date(date_end);
 if ~ischar(behr_mat_dir)
     E.badinput('Parameter "behr_mat_dir" must be a string');
 elseif ~ischar(sp_mat_dir)
-    E.badinput('Parameter "behr_mat_dir" must be a string');
-elseif ~ischar(amf_tools_path)
-    E.badinput('Parameter "amf_tools_path" must be a string');
+    E.badinput('Parameter "sp_mat_dir" must be a string');
 elseif ~ischar(no2_profile_path)
     E.badinput('Parameter "no2_profile_path" must be a string');
 elseif (~islogical(overwrite) && ~isnumeric(overwrite)) || ~isscalar(overwrite)
@@ -129,6 +126,9 @@ end
 if isempty(behr_mat_dir)
     behr_mat_dir = behr_paths.BEHRMatSubdir(region, prof_mode);
 end
+
+% Bring the AMF tools path (where damf.txt is) into this workspace
+amf_tools_path = behr_paths.amf_tools_dir;
 
 % Verify the paths integrity.
 nonexistant = {};
@@ -153,8 +153,6 @@ if numel(nonexistant)>0
 end
 
 %Store paths to relevant files
-addpath(amf_tools_path)
-fileTmp = fullfile(amf_tools_path,'nmcTmpYr.txt');
 fileDamf = fullfile(amf_tools_path,'damf.txt');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -214,6 +212,7 @@ behrutils_githead = git_head_hash(behr_paths.behr_utils);
 genutils_githead = git_head_hash(behr_paths.utils);
 psm_githead = git_head_hash(behr_paths.psm_dir);
 imatpy_githead = git_head_hash(behr_paths.python_interface);
+wrfutils_githead = git_head_hash(behr_paths.wrf_utils);
 
 datenums = datenum(date_start):datenum(date_end);
 parfor(j=1:length(datenums), n_workers)
@@ -244,6 +243,12 @@ parfor(j=1:length(datenums), n_workers)
     S=load(fullfile(sp_mat_dir,sp_mat_name));
     Data=S.Data;
     
+    if isempty(Data)
+        % If there is no data read in from read_main.m, then there's
+        % nothing to do for this day.
+        continue
+    end
+    
     % Double check that the loaded SP file is for the same region as we're
     % trying to process
     if ~strcmpi(Data(1).BEHRRegion, region)
@@ -254,101 +259,7 @@ parfor(j=1:length(datenums), n_workers)
     % CALCULATE OUR AMFS %
     %%%%%%%%%%%%%%%%%%%%%%
     
-    for d=1:length(Data);
-        % Data is initialized in read_main with a single 0 in the Longitude
-        % field.  Since points outside the lat/lons of interest are removed
-        % completely, we should also check if all points are gone.
-        if numel(Data(d).Longitude)==1 || isempty(Data(d).Longitude);
-            if DEBUG_LEVEL > 1; fprintf('  Note: Data(%u) is empty\n',d); end
-            continue %JLL 17 Mar 2014: Skip doing anything if there's really no information in this data
-        end
-        if DEBUG_LEVEL>0; fprintf('  Swath %u of %s \n',d,datestr(datenums(j))); end
-        c=numel(Data(d).Longitude);
-        
-        %JLL 17 Mar 2014: Load some of the variables from 'Data' to
-        %make referencing them less cumbersome. Also convert some
-        %to column vectors to work with rNmcTmp2 and rDamf2
-        loncorns = Data(d).FoV75CornerLongitude;
-        latcorns = Data(d).FoV75CornerLatitude;
-        time = Data(d).Time;       
- 
-        sza = Data(d).SolarZenithAngle;
-        vza = Data(d).ViewingZenithAngle;
-        phi = Data(d).RelativeAzimuthAngle;
-        surfPres = Data(d).GLOBETerpres;
-        albedo = Data(d).MODISAlbedo;
-        cldFrac = Data(d).CloudFraction;
-        cldRadFrac = Data(d).CloudRadianceFraction;
-        
-        pressure = behr_pres_levels();
-        
-        surfPres(surfPres>=1013)=1013; %JLL 17 Mar 2014: Clamp surface pressure to sea level or less.
-        cldPres = Data(d).CloudPressure;
-        cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
-        
-        if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
-        [no2Profile, temperature, wrf_profile_file] = rProfile_WRF(datenums(j), prof_mode, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
-        bad_profs = squeeze(all(isnan(no2Profile),1));
-        
-        if DEBUG_LEVEL > 1; fprintf('   Calculating clear and cloudy AMFs\n'); end
-        dAmfClr = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres); %JLL 18 Mar 2014: Interpolate the values in dAmf to the albedo and other conditions input
-        cloudalbedo=0.8*ones(size(Data(d).CloudFraction)); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
-        dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
-
-        if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
-        [amf, amfVis, ~, ~, scattering_weights, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, cldPres, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
-        amf(bad_profs)=NaN;
-        amfVis(bad_profs)=NaN;
-        scattering_weights(:,bad_profs)=NaN;
-        avg_kernels(:,bad_profs)=NaN;
-        sw_plevels(:,bad_profs)=NaN;
-        no2_prof_interp(:,bad_profs)=NaN;
-        
-        sz = size(Data(d).Longitude);
-        len_vecs = size(scattering_weights,1);  % JLL 26 May 2015 - find out how many pressure levels there are. Will often be 30, but might change.
-        % Need this to properly reshape the scattering weights, AKs, pressure levels, and (soon) profiles
-        
-        Data(d).BEHRAMFTrop = reshape(amf,sz); %JLL 18 Mar 2014: Save the resulting AMF of the pixel
-        Data(d).BEHRAMFTropVisOnly = reshape(amfVis,sz);
-        Data(d).BEHRScatteringWeights = reshape(scattering_weights, [len_vecs, sz]);
-        Data(d).BEHRAvgKernels = reshape(avg_kernels, [len_vecs, sz]);
-        Data(d).BEHRNO2apriori = reshape(no2_prof_interp, [len_vecs, sz]);
-        Data(d).BEHRWRFFile = wrf_profile_file;
-        Data(d).BEHRProfileMode = prof_mode;
-        Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
-        Data(d).BEHRQualityFlags = behr_quality_flags(Data(d)); 
-    end
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % CALCULATE VCDS FROM NASA SCDS AND OUR AMFS %
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    b=length(Data);
-    for z=1:b;
-        if ~isfield(Data,'BEHRAMFTrop') || isempty(Data(z).BEHRAMFTrop)
-            continue
-        end
-        Data(z).BEHRColumnAmountNO2Trop=Data(z).ColumnAmountNO2Trop.*Data(z).AmfTrop./Data(z).BEHRAMFTrop;
-        Data(z).BEHRColumnAmountNO2TropVisOnly=Data(z).ColumnAmountNO2Trop.*Data(z).AmfTrop./Data(z).BEHRAMFTropVisOnly;
-        % make sure fill values in the original column or AMF are
-        % fill values in BEHR.
-        Data(z).BEHRColumnAmountNO2Trop(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AmfTrop < -30000) = nan;
-        Data(z).BEHRColumnAmountNO2TropVisOnly(Data(z).ColumnAmountNO2Trop < -1e29 | Data(z).AmfTrop < -30000) = nan;
-        if DEBUG_LEVEL > 0; fprintf('   BEHR [NO2] stored for swath %u\n',z); end
-        
-        Data(z).GitHead_Core_Main = core_githead;
-        Data(z).GitHead_BEHRUtils_Main = behrutils_githead;
-        Data(z).GitHead_GenUtils_Main = genutils_githead;
-        Data(z).GitHead_PSM_Main = psm_githead;
-        Data(z).GitHead_MatPyInt_Main = imatpy_githead;
-    end
-    
-    
-    %%%%%%%%%%%%%%%%%
-    % GRIDDING DATA %
-    %%%%%%%%%%%%%%%%%
-    
-    OMI = psm_wrapper(Data, Data(1).Grid, 'only_cvm', ~use_psm, 'DEBUG_LEVEL', DEBUG_LEVEL);
+    [Data, OMI] = BEHR_main_one_day(Data, 'no2_profile_path', no2_profile_path, 'profile_mode', prof_mode, 'use_psm_gridding', use_psm);
     
     %%%%%%%%%%%%%
     % SAVE FILE %
