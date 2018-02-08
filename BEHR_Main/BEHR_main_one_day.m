@@ -6,6 +6,7 @@ function [ Data, OMI ] = BEHR_main_one_day( Data, varargin )
 %   structure DATA with the native pixels including BEHR NO2 VCDs and the
 %   OMI structure with the gridded quantities.
 %
+%
 %   Additional parameters:
 %
 %       'no2_profile_path' - the top directory to look for WRF output files
@@ -24,6 +25,20 @@ function [ Data, OMI ] = BEHR_main_one_day( Data, varargin )
 %       method (specifically, fields specified as psm_gridded_vars in
 %       BEHR_publishing_gridded_fields will be gridded by PSM).
 %
+%       'err_wrf_missing_attr' - if true (default), then if WRF files are
+%       missing attributes that are read in (usually units), an error is
+%       thrown. However, if false, then default units are assumed. Use
+%       "false" with caution, as if the necessary variables are given in
+%       the wrong units, there will be no way to catch that if "false" is
+%       given for this parameter.
+%
+%       'DEBUG_LEVEL' - level of progress messaged printed to the console.
+%       0 = none, 1 = minimal, 2 = all, 3 = processing times are added.
+%       Default is 2.
+%
+%
+%   Parameters specific to error analysis:
+%
 %       'lookup_sweights' - scalar logical, determines whether the
 %       algorithm should look up scattering weights based on SZA, VZA, etc.
 %       or use the scattering weights already stored in Data. This is
@@ -37,16 +52,14 @@ function [ Data, OMI ] = BEHR_main_one_day( Data, varargin )
 %       read in from Data. Similar to "lookup_sweights", intended for
 %       uncertainty analysis. If false, Data must be the result of
 %       BEHR_main to have the profiles stored in it.
-%
-%       'DEBUG_LEVEL' - level of progress messaged printed to the console.
-%       0 = none, 1 = minimal, 2 = all, 3 = processing times are added.
-%       Default is 2.
+
 
 p = inputParser;
 % Parameters relevant to the normal retrieval
 p.addParameter('no2_profile_path', '');
 p.addParameter('profile_mode', 'monthly');
 p.addParameter('use_psm_gridding', false);
+p.addParameter('err_wrf_missing_attr', true);
 
 % Parameters relevant to error analysis
 p.addParameter('lookup_sweights', true);
@@ -61,6 +74,7 @@ pout = p.Results;
 no2_profile_path = pout.no2_profile_path;
 prof_mode = pout.profile_mode;
 use_psm = pout.use_psm_gridding;
+err_wrf_missing_attr = pout.err_wrf_missing_attr;
 lookup_sweights = pout.lookup_sweights;
 lookup_profile = pout.lookup_profile;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
@@ -89,11 +103,11 @@ wrfutils_githead = git_head_hash(behr_paths.wrf_utils);
 this_date = Data(1).Date;
 region = Data(1).BEHRRegion;
 
-for d=1:length(Data);
+for d=1:length(Data)
     % Data is initialized in read_main with a single 0 in the Longitude
     % field.  Since points outside the lat/lons of interest are removed
     % completely, we should also check if all points are gone.
-    if numel(Data(d).Longitude)==1 || isempty(Data(d).Longitude);
+    if numel(Data(d).Longitude)==1 || isempty(Data(d).Longitude)
         if DEBUG_LEVEL > 1; fprintf('  Note: Data(%u) is empty\n',d); end
         continue %JLL 17 Mar 2014: Skip doing anything if there's really no information in this data
     end
@@ -121,7 +135,7 @@ for d=1:length(Data);
     cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
     
     if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
-    [no2Profile, temperature, wrf_profile_file, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+    [no2Profile, temperature, wrf_profile_file, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path, 'err_missing_att', err_wrf_missing_attr); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     if ~lookup_profile
         no2Profile_check = no2Profile;
         no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, pressure);
