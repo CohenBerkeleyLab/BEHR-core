@@ -176,7 +176,8 @@ for d=1:length(Data);
     Data(d).BEHRWRFTemperatureMode = wrf_temp_mode;
     Data(d).BEHRProfileMode = prof_mode;
     Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
-    Data(d).TropoPresVSCldPres = TropoPres-cldPres;
+    Data(d).TropoPresVSCldPres = (TropoPres-cldPres) > 0;
+    Data(d).TropopausePressure = TropoPres;
     Data(d).BEHRQualityFlags = behr_quality_flags(Data(d));
 end
 
