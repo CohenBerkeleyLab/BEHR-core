@@ -105,6 +105,8 @@ for d=1:length(Data);
     loncorns = Data(d).FoV75CornerLongitude;
     latcorns = Data(d).FoV75CornerLatitude;
     time = Data(d).Time;
+    lon = Data(d).Longitude;
+    lat = Data(d).Latitude;
     
     sza = Data(d).SolarZenithAngle;
     vza = Data(d).ViewingZenithAngle;
@@ -121,10 +123,10 @@ for d=1:length(Data);
     cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
     
     if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
-    [no2Profile, temperature, wrf_profile_file, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+    [no2Profile, temperature, wrf_profile_file, TropoPres, presProfile, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, lon, lat, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     if ~lookup_profile
         no2Profile_check = no2Profile;
-        no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, pressure);
+        %no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, presProfile);
         if ~lookup_sweights && any(abs(no2Profile(:) - no2Profile_check(:)) > 1e-12)
             % If not using the scattering weights from the Data structure,
             % then we need to verify that we loaded the right temperature
@@ -136,9 +138,9 @@ for d=1:length(Data);
     
     if lookup_sweights
         if DEBUG_LEVEL > 1; fprintf('   Calculating clear and cloudy AMFs\n'); end
-        dAmfClr = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres); %JLL 18 Mar 2014: Interpolate the values in dAmf to the albedo and other conditions input
+        dAmfClr = rDamf2(fileDamf, presProfile, sza, vza, phi, albedo, surfPres); %JLL 18 Mar 2014: Interpolate the values in dAmf to the albedo and other conditions input
         cloudalbedo=0.8*ones(size(Data(d).CloudFraction)); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
-        dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
+        dAmfCld = rDamf2(fileDamf, presProfile, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
     else
         dAmfClr = remove_nonstandard_pressures(Data(d).BEHRScatteringWeightsClear, Data(d).BEHRPressureLevels);
         dAmfCld = remove_nonstandard_pressures(Data(d).BEHRScatteringWeightsCloudy, Data(d).BEHRPressureLevels);
@@ -150,7 +152,7 @@ for d=1:length(Data);
     end
     
     if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
-    [amf, amfVis, ~, ~, scattering_weights_clear, scattering_weights_cloudy, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, cldPres, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+    [amf, amfVis, ~, ~, scattering_weights_clear, scattering_weights_cloudy, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, cldPres, cldFrac, cldRadFrac, presProfile, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
     amf(bad_profs)=NaN;
     amfVis(bad_profs)=NaN;
     scattering_weights_clear(:,bad_profs)=NaN;
@@ -174,6 +176,7 @@ for d=1:length(Data);
     Data(d).BEHRWRFTemperatureMode = wrf_temp_mode;
     Data(d).BEHRProfileMode = prof_mode;
     Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
+    Data(d).TropoPresVSCldPres = TropoPres-cldPres;
     Data(d).BEHRQualityFlags = behr_quality_flags(Data(d));
 end
 
