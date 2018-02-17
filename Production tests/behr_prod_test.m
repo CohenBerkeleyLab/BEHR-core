@@ -237,15 +237,8 @@ while n < n_files
         median_abs_perdiff = nanmedian(abs(perdel));
         
         indiv_stats(n).(fields_to_check{a}).date = datestr(dnums_new(r),'yyyy-mm-dd');
-       
-        if isequal(size(xx_good), size(lon))
-            indiv_stats(n).(fields_to_check{a}).Longitude = lon(xx_good);
-            indiv_stats(n).(fields_to_check{a}).Latitude = lat(xx_good);
-        else
-            indiv_stats(n).(fields_to_check{a}).Longitude = nan(size(lon));
-            indiv_stats(n).(fields_to_check{a}).Latitude = nan(size(lon));
-        end
-        
+        indiv_stats(n).(fields_to_check{a}).Longitude = lon(xx_good);
+        indiv_stats(n).(fields_to_check{a}).Latitude = lat(xx_good);
         
         indiv_stats(n).(fields_to_check{a}).difference_stats.num_dif_vals = num_neq;
         indiv_stats(n).(fields_to_check{a}).difference_stats.mean_difference = mean_diff;
@@ -287,14 +280,8 @@ while n < n_files
             indiv_stats(n).(fields_to_check{a}).fill_and_nan_changes.lat_for_replaced_fills = lat_for_rep_fills;
         end
         
-        if isequal(size(xx_good), size(lon))
-            overall_stats.(fields_to_check{a}).Longitude = cat(1, overall_stats.(fields_to_check{a}).Longitude, lon(xx_good));
-            overall_stats.(fields_to_check{a}).Latitude = cat(1, overall_stats.(fields_to_check{a}).Latitude, lat(xx_good));
-        else
-            overall_stats.(fields_to_check{a}).Longitude = nan;
-            overall_stats.(fields_to_check{a}).Latitude = nan;
-        end
-        
+        overall_stats.(fields_to_check{a}).Longitude = cat(1, overall_stats.(fields_to_check{a}).Longitude, lon(xx_good));
+        overall_stats.(fields_to_check{a}).Latitude = cat(1, overall_stats.(fields_to_check{a}).Latitude, lat(xx_good));
         
         overall_stats.(fields_to_check{a}).difference_stats.num_dif_vals = overall_stats.(fields_to_check{a}).difference_stats.num_dif_vals + num_neq;
         overall_stats.(fields_to_check{a}).difference_stats.differences = cat(1, overall_stats.(fields_to_check{a}).difference_stats.differences, del);
