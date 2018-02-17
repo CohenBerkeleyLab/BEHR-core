@@ -124,7 +124,7 @@ for d=1:length(Data);
     [no2Profile, temperature, wrf_profile_file, TropoPres, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     if ~lookup_profile
         no2Profile_check = no2Profile;
-        %no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, presProfile);
+        no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, pressure);
         if ~lookup_sweights && any(abs(no2Profile(:) - no2Profile_check(:)) > 1e-12)
             % If not using the scattering weights from the Data structure,
             % then we need to verify that we loaded the right temperature
