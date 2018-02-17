@@ -150,6 +150,7 @@ for d=1:length(Data);
     end
     
     if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
+
     [amf, amfVis, ~, ~, scattering_weights_clear, scattering_weights_cloudy, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, TropoPres, cldPres, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
     amf(bad_profs)=NaN;
     amfVis(bad_profs)=NaN;
