@@ -120,7 +120,7 @@ for d=1:length(Data);
     cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
     
     if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
-    [no2Profile, temperature, wrf_profile_file, TropoPres,pindx, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+    [no2Profile, temperature, wrf_profile_file, TropoPres,tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     if ~lookup_profile
         no2Profile_check = no2Profile;
         no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, pressure);
@@ -174,8 +174,10 @@ for d=1:length(Data);
     Data(d).BEHRWRFTemperatureMode = wrf_temp_mode;
     Data(d).BEHRProfileMode = prof_mode;
     Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
+    % temporary fields, will be removed after the warning flag is set
     Data(d).TropoPresVSCldPres = (TropoPres-cldPres) > 0;
-    Data(d).Interp_TropopausePressure = pindx;
+    Data(d).Interp_TropopausePressure = tropopause_interp_flag;
+    %
     Data(d).BEHRTropopausePressure = TropoPres;
     Data(d).BEHRQualityFlags = behr_quality_flags(Data(d));   
 end
