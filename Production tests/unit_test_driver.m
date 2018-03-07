@@ -119,16 +119,48 @@ else
     fid = 1;
 end
 
-
 try
     prompt_str = ['\nSpecify any fields to ignore in unit testing, separated by a space.\n',...
-        'Regular expressions can be used. By default, fields beginning with\n',...
-        '"GitHead" are ignored because they are expected to be different if the\n',...
-        'algorithm has changed. To override this, make one of the strings input\n',...
-        '"keepgit" (without the quotes), i.e. entering "keepgit .*File" will\n',...
-        'ignore any field ending in "File" but do compare the GitHead fields: '];
+                  'Regular expressions can be used. By default, fields beginning with\n',...
+                  '"GitHead" are ignored because they are expected to be different if the\n',...
+                  'algorithm has changed. To override this, make one of the strings input\n',...
+                  '"keepgit" (without the quotes), i.e. entering "keepgit .*File" will\n',...
+                  'ignore any field ending in "File" but do compare the GitHead fields: '];
     fields_to_ignore = input(prompt_str, 's');
     fields_to_ignore = strsplit(fields_to_ignore);
+
+    xx = strcmpi('keepgit', fields_to_ignore);
+    if ~any(xx)
+        fields_to_ignore = veccat({'GitHead.*'},fields_to_ignore);
+    else
+        fields_to_ignore(xx) = [];
+    end
+
+    if generate_new_data
+        make_git_report(behr_paths.behr_core, 'GitReport-Core.txt');
+        make_git_report(behr_paths.behr_utils, 'GitReport-BEHRUtils.txt');
+        make_git_report(behr_paths.utils, 'GitReport-GenUtils.txt');
+    end
+    switch what_to_test
+        % Each of the testing subfunctions allows paths to be given to them 
+        % by test_all() to minimized user interaction if all three steps are
+        % to be run. I've set it up so that if empty strings are passed, it
+        % considers those paths to not be given, but something has to be passed.
+        case 'reading'
+            success = test_reading('', '');
+        case 'behrmain'
+            success_m = test_behr_main('monthly', '', '');
+            success_d = test_behr_main('daily', '', '');
+            success = success_m & success_d;
+        case 'publishing'
+            success_m = test_publishing('monthly', '', '', '', '');
+            success_d = test_publishing('daily', '', '', '', '');
+            success = success_m * success_d;
+        case 'all'
+            success = test_all();
+        otherwise
+            E.notimplemented(what_to_test);
+    end
     
     xx = strcmpi('keepgit', fields_to_ignore);
     if ~any(xx)
