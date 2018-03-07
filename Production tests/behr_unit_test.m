@@ -40,7 +40,7 @@ elseif ~iscellstr(fields_to_ignore)
     E.badinput('FIELDS_TO_IGNORE must be a cell array of strings');
 end
 
-tol = 1e-6;
+tol = 1e-4;
 
 [test_field_names, new_old_fields_mapping] = compare_fields_present(new, old, DEBUG_LEVEL, fid, fields_to_ignore);
 test_field_vales = compare_field_values(new, old, new_old_fields_mapping, tol, DEBUG_LEVEL, fid);
