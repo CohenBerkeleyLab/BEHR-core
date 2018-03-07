@@ -47,6 +47,13 @@ function BEHR_main(varargin)
 %       method (specifically, fields specified as psm_gridded_vars in
 %       BEHR_publishing_gridded_fields will be gridded by PSM).
 %
+%       'err_wrf_missing_attr' - if true (default), then if WRF files are
+%       missing attributes that are read in (usually units), an error is
+%       thrown. However, if false, then default units are assumed. Use
+%       "false" with caution, as if the necessary variables are given in
+%       the wrong units, there will be no way to catch that if "false" is
+%       given for this parameter.
+%
 %       'DEBUG_LEVEL' - level of progress messaged printed to the console.
 %       0 = none, 1 = minimal, 2 = all, 3 = processing times are added.
 %       Default is 2.
@@ -79,6 +86,7 @@ p.addParameter('region', 'us');
 p.addParameter('overwrite', false);
 p.addParameter('profile_mode', 'monthly');
 p.addParameter('use_psm_gridding', false);
+p.addParameter('err_wrf_missing_attr', true);
 p.addParameter('DEBUG_LEVEL', 2);
 
 p.parse(varargin{:});
@@ -93,6 +101,7 @@ region = pout.region;
 overwrite = pout.overwrite;
 prof_mode = pout.profile_mode;
 use_psm = pout.use_psm_gridding;
+err_wrf_missing_attr = pout.err_wrf_missing_attr;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 %%% Validation %%%
@@ -259,7 +268,7 @@ parfor(j=1:length(datenums), n_workers)
     % CALCULATE OUR AMFS %
     %%%%%%%%%%%%%%%%%%%%%%
     
-    [Data, OMI] = BEHR_main_one_day(Data, 'no2_profile_path', no2_profile_path, 'profile_mode', prof_mode, 'use_psm_gridding', use_psm);
+    [Data, OMI] = BEHR_main_one_day(Data, 'no2_profile_path', no2_profile_path, 'profile_mode', prof_mode, 'use_psm_gridding', use_psm, 'err_wrf_missing_attr', err_wrf_missing_attr);
     
     %%%%%%%%%%%%%
     % SAVE FILE %
