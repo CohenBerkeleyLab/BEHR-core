@@ -1,8 +1,9 @@
 #!/bin/bash
+set -e
 
-_mydir=$(dirname $0)
-_mydir=$(cd $_mydir; pwd -P)
-clone_dir=$(dirname $_mydir) # by default, put the new repositories in the folder containing this one
+_mydir=$(dirname "$0")
+_mydir=$(cd "$_mydir"; pwd -P)
+clone_dir=$(dirname "$_mydir") # by default, put the new repositories in the folder containing this one
 
 # *************************************** #
 # Setup variables needed in sub functions #
