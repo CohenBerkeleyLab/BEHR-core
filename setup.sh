@@ -1,8 +1,9 @@
 #!/bin/bash
+set -e
 
-_mydir=$(dirname $0)
-_mydir=$(cd $_mydir; pwd -P)
-clone_dir=$(dirname $_mydir) # by default, put the new repositories in the folder containing this one
+_mydir=$(dirname "$0")
+_mydir=$(cd "$_mydir"; pwd -P)
+clone_dir=$(dirname "$_mydir") # by default, put the new repositories in the folder containing this one
 
 # *************************************** #
 # Setup variables needed in sub functions #
@@ -61,6 +62,11 @@ Usage: $(basename $0) [--https]|[--ssh]|[--ssh=<alias>]
                 ./$(basename $0) --ssh=lab-github
 
             would clone the repositories with "git@lab-github:/${fork}/..."
+        --develop : keeps the repos in the develop branch after cloning. Otherwise, 
+            check out the master branch for each repo. Generally, most users will
+            want the master branch since it is stable. UC Berkeley students working
+            on developing the code should use this flag to start in the unstable 
+            research branch.
 
     The repositories will be cloned to:
 EOU
@@ -76,10 +82,24 @@ EOU
 }
 
 github_setup () {
+    co_master=$2
+    if $co_master; then
+        git checkout master
+    fi
+
     cd "$clone_dir"
 
     for repo in ${github_repos[@]}; do
-        git clone ${1}${repo}
+        # This will extract the repo name and remove the .git extension. We specify this
+        # during the cloning process so that we can cd into it and change the branch if 
+        # necessary
+        local_dir="$(basename $repo)"
+        local_dir=${local_dir%.*}
+        git clone ${1}${repo} "$local_dir"
+        if $co_master; then
+            # Do the cd in a subshell so we don't have to cd back up to this directory
+            (cd $local_dir; git checkout master)
+        fi
     done
 }
 
@@ -91,6 +111,7 @@ github_setup () {
 force_ssh=false
 force_https=false
 ssh_alias="github.com"
+checkout_master=true
 
 for arg in "$@"; do
     case $arg in
@@ -104,6 +125,9 @@ for arg in "$@"; do
             ;;
         --ssh=*)
             ssh_alias="${arg#*=}"
+            ;;
+        --develop)
+            checkout_master=false
             ;;
         *)
             # no need to explicitly specify help options, will print usage
@@ -143,5 +167,5 @@ else
     fi
 fi
 
-github_setup "$stem"
+github_setup "$stem" $checkout_master
 
