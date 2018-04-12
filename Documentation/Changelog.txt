@@ -39,6 +39,13 @@ equivalent to the one with the period and is used interchangeably.
    anomaly.
 -- Clear and cloudy scattering weights are now published separately; averaging kernels
    are still the cloud radiance fraction-weighted sum of clear and cloudy sensitivities.
+-- The ocean reflectivity look up table was updated so that the reflectivity was calculated
+   at 460 nm instead of 430 nm. This is in the MODIS Band 3 window used for land surface
+   reflectivity.
+-- For the subproduct using daily NO2 profiles, the profile closest in time to the OMI overpass
+   is selected; previously the last profile before the OMI overpass was selected.
+-- The AMF calculation now uses a variable tropopause height derived from the WRF temperature
+   profiles instead of the previous fixed 200 hPa tropopause.
 
 **** 3.0A ****
 -- We will no longer produce the csv file version of BEHR due to the increasing number
