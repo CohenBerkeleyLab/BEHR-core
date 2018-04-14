@@ -124,6 +124,8 @@ equivalent to the one with the period and is used interchangeably.
 	
 	\item \textbf{BEHRScatteringWeights}: the vectors of scattering weights that can be used to recompute AMFs using custom \emph{a priori} profiles. See \S\ref{sec:scweights} for more details.
 	
+	\item \textbf{BEHRTropopausePressure}: the tropopause pressure derived from WRF temperature profiles and used as the upper limit in the BEHR AMF calculation.
+	
 	\item \textbf{GLOBETerpress}: The average surface pressure of the pixel calculated from the GLOBE database (\url{http://www.ngdc.noaa.gov/mgg/topo/globe.html}). Currently it is calculated from the GLOBE terrain heights using a simple scale height calculation, with scale height set to 7.4 km.
 	
 	
@@ -178,6 +180,7 @@ equivalent to the one with the period and is used interchangeably.
 	BEHRPressureLevels	&	Native	 	& 	BEHR			& 	[0, $\infty$) & hPa \\
 	BEHRQualityFlags		& 	Both			& 	BEHR			&	[0, $2^{32}-1$] & bit array flag \\
 	BEHRScatteringWeights & Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRTropopausePressure & Both		&	BEHR			&	[0, $\infty$) & hPa \\
 	CloudFraction		&	Both 		&	SP			&	[0, 1]	 & unitless \\
 	CloudPressure		&	Native	 	&	SP			& 	[0, $\infty$) & hPa \\
 	CloudRadianceFraction &	Both 		&	SP			&	[0, 1]	& unitless \\
@@ -354,7 +357,7 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	The difference in the VCDs stems from the difference in the computation of the cloudy AMF. The to-ground AMF (BEHRAMFTrop) is ultimately the ratio of a modeled slant column density (accounting for the presence of clouds) to a modeled vertical column density that is integrated from ground to tropopause over the whole pixel:
 	
 	\begin{equation}\label{eqn:total-amf}
-	A_{\mathrm{to-ground}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp}
+	A_{\mathrm{to-ground}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{p_\mathrm{tp}} g(p) \: dp}
 	\end{equation}
 	
 	where $p_{\mathrm{surf}}$ is the ground surface pressure, $p_{\mathrm{cloud}}$ is the cloud pressure, $p_{\mathrm{tp}}$ is the tropopause pressure, $w_{\mathrm{clear}}(p)$ are the clear-sky scattering weights, $w_{\mathrm{cloudy}}$ are the cloudy-sky scattering weights, $g(p)$ is the \emph{a priori} \ce{NO2} profile, and $f_r$ is the cloud radiance fraction.	
@@ -362,7 +365,7 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	The visible-only AMF, on the other hand, uses only the visible component of the modeled column in the denominator:
 	\begin{equation}\label{eqn:vis-amf}
 	A_{\mathrm{vis-only}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}%
-{(1-f_g)\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp + f_g \int_{p_{\mathrm{cloud}}}^{\mathrm{p_{tp}}} g(p) \: dp}
+{(1-f_g)\int_{p_{\mathrm{surf}}}^{p_\mathrm{tp}} g(p) \: dp + f_g \int_{p_{\mathrm{cloud}}}^{p_\mathrm{tp}} g(p) \: dp}
 	\end{equation}
 	
 	where $f_g$ is the geometric cloud fraction. 
@@ -372,81 +375,36 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	
 	\subsection{Using scattering weights/averaging kernels} \label{sec:scweights}
 	\subsubsection{Variable layout}
-	These are for advanced users who might wish to either use their own \emph{a priori} \ce{NO2} profile or to compare modeled \ce{NO2} VCDs correctly with BEHR VCDs.  Note that the averaging kernels for each pixel are simply the scattering weights divided by the BEHR AMF; they are provided separately simply for user convenience.
+	These are for advanced users who might wish to either use their own \emph{a priori} \ce{NO2} profile or to compare modeled \ce{NO2} VCDs correctly with BEHR VCDs.  Starting with v3.0B separate clear and cloudy scattering weights are provided, which allows users to follow Eqs. \eqref{eqn:total-amf} and \eqref{eqn:vis-amf} exactly, while a single combined averaging kernel vector is given for each pixel. The relationship between them is:
+	
+	\begin{equation}
+	AK_i(p) = \frac{(1-f)w_{i,\mathrm{clear}}(p) + f w_{i,\mathrm{cloudy}}(p)}{A_{i,\mathrm{to-ground}}}
+	\end{equation}
+	
+that is, the averaging kernel for pixel $i$ at pressure $p$ is the cloud radiance fraction weighted average of the clear and cloudy scattering weights for pixel $i$ at pressure $p$, divided by the to-ground AMF for pixel $i$.
 	
 	For new users wishing to begin using these variables, several resources will be helpful. \citet{palmer2001} contains the original formulation of the relationship between scattering weights, \emph{a priori} \ce{NO2} profiles, and air mass factors and should definitely be studied. The first several chapters of \emph{The Remote Sensing of Tropospheric Composition from Space} assembled by Burrows, Platt, and Borrell \citep{burrows-platt} also describes the relationship of scattering weights, averaging kernels, and air mass factors.
 	
-	What follows will be a description of why the scattering weights are presented how they are.  BEHRScatteringWeights, BEHRAvgKernels, BEHRPressureLevels, and BEHRNO2apriori are 3D variables; the first dimension is the vertical dimension, the second and third correspond to the dimensions of the normal 2D variables. To put this another way, if $X$ were the array of values for these variables, then $X(:,1,1)$ would be the vector of values for the $(1,1)$ pixel, $X(:,1,2)$ the vector for the $(1,2)$ pixel and so on. (Note: some programs may read the data in with C-style ordering and so put the vertical dimension last. The vertical dimension should always be 30 long.)
+	What follows will be a description of why the scattering weights are presented how they are.  BEHRScatteringWeights, BEHRAvgKernels, BEHRPressureLevels, and BEHRNO2apriori are 3D variables; the first dimension is the vertical dimension, the second and third correspond to the dimensions of the normal 2D variables. To put this another way, if $X$ were the array of values for these variables, then $X(:,1,1)$ would be the vector of values for the $(1,1)$ pixel, $X(:,1,2)$ the vector for the $(1,2)$ pixel and so on. (Note: some programs may read the data in with C-style ordering and so put the vertical dimension last.)
 	
-	The BEHRPressureLevels variable gives the vertical coordinates for the other three.  28 of the pressure levels will be the same for every pixel; the remaining two will correspond to the terrain and cloud pressure. Should the terrain or cloud pressure match one of the standard 28 pressures, then the vector of values for this pixel will still be 30 elements long, but will end with fill values which should be removed.
+	The BEHRPressureLevels variable gives the vertical coordinates for the other three.  30 of the pressure levels will be the same for every pixel; the remaining three will correspond to the terrain, cloud, and tropopause pressure. Should the terrain, cloud, or tropopause pressure match one of the standard 30 pressures, then the vector of values for this pixel will still be 33 elements long, but will end with fill values which should be removed.  The scattering weights and averaging kernels can have additional fill values compared to the pressure levels; this occurs when the pressures are outside those available from WRF-Chem. Such fill values should always be above the tropopause, and because AMF calculations integrate from surface (or cloud) pressure to tropopause, can be safely removed.
 	
 	\subsubsection{Summary of use}
 	Averaging kernels should be applied to model profiles before integrating the model profile to yield a tropospheric column for comparison with the BEHR VCD:
 	
 	\begin{equation}
-	V_{\mathrm{model}} = \sum_i AK_i g_i
+	V_{\mathrm{model}} = \sum_l AK_l g_l
 	\end{equation}
 	
-	where $AK_i$ is the averaging kernel and $g_i$ the model \ce{NO2} partial column density for level $i$. The model profile should be interpolated to the pressure levels given in BEHRPressureLevels, rather than the other way around, since the averaging kernels can have sharp transitions at clouds. Since $AK_i = w_i/A$, where $w_i$ is the scattering weight for level $i$ and $A$ the pixel's AMF, this calculation effectively converts the model column to a slant column first, then ``retrieves'' it using the BEHR AMF. \textbf{Note:} since BEHR provides a tropospheric \ce{NO2} column density, it must be compared against a modeled tropospheric column only.
+	where $AK_l$ is the averaging kernel and $g_l$ the model \ce{NO2} partial column density for level $l$. The model profile should be interpolated to the pressure levels given in BEHRPressureLevels, rather than the other way around, since the averaging kernels can have sharp transitions at clouds. Since $AK_l = [(1-f)w_{i,\mathrm{clear}}(p) + f w_{i,\mathrm{cloudy}}(p)//A$, where $w_i$ is the scattering weight for level $i$ and $A$ the pixel's AMF, this calculation effectively converts the model column to a slant column first, then ``retrieves'' it using the BEHR AMF. \textbf{Note:} since BEHR provides a tropospheric \ce{NO2} column density, it must be compared against a modeled tropospheric column only.
 	
-	Similarly, scattering weights can be used with modified versions of Eq. \eqref{eqn:total-amf} and \eqref{eqn:vis-amf} to calculate custom AMFs with new \emph{a priori} profiles:
+	Similarly, scattering weights can be used with Eqs. \eqref{eqn:total-amf} and \eqref{eqn:vis-amf} to calculate custom AMFs with new \emph{a priori} profiles. The published scattering weights include any necessary temperature correction, so they can be used directly in Eqs.\eqref{eqn:total-amf} and \eqref{eqn:vis-amf}.
 	
-	\begin{equation}\label{eqn:custom-tot-amf}
-	A_{\mathrm{to-ground}} = \frac{\int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{pub}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp}
-	\end{equation}
+	We strongly recommend that users interested in calculating their own AMFs check their code by attempting to reproduce the BEHR AMFs from the published scattering weights and \ce{NO2} profiles. Using \path{integPr2.m} from the \href{https://github.com/CohenBerkeleyLab/BEHR-core-utils}{BEHR core utilities repository}, one should be able to reproduce the BEHR AMFs nearly exactly. \path{test_published_scattering_weights.m} in the \href{https://github.com/CohenBerkeleyLab/BEHR-core}{BEHR core repository} demonstrates how BEHR AMFs can be reproduced using the published scattering weights and \ce{NO2} profiles. 
 	
-	\begin{equation}\label{eqn:custom-vis-amf}
-	A_{\mathrm{vis-only}} = \frac{\int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{pub}}(p) g(p) \: dp}{(1-f_g)\int_{p_{\mathrm{surf}}}^{p_\mathrm{{tp}}} g(p) \: dp + f_g \int_{p_{\mathrm{cld}}}^{p_{\mathrm{tp}}} g(p) \: dp}
-	\end{equation}
+	Two final notes: first, \path{integPr2.m} integrates the \emph{a priori} profile in mixing ratio (or mixing ratio times scattering weight) over pressure, see Appendix B of \citet{ziemka01} for information on how mixing ratio integrated over pressure should be done to be equivalent to number density integrated over altitude. Second, the clear and cloudy scattering weights are set to 0 below the surface and cloud pressures, respectively before they are combined to yield the averaging kernel, so there will implicitly be no below-ground or below-cloud contribution to the respective subscenes.
 	
-	Because of how the published scattering weights ($w_{\mathrm{pub}}$) are constructed (\S\ref{sec:scattering-wt-calc}) they incorporate the cloud radiance fraction weighting from Eq. \eqref{eqn:total-amf} and \eqref{eqn:vis-amf}.
 	
-	We strongly recommend that users interested in calculating their own AMFs check their code by attempting to reproduce the BEHR AMFs from the published scattering weights and \ce{NO2} profiles. Using \path{integPr2.m} from the \href{https://github.com/CohenBerkeleyLab/BEHR-core-utils}{BEHR core utilities repository}, one should be able to reproduce the BEHR AMFs to within $\sim 5\%$ in most cases. (It will not be exact since we use separate clear and cloudy scattering weights internally.)
-	
-	\subsubsection{Calculation of scattering weights}\label{sec:scattering-wt-calc}
-	The scattering weights presented ($w_{\mathrm{tot}}$) are calculated as the weighted average of a vector of clear and cloudy scattering weights obtained by interpolating the NASA OMNO2 TOMRAD look up table to the appropriate values of SZA, VZA, RAA (relative azimuth angle), albedo, and surface pressure. Mathematically:
-	\begin{align}
-		w_{i, \mathrm{tot}} = f_r w_{i, \mathrm{cld}} + (1 - f_r) w_{i, \mathrm{clr}} \label{eqn-pubSW}\\
-		w_{i, \mathrm{clr}} = \left\lbrace 
-			\begin{matrix}
-				0 & \text{ if } p_i > p_\mathrm{terr} \\
-				w_{i, \mathrm{clr}} & \text{ otherwise }
-			\end{matrix}\right. \\
-		w_{i, \mathrm{cld}} = \left\lbrace 
-			\begin{matrix} 
-				0 & \text{ if } p_i > p_\mathrm{cld} \\
-				w_{i, \mathrm{cld}} & \text{ otherwise }
-			\end{matrix}\right. \label{eqn-cldSW}
-	\end{align}
-	where $f_r$ is the radiance cloud fraction, $w_{i, \mathrm{clr}}$ is the $i$th element in the clear sky scattering weight vector, $w_{i, \mathrm{cld}}$ is the $i$th element in the cloudy scattering weight vector, $p_i$ is the pressure level for the $i$th element in the vectors, $p_\mathrm{terr}$ is the terrain pressure for the pixel, and $p_\mathrm{cld}$ is the cloud top pressure for the pixel.
-	
-	Therefore the final vector of scattering weights is the cloud radiance fraction-weighted average of the clear and cloudy scattering weight vectors after setting the clear sky vectors to 0 below the ground, and the cloudy vectors to 0 below the cloud top.  This is an approximation of how the NASA scattering weights are reported.  These scattering weights can be combined with an \emph{a priori} \ce{NO2} profile to get the total AMF using a modified version of Eq. \eqref{eqn:total-amf} above:
-	
-	\begin{equation}\label{eqn:amf-published-sw}
-	A = \frac{\int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{tot}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} g(p) \: dp}
-	\end{equation}
-	
-	Note that, because the clear and cloudy scattering weights are combined by Eq. \eqref{eqn-pubSW}, using them in Eq. \eqref{eqn:amf-published-sw} will directly produce the final, total column AMF (rather than separate clear and cloudy AMFs that must be combined). To reproduce visible only AMFs instead should simply be a matter of using the appropriate visible model VCD in the denominator, similar to Eq. \eqref{eqn:vis-amf}.
-	
-	Further note that Eq. \eqref{eqn:amf-published-sw} integrates $g(p)$ as the \emph{a priori} profile in mixing ratio over pressure, see Appendix B of \citet{ziemka01} for information on how mixing ratio integrated over pressure should be done to be equivalent to number density integrated over altitude.
-	
-	\subsubsection{Justification for including terrain and cloud pressure weights}
-	Although we publish the scattering weights in this form, we calculate our AMF as:
-	\begin{equation} \label{eqn-ourAMF}
-		A = f_r A_\mathrm{cld} + (1-f_r) A_\mathrm{clr}
-	\end{equation}
-	where
-	\begin{align}
-		A_\mathrm{cld} = \int_{p_\mathrm{cld}}^{p_\mathrm{trop}} g(p) w_{\mathrm{cld}}(p) \: dp \label{eqn-cldAMF} \\
-		A_\mathrm{clr} = \int_{p_\mathrm{terr}}^{p_\mathrm{trop}} g(p) w_{\mathrm{clr}}(p) \: dp \label{eqn-clrAMF}
-	\end{align}
-	Mathematically, this should be the same as:
-	\begin{equation} \label{eqn-totAMF}
-		A_\mathrm{tot} = \int_{p_\mathrm{terr}}^{p_\mathrm{trop}} g(p) w_{\mathrm{tot}}(p) \: dp
-	\end{equation}
-	however computationally it was not.  This was because in Eqns. \ref{eqn-cldAMF}-\ref{eqn-clrAMF} we interpolate $w(p)$ to the terrain or cloud top pressure \emph{before} setting $w(p)$ to zero below those pressures.  This is done because the interpolation should not modify the scattering weights---surface pressure is already accounted for in the lookup table---but rather is only meant to find the scattering weight at our lower integration limit.
-	
-	However, if the same approach is carried out with $w_\mathrm{tot}$ in Eqn. \ref{eqn-totAMF}, we are not interpolating between the same values, because now we \emph{have} set $w_\mathrm{clr}(p)$ and $w_\mathrm{cld}(p)$ to 0 below terrain and cloud top, respectively.  To avoid this problem, $w_\mathrm{clr}(p)$ and $w_\mathrm{cld}(p)$ are each interpolated to both terrain and cloud top height before being used in Eqns. \ref{eqn-pubSW}--\ref{eqn-cldSW}.  Using data from 1 Aug 2013, with the same \ce{NO2} profile, the difference between the AMFs calculated using Eqns. \ref{eqn-ourAMF} and Eqn. \ref{eqn-totAMF} decrease from a median of 12.9\% without pre-interpolating to 0.299\% with pre-interpolating.
 	
 %%%%% BIBLIOGRAPHY %%%%%
 \bibliographystyle{copernicus}
