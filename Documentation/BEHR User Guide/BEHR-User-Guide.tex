@@ -124,6 +124,8 @@ equivalent to the one with the period and is used interchangeably.
 	
 	\item \textbf{BEHRScatteringWeights}: the vectors of scattering weights that can be used to recompute AMFs using custom \emph{a priori} profiles. See \S\ref{sec:scweights} for more details.
 	
+	\item \textbf{BEHRTropopausePressure}: the tropopause pressure derived from WRF temperature profiles and used as the upper limit in the BEHR AMF calculation.
+	
 	\item \textbf{GLOBETerpress}: The average surface pressure of the pixel calculated from the GLOBE database (\url{http://www.ngdc.noaa.gov/mgg/topo/globe.html}). Currently it is calculated from the GLOBE terrain heights using a simple scale height calculation, with scale height set to 7.4 km.
 	
 	
@@ -178,6 +180,7 @@ equivalent to the one with the period and is used interchangeably.
 	BEHRPressureLevels	&	Native	 	& 	BEHR			& 	[0, $\infty$) & hPa \\
 	BEHRQualityFlags		& 	Both			& 	BEHR			&	[0, $2^{32}-1$] & bit array flag \\
 	BEHRScatteringWeights & Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRTropopausePressure & Both		&	BEHR			&	[0, $\infty$) & hPa \\
 	CloudFraction		&	Both 		&	SP			&	[0, 1]	 & unitless \\
 	CloudPressure		&	Native	 	&	SP			& 	[0, $\infty$) & hPa \\
 	CloudRadianceFraction &	Both 		&	SP			&	[0, 1]	& unitless \\
@@ -354,7 +357,7 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	The difference in the VCDs stems from the difference in the computation of the cloudy AMF. The to-ground AMF (BEHRAMFTrop) is ultimately the ratio of a modeled slant column density (accounting for the presence of clouds) to a modeled vertical column density that is integrated from ground to tropopause over the whole pixel:
 	
 	\begin{equation}\label{eqn:total-amf}
-	A_{\mathrm{to-ground}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp}
+	A_{\mathrm{to-ground}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}{\int_{p_{\mathrm{surf}}}^{p_\mathrm{tp}} g(p) \: dp}
 	\end{equation}
 	
 	where $p_{\mathrm{surf}}$ is the ground surface pressure, $p_{\mathrm{cloud}}$ is the cloud pressure, $p_{\mathrm{tp}}$ is the tropopause pressure, $w_{\mathrm{clear}}(p)$ are the clear-sky scattering weights, $w_{\mathrm{cloudy}}$ are the cloudy-sky scattering weights, $g(p)$ is the \emph{a priori} \ce{NO2} profile, and $f_r$ is the cloud radiance fraction.	
@@ -362,7 +365,7 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	The visible-only AMF, on the other hand, uses only the visible component of the modeled column in the denominator:
 	\begin{equation}\label{eqn:vis-amf}
 	A_{\mathrm{vis-only}} = \frac{(1-f_r) \int_{p_{\mathrm{surf}}}^{p_{\mathrm{tp}}} w_{\mathrm{clear}}(p) g(p) \: dp + f_r \int_{p_{\mathrm{cloud}}}^{p_{\mathrm{tp}}} w_{\mathrm{cloudy}}(p) g(p) \: dp}%
-{(1-f_g)\int_{p_{\mathrm{surf}}}^{\mathrm{p_{tp}}} g(p) \: dp + f_g \int_{p_{\mathrm{cloud}}}^{\mathrm{p_{tp}}} g(p) \: dp}
+{(1-f_g)\int_{p_{\mathrm{surf}}}^{p_\mathrm{tp}} g(p) \: dp + f_g \int_{p_{\mathrm{cloud}}}^{p_\mathrm{tp}} g(p) \: dp}
 	\end{equation}
 	
 	where $f_g$ is the geometric cloud fraction. 
@@ -372,28 +375,34 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	
 	\subsection{Using scattering weights/averaging kernels} \label{sec:scweights}
 	\subsubsection{Variable layout}
-	These are for advanced users who might wish to either use their own \emph{a priori} \ce{NO2} profile or to compare modeled \ce{NO2} VCDs correctly with BEHR VCDs.  Note that the averaging kernels for each pixel are simply the scattering weights divided by the BEHR AMF; they are provided separately simply for user convenience.
+	These are for advanced users who might wish to either use their own \emph{a priori} \ce{NO2} profile or to compare modeled \ce{NO2} VCDs correctly with BEHR VCDs.  Starting with v3.0B separate clear and cloudy scattering weights are provided, which allows users to follow Eqs. \eqref{eqn:total-amf} and \eqref{eqn:vis-amf} exactly, while a single combined averaging kernel vector is given for each pixel. The relationship between them is:
+	
+	\begin{equation}
+	AK_i(p) = \frac{(1-f)w_{i,\mathrm{clear}}(p) + f w_{i,\mathrm{cloudy}}(p)}{A_{i,\mathrm{to-ground}}}
+	\end{equation}
+	
+that is, the averaging kernel for pixel $i$ at pressure $p$ is the cloud radiance fraction weighted average of the clear and cloudy scattering weights for pixel $i$ at pressure $p$, divided by the to-ground AMF for pixel $i$.
 	
 	For new users wishing to begin using these variables, several resources will be helpful. \citet{palmer2001} contains the original formulation of the relationship between scattering weights, \emph{a priori} \ce{NO2} profiles, and air mass factors and should definitely be studied. The first several chapters of \emph{The Remote Sensing of Tropospheric Composition from Space} assembled by Burrows, Platt, and Borrell \citep{burrows-platt} also describes the relationship of scattering weights, averaging kernels, and air mass factors.
 	
-	What follows will be a description of why the scattering weights are presented how they are.  BEHRScatteringWeights, BEHRAvgKernels, BEHRPressureLevels, and BEHRNO2apriori are 3D variables; the first dimension is the vertical dimension, the second and third correspond to the dimensions of the normal 2D variables. To put this another way, if $X$ were the array of values for these variables, then $X(:,1,1)$ would be the vector of values for the $(1,1)$ pixel, $X(:,1,2)$ the vector for the $(1,2)$ pixel and so on. (Note: some programs may read the data in with C-style ordering and so put the vertical dimension last. The vertical dimension should always be 30 long.)
+    BEHRScatteringWeights, BEHRAvgKernels, BEHRPressureLevels, and BEHRNO2apriori are 3D variables; the first dimension is the vertical dimension, the second and third correspond to the dimensions of the normal 2D variables. To put this another way, if $X$ were the array of values for these variables, then $X(:,1,1)$ would be the vector of values for the $(1,1)$ pixel, $X(:,1,2)$ the vector for the $(1,2)$ pixel and so on. (Note: some programs may read the data in with C-style ordering and so put the vertical dimension last.)
 	
-	The BEHRPressureLevels variable gives the vertical coordinates for the other three.  28 of the pressure levels will be the same for every pixel; the remaining two will correspond to the terrain and cloud pressure. Should the terrain or cloud pressure match one of the standard 28 pressures, then the vector of values for this pixel will still be 30 elements long, but will end with fill values which should be removed.
+	The BEHRPressureLevels variable gives the vertical coordinates for the other three.  30 of the pressure levels will be the same for every pixel; the remaining three will correspond to the terrain, cloud, and tropopause pressure. Should the terrain, cloud, or tropopause pressure match one of the standard 30 pressures, then the vector of values for this pixel will still be 33 elements long, but will end with fill values which should be removed.  The scattering weights and averaging kernels can have additional fill values compared to the pressure levels; this occurs when the pressures are outside those available from WRF-Chem. Such fill values should always be above the tropopause, and because AMF calculations integrate from surface (or cloud) pressure to tropopause, can be safely removed.
 	
 	\subsubsection{Summary of use}
-	\textbf{Please note:} the v3.0 averaging kernels are still in the process of being validated. Users should contact the BEHR maintainer listed on the website to verify their accuracy before using them in any study.
 	
 	Averaging kernels should be applied to model profiles before integrating the model profile to yield a tropospheric column for comparison with the BEHR VCD:
 	
 	\begin{equation}
-	V_{\mathrm{model}} = \sum_i AK_i g_i
+	V_{\mathrm{model}} = \sum_l AK_l g_l
 	\end{equation}
 	
-	where $AK_i$ is the averaging kernel and $g_i$ the model \ce{NO2} partial column density for level $i$. The model profile should be interpolated to the pressure levels given in BEHRPressureLevels, rather than the other way around, since the averaging kernels can have sharp transitions at clouds. Since $AK_i = w_i/A$, where $w_i$ is the scattering weight for level $i$ and $A$ the pixel's AMF, this calculation effectively converts the model column to a slant column first, then ``retrieves'' it using the BEHR AMF. \textbf{Note:} since BEHR provides a tropospheric \ce{NO2} column density, it must be compared against a modeled tropospheric column only.
+	where $AK_l$ is the averaging kernel and $g_l$ the model \ce{NO2} partial column density for level $l$. The model profile should be interpolated to the pressure levels given in BEHRPressureLevels, rather than the other way around, since the averaging kernels can have sharp transitions at clouds. Since $AK_l = [(1-f)w_{i,\mathrm{clear}}(p) + f w_{i,\mathrm{cloudy}}(p)]/A$, where $w_i$ is the scattering weight for level $i$ and $A$ the pixel's AMF, this calculation effectively converts the model column to a slant column first, then ``retrieves'' it using the BEHR AMF. \textbf{Note:} since BEHR provides a tropospheric \ce{NO2} column density, it must be compared against a modeled tropospheric column only.
 	
 	Similarly, scattering weights can be used with Eq. \eqref{eqn:total-amf} and \eqref{eqn:vis-amf} to calculate custom AMFs with new \emph{a priori} profiles. Unlike the averaging kernels, separate clear and cloudy scattering weights are stored in the .hdf files because in the BEHR AMF calculation, clear and cloudy scattering weights are used separately.	Users interested in calculating their own AMFs with custom \ce{NO2} profiles should download the following Matlab repositories:
 	
 	\begin{itemize}
+	\item \url{https://github.com/CohenBerkeleyLab/BEHR-core}
 	\item \url{https://github.com/CohenBerkeleyLab/BEHR-core-utils}
 	\item \url{https://github.com/CohenBerkeleyLab/Matlab-Gen-Utils}
 	\end{itemize}
@@ -424,9 +433,7 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	\end{align}
 	where $f_r$ is the radiance cloud fraction, $w_{i, \mathrm{clr}}$ is the $i$th element in the clear sky scattering weight vector, $w_{i, \mathrm{cld}}$ is the $i$th element in the cloudy scattering weight vector, $A$ is the BEHR tropospheric AMF, $p_i$ is the pressure level for the $i$th element in the vectors, $p_\mathrm{terr}$ is the terrain pressure for the pixel, and $p_\mathrm{cld}$ is the cloud top pressure for the pixel. Therefore the final vector of averaging kernels is the cloud radiance fraction-weighted average of the clear and cloudy scattering weight vectors after setting the clear sky vectors to essentially 0 below the ground, and the cloudy vectors to essentially 0 below the cloud top.
 	
-	\subsubsection{Justification for including terrain and cloud pressure levels}
-	
-	Setting the clear and cloudy scattering weights to zero below the terrain and cloud top, respectively, represents the assumed zero sensitivity of the satellite to \ce{NO2} below the cloudy part of the pixel, and that the \ce{NO2} column necessarily does not extend below ground. This results in a sharp discontinuity in the averaging kernels at each of these pressures. By including these pressure levels in the averaging kernel vectors, we place that discontinuity at the exact pressure our algorithm does internally, rather than the next pressure level above.
+	Two final notes: first, internally BEHR integrates the \emph{a priori} profile in mixing ratio (or mixing ratio times scattering weight) over pressure, see Appendix B of \citet{ziemka01} for information on how mixing ratio integrated over pressure should be done to be equivalent to number density integrated over altitude. Second, since the clear and cloudy scattering weights are set to 0 below the surface and cloud pressures, respectively, before they are combined to yield the averaging kernel, so there will implicitly be no below-ground or below-cloud contribution to the respective subscenes.
 	
 %%%%% BIBLIOGRAPHY %%%%%
 \bibliographystyle{copernicus}

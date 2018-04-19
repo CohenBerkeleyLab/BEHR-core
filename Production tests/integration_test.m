@@ -5,7 +5,7 @@ function [  ] = integration_test( varargin )
 %   The only purpose of this function is a rapid verification that the
 %   primary components of BEHR work; it does not check for correctness.
 %
-%   INTEGRATION_TEST( 'free-branch' ) overrides the requirement that BEHR-core and
+%   INTEGRATION_TEST( 'freebranch' ) overrides the requirement that BEHR-core and
 %   BEHR-core-utils be on the same branch.
 %
 %   INTEGRATION_TEST( 'reading' ) only does the reading code.
@@ -17,18 +17,37 @@ function [  ] = integration_test( varargin )
 %   Any of these three can be combined to do two of the three pieces: e.g.
 %   INTEGRATION_TEST( 'reading', 'main' ) will run the reading and main
 %   code, but not the publishing code.
+%
+%   Other parameters:
+%
+%       'sp_mat_dir' - affects where the OMI_SP files are read from for the
+%       "main" code test. By default reads OMI_SP files from its output
+%       directory. This does not affect where the reading step outputs
+%       files.
+%
+%       'behr_mat_dir' - affects where the "pub" step reads the OMI_BEHR
+%       files from. By default reads OMI_BEHR files from its output
+%       directory. This does not affect where the main step outputs files.
 E = JLLErrors;
 
-xx = strcmpi('free-branch', varargin);
-if any(xx)
-    req_same_branch = false;
-else
-    req_same_branch = true;
-end
+p = advInputParser;
+p.addFlag('freebranch');
+p.addFlag('reading');
+p.addFlag('main');
+p.addFlag('pub');
+p.addParameter('sp_mat_dir', '');
+p.addParameter('behr_mat_dir', '');
 
-do_read = ismember('reading', varargin);
-do_main = ismember('main', varargin);
-do_pub = ismember('pub', varargin);
+p.parse(varargin{:});
+pout = p.AdvResults;
+
+req_same_branch = ~pout.freebranch;
+do_read = pout.reading;
+do_main = pout.main;
+do_pub = pout.pub;
+
+sp_mat_dir = pout.sp_mat_dir;
+behr_mat_dir = pout.behr_mat_dir;
 
 if ~do_read && ~do_main && ~do_pub
     % If no step specified, assume we do all of them
@@ -59,7 +78,15 @@ if ~exist(pub_gridded_dir, 'dir')
     mkdir(pub_gridded_dir);
 end
 
-test_date = '2012-02-01';
+if isempty(sp_mat_dir)
+    sp_mat_dir = out_dir;
+end
+if isempty(behr_mat_dir)
+    behr_mat_dir = out_dir;
+end
+
+%test_date = '2012-02-01';
+test_date = '2012-12-31';
 
 if do_read
     timer_read = tic;
@@ -70,17 +97,17 @@ else
 end
 if do_main
     timer_main = tic;
-    BEHR_main('start', test_date, 'end', test_date, 'sp_mat_dir', out_dir, 'behr_mat_dir', out_dir, 'profile_mode', 'monthly', 'overwrite', true);
-    BEHR_main('start', test_date, 'end', test_date, 'sp_mat_dir', out_dir, 'behr_mat_dir', out_dir, 'profile_mode', 'daily', 'overwrite', true);
+    BEHR_main('start', test_date, 'end', test_date, 'sp_mat_dir', sp_mat_dir, 'behr_mat_dir', out_dir, 'profile_mode', 'monthly', 'overwrite', true);
+    BEHR_main('start', test_date, 'end', test_date, 'sp_mat_dir', sp_mat_dir, 'behr_mat_dir', out_dir, 'profile_mode', 'daily', 'overwrite', true);
     t_main = toc(timer_main);
 else 
     t_main = NaN;
 end
 if do_pub
     timer_pub = tic;
-    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'native', 'mat_dir', out_dir, 'save_dir', pub_native_dir,...
+    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'native', 'mat_dir', behr_mat_dir, 'save_dir', pub_native_dir,...
         'organize', false, 'overwrite', true);
-    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'gridded', 'mat_dir', out_dir, 'save_dir', pub_gridded_dir,...
+    BEHR_publishing_main('start', test_date, 'end', test_date, 'output_type', 'hdf', 'pixel_type', 'gridded', 'mat_dir', behr_mat_dir, 'save_dir', pub_gridded_dir,...
         'organize', false, 'overwrite', true);
     t_pub = toc(timer_pub);
 else
