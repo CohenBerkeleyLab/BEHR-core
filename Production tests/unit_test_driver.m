@@ -119,58 +119,65 @@ else
     fid = 1;
 end
 
-prompt_str = ['\nSpecify any fields to ignore in unit testing, separated by a space.\n',...
-              'Regular expressions can be used. By default, fields beginning with\n',...
-              '"GitHead" are ignored because they are expected to be different if the\n',...
-              'algorithm has changed. To override this, make one of the strings input\n',...
-              '"keepgit" (without the quotes), i.e. entering "keepgit .*File" will\n',...
-              'ignore any field ending in "File" but do compare the GitHead fields: '];
-fields_to_ignore = input(prompt_str, 's');
-fields_to_ignore = strsplit(fields_to_ignore);
+try
+    prompt_str = ['\nSpecify any fields to ignore in unit testing, separated by a space.\n',...
+                  'Regular expressions can be used. By default, fields beginning with\n',...
+                  '"GitHead" are ignored because they are expected to be different if the\n',...
+                  'algorithm has changed. To override this, make one of the strings input\n',...
+                  '"keepgit" (without the quotes), i.e. entering "keepgit .*File" will\n',...
+                  'ignore any field ending in "File" but do compare the GitHead fields: '];
+    fields_to_ignore = input(prompt_str, 's');
+    fields_to_ignore = strsplit(fields_to_ignore);
 
-xx = strcmpi('keepgit', fields_to_ignore);
-if ~any(xx)
-    fields_to_ignore = veccat({'GitHead.*'},fields_to_ignore);
-else
-    fields_to_ignore(xx) = [];
-end
+    xx = strcmpi('keepgit', fields_to_ignore);
+    if ~any(xx)
+        fields_to_ignore = veccat({'GitHead.*'},fields_to_ignore);
+    else
+        fields_to_ignore(xx) = [];
+    end
 
-if generate_new_data
-    make_git_report(behr_paths.behr_core, 'GitReport-Core.txt');
-    make_git_report(behr_paths.behr_utils, 'GitReport-BEHRUtils.txt');
-    make_git_report(behr_paths.utils, 'GitReport-GenUtils.txt');
-end
-switch what_to_test
-    % Each of the testing subfunctions allows paths to be given to them 
-    % by test_all() to minimized user interaction if all three steps are
-    % to be run. I've set it up so that if empty strings are passed, it
-    % considers those paths to not be given, but something has to be passed.
-    case 'reading'
-        success = test_reading('', '');
-    case 'behrmain'
-        success_m = test_behr_main('monthly', '', '');
-        success_d = test_behr_main('daily', '', '');
-        success = success_m & success_d;
-    case 'publishing'
-        success_m = test_publishing('monthly', '', '', '', '');
-        success_d = test_publishing('daily', '', '', '', '');
-        success = success_m * success_d;
-    case 'all'
-        success = test_all();
-    otherwise
-        E.notimplemented(what_to_test);
-end
+    if generate_new_data
+        make_git_report(behr_paths.behr_core, 'GitReport-Core.txt');
+        make_git_report(behr_paths.behr_utils, 'GitReport-BEHRUtils.txt');
+        make_git_report(behr_paths.utils, 'GitReport-GenUtils.txt');
+    end
+    switch what_to_test
+        % Each of the testing subfunctions allows paths to be given to them 
+        % by test_all() to minimized user interaction if all three steps are
+        % to be run. I've set it up so that if empty strings are passed, it
+        % considers those paths to not be given, but something has to be passed.
+        case 'reading'
+            success = test_reading('', '');
+        case 'behrmain'
+            success_m = test_behr_main('monthly', '', '');
+            success_d = test_behr_main('daily', '', '');
+            success = success_m & success_d;
+        case 'publishing'
+            success_m = test_publishing('monthly', '', '', '', '');
+            success_d = test_publishing('daily', '', '', '', '');
+            success = success_m * success_d;
+        case 'all'
+            success = test_all();
+        otherwise
+            E.notimplemented(what_to_test);
+    end
     
-for a=1:numel(success)
-    fprintf(fid, '%s: %s\n', datestr(test_dates{a}), passfail(success(a)));
+    for a=1:numel(success)
+        fprintf(fid, '%s: %s\n', datestr(test_dates{a}), passfail(success(a)));
+    end
+    fprintf(fid, 'Overall: %s\n', passfail(all(success)));
+    
+    msg = sprintf('BEHR unit test completed on %s step(s): %s', what_to_test, datestr(now));
+    border = repmat('*', 1, numel(msg));
+    fprintf(fid, '\n%s\n', border);
+    fprintf(fid, '%s\n', msg);
+    fprintf(fid, '%s\n\n', border);
+catch err
+    if fid > 2
+        fclose(fid);
+    end
+    rethrow(err);
 end
-fprintf(fid, 'Overall: %s\n', passfail(all(success)));
-
-msg = sprintf('BEHR unit test completed on %s step(s): %s', what_to_test, datestr(now));
-border = repmat('*', 1, numel(msg));
-fprintf(fid, '\n%s\n', border);
-fprintf(fid, '%s\n', msg);
-fprintf(fid, '%s\n\n', border);
 if fid > 2
     fclose(fid);
 end
@@ -364,6 +371,7 @@ end
                         if DEBUG_LEVEL > 0
                             fprintf(fid, 'FAIL: No data produced for %s!!!\n', test_dates{i});
                         end
+                        successes(i) = false;
                     end
                     continue
                 else
@@ -435,8 +443,8 @@ end
             old_dir = getdir(sprintf('You''ll need to choose the directory with the old %s OMI_BEHR files', prof_mode), test_dates);
         end
         
-        successes_data = false(size(test_dates));
-        successes_grid = false(size(test_dates));
+        successes_data = true(size(test_dates));
+        successes_grid = true(size(test_dates));
         for i=1:numel(test_dates)
             if strcmpi(prof_mode, 'daily') && ~can_do_daily(test_dates{i})
                 successes_data(i) = true;
@@ -457,12 +465,12 @@ end
                         if DEBUG_LEVEL > 0
                             fprintf(fid, 'No data for %s as expected\n', test_dates{i});
                         end
-                        successes_data(i) = true;
-                        successes_grid(i) = true;
                     else
                         if DEBUG_LEVEL > 0
                             fprintf(fid, 'FAIL: No data produced for %s!!!\n', test_dates{i});
                         end
+                        successes_data(i) = false;
+                        successes_grid(i) = false;
                     end
                     continue
                 else
@@ -475,13 +483,25 @@ end
                 fprintf(fid, 'Loaded new file: %s\n', new_file{1});
             end
             
+            % Only the native pixel struct has all of the necessary fields
+            % to assess the accuracy of the quality flags. We must assume
+            % that the gridding algorithm does its job properly... at least
+            % until we write a unit test for that.
+            if DEBUG_LEVEL > 0
+                header_msg = '***** Running priori tests on result of main algorithm, Data struct ****';
+                header_border = repmat('*', 1, length(header_msg));
+                fprintf(fid, '\n%1$s\n%2$s\n%1$s\n', header_border, header_msg);
+            end
+            
+            successes_data(i) = main_priori_tests(new_data.Data, DEBUG_LEVEL, fid) && successes_data(i);
+            
             if DEBUG_LEVEL > 0
                 header_msg = '***** Running BEHR_main unit tests on Data struct ****';
                 header_border = repmat('*', 1, length(header_msg));
                 fprintf(fid, '\n%1$s\n%2$s\n%1$s\n', header_border, header_msg);
             end
             
-            successes_data(i) = behr_unit_test(new_data.Data, old_data.Data, DEBUG_LEVEL, fid, fields_to_ignore);
+            successes_data(i) = behr_unit_test(new_data.Data, old_data.Data, DEBUG_LEVEL, fid, fields_to_ignore) && successes_data(i);
             
             if DEBUG_LEVEL > 0
                 header_msg = '***** Running BEHR_main unit tests on OMI struct ****';
@@ -489,7 +509,7 @@ end
                 fprintf(fid, '\n%1$s\n%2$s\n%1$s\n', header_border, header_msg);
             end
             
-            successes_grid(i) = behr_unit_test(new_data.OMI, old_data.OMI, DEBUG_LEVEL, fid, fields_to_ignore);
+            successes_grid(i) = behr_unit_test(new_data.OMI, old_data.OMI, DEBUG_LEVEL, fid, fields_to_ignore) && successes_grid(i);
         end
         
         successes = successes_data & successes_grid;

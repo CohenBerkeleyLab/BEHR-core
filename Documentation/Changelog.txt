@@ -4,7 +4,8 @@
 **** (BEHR) NO2 Product Changelog ****
 **************************************
 
-Current maintainer: Josh Laughner (jlaughner@berkeley.edu)
+Current maintainers: Josh Laughner (jlaughner@berkeley.edu)
+                     Qindan Zhu (qindan_zhu@berkeley.edu)
 
 ==========
 1) Preface
@@ -31,6 +32,27 @@ equivalent to the one with the period and is used interchangeably.
 ============
 2) Changelog
 ============
+
+**** 3.0B ****
+-- Bug in the BEHRQualityFlags field fixed; previously the quality summary bit (least
+   significant bit) only flagged pixels with low quality albedo data and the error
+   summary bit (2nd least significant bit) only flagged pixels affected by the row
+   anomaly.
+-- Clear and cloudy scattering weights are now published separately; averaging kernels
+   are still the cloud radiance fraction-weighted sum of clear and cloudy sensitivities.
+-- The ocean reflectivity look up table was updated so that the reflectivity was calculated
+   at 460 nm instead of 430 nm. This is in the MODIS Band 3 window used for land surface
+   reflectivity.
+-- For the subproduct using daily NO2 profiles, the profile closest in time to the OMI overpass
+   is selected; previously the last profile before the OMI overpass was selected.
+-- The AMF calculation now uses a variable tropopause height derived from the WRF temperature
+   profiles instead of the previous fixed 200 hPa tropopause.
+-- If any of the NO2 profile, temperature profile, clear sky scattering weights, or cloudy
+   sky scattering weights are all undefined for a pixel, the AMF and NO2 VCD for that pixel
+   are set to fill values. Previously, there were rare cases where, e.g. the clear sky scattering
+   weights could be undefined but the cloudy sky scattering weights were not, and the AMF would
+   still be computed.
+-- Cloud pressure now clamped to <= surface pressure.
 
 **** 3.0A ****
 -- We will no longer produce the csv file version of BEHR due to the increasing number
