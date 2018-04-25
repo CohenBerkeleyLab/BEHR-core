@@ -131,7 +131,8 @@ for d=1:length(Data)
     
     surfPres(surfPres>=1013)=1013; %JLL 17 Mar 2014: Clamp surface pressure to sea level or less.
     cldPres = Data(d).CloudPressure;
-    cldPres(cldPres>=1013)=1013; % JLL 13 May 2016: Also clamp cloud pressure. Whenever this is >1013, the AMF becomes a NaN because the lookup table cannot handle "surface" pressure >1013
+    cldPres = min(cldPres, surfPres); % Clamp cldPres to be <= surface pressure, should not have below surface clouds.
+    
     
     if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
     [no2Profile, temperature, wrf_profile_file, TropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path, 'err_missing_att', err_wrf_missing_attr); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
