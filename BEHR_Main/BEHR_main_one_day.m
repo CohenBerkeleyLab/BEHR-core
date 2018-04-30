@@ -64,6 +64,8 @@ p.addParameter('err_wrf_missing_attr', true);
 % Parameters relevant to error analysis
 p.addParameter('lookup_sweights', true);
 p.addParameter('lookup_profile', true);
+p.addParameter('randomize_profile_time', false);
+p.addParameter('randomize_profile_loc', false);
 
 % Other parameters
 p.addParameter('DEBUG_LEVEL', 2);
@@ -77,6 +79,8 @@ use_psm = pout.use_psm_gridding;
 err_wrf_missing_attr = pout.err_wrf_missing_attr;
 lookup_sweights = pout.lookup_sweights;
 lookup_profile = pout.lookup_profile;
+randomize_profile_time = pout.randomize_profile_time;
+randomize_profile_loc = pout.randomize_profile_loc;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 allowed_prof_modes = {'daily','monthly'};
@@ -135,7 +139,35 @@ for d=1:length(Data)
     
     
     if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
-    [no2Profile, temperature, wrf_profile_file, TropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path, 'err_missing_att', err_wrf_missing_attr); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+    if randomize_profile_time
+        % Used for uncertainty analysis to vary the day of month that the
+        % profile is chosen from. 
+        if strcmpi(prof_mode, 'daily')
+            prof_date = random_day_in_month(this_date, true);
+        else
+            E.callError('incompatible_prof_mode', '"randomize_profile_time" cannot be used unless "prof_mode" is "daily"');
+        end
+    else
+        prof_date = this_date;
+    end
+    
+    if randomize_profile_loc
+        % Used for uncertainty analysis. Move the pixel corners by roughly
+        % one OMI pixel in each dimension to "jitter" which profiles are
+        % used. This should emulate if e.g. emissions are allocated in the
+        % wrong place, or transport is wrong, or chemistry is wrong,
+        % because by moving the pixel we can alter how long the air parcel
+        % has aged chemically by moving it nearer or farther from the
+        % source.
+        prof_loncorns = jitter_corners(loncorns);
+        prof_latcorns = jitter_corners(latcorns);
+    else
+        prof_loncorns = loncorns;
+        prof_latcorns = latcorns;
+    end
+        
+    
+    [no2Profile, temperature, wrf_profile_file, TropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(prof_date, prof_mode, region, prof_loncorns, prof_latcorns, time, surfPres, pressure, no2_profile_path, 'err_missing_att', err_wrf_missing_attr); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     if ~lookup_profile
         no2Profile_check = no2Profile;
         no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, pressure);
@@ -259,4 +291,63 @@ for a=1:prod(sz(2:end))
     end
     val_out(:,a) = val(xx,a);
 end
+end
+
+function date_out = random_day_in_month(date_in, forbid_current_day)
+if ~exist('forbid_current_day', 'var')
+    forbid_current_day = false;
+end
+y = year(date_in);
+m = month(date_in);
+d = day(date_in);
+while d == day(date_in)
+    d = randi(eomday(y,m));
+    if ~forbid_current_day
+        % If we allow the randomization to pick the same day as the input
+        % date, then we can always exit the first time.
+        break
+    end
+end
+date_out = datenum(y,m,d);
+end
+
+function [loncorn_out, latcorn_out] = jitter_corners(loncorn_in, latcorn_in, jitter_amt, force_jitter)
+if ~exist('force_jitter', 'var')
+    force_jitter = false;
+end
+
+E = JLLErrors;
+if size(loncorn_in, 1) ~= 4 || size(latcorn_in, 1) ~= 4
+    E.badinput('LONCORN_IN and LATCORN_IN must have length 4 in the first dimension')
+elseif ~isequal(size(loncorn_in), size(latcorn_in))
+    E.badinput('LONCORN_IN and LATCORN_IN must be the same size')
+end
+if ~isnumeric(jitter_amt) || ~isscalar(jitter_amt) || jitter_amt <= 0
+    E.badinput('JITTER_AMT must be a scalar, positive number')
+end
+
+sz = size(loncorn_in);
+x_sign = randi([-1 1], sz(2:3));
+y_sign = randi([-1 1], sz(2:3));
+
+% Okay, here's the slightly tricky part. If we want to force a pixel to
+% jitter, then we need to rerandomize any locations where the x and y shift
+% are both zero.
+if force_jitter
+    both_zero = x_sign(:) == 0 & y_sign(:) == 0;
+    while any(both_zero(:))
+        x_sign(both_zero) = randi([-1 1], sum(both_zero), 1);
+        y_sign(both_zero) = randi([-1 1], sum(both_zero), 1);
+        both_zero = x_sign(:) == 0 & y_sign(:) == 0;
+    end
+end
+
+% Now we just need to create the actual jitter matrices so that all the
+% corners for a given pixel move by the same amount.
+x_shift = repmat(permute(x_sign, [3 1 2]) * jitter_amt, 4, 1, 1);
+y_shift = repmat(permute(y_sign, [3 1 2]) * jitter_amt, 4, 1, 1);
+
+loncorn_out = loncorn_in + x_shift;
+latcorn_out = latcorn_in + y_shift;
+
 end
