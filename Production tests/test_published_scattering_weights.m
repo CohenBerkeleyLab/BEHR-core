@@ -42,7 +42,7 @@ for i=1:numel(Data.BEHRAMFTrop)
             % In BEHR, we have to restrict surface pressure to >= 1013 due to
             % the limitation of the scattering weight look up table.
             surfPres = min(Data.GLOBETerpres(i), 1013);
-            cldPres = min(Data.CloudPressure(i), 1013);
+            cldPres = min(Data.CloudPressure(i), surfPres);
             
             
             
