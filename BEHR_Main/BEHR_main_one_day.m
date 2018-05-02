@@ -52,6 +52,21 @@ function [ Data, OMI ] = BEHR_main_one_day( Data, varargin )
 %       read in from Data. Similar to "lookup_sweights", intended for
 %       uncertainty analysis. If false, Data must be the result of
 %       BEHR_main to have the profiles stored in it.
+%
+%       'randomize_profile_time' - scalar logical (default false), if true,
+%       the NO2 profile will be chosen from a different day in the same
+%       month. The hour of day is still chosen properly, so the dominant
+%       error that this is testing is if the wind direction is very wrong.
+%
+%       'randomize_profile_loc' - scalar logical (default false), if true,
+%       then the pixel corners will be "jittered" by some amount (currently
+%       0.2 degrees) so that a WRF profile from a nearby, but different,
+%       location is used for that pixel. All corners of one pixel are
+%       jittered in the same direction. This simulates if the emissions,
+%       transport speed, or chemistry are in the incorrect place in WRF.
+%       Currently, the randomization allows the pixels to not move, in
+%       order to include the possibility that the
+%       emissions/transport/chemistry are correct in the WRF simulation.
 
 
 p = inputParser;
@@ -70,6 +85,7 @@ p.addParameter('randomize_profile_loc', false);
 % Other parameters
 p.addParameter('DEBUG_LEVEL', 2);
 
+p.KeepUnmatched = true;
 p.parse(varargin{:});
 pout = p.Results;
 
@@ -159,15 +175,26 @@ for d=1:length(Data)
         % because by moving the pixel we can alter how long the air parcel
         % has aged chemically by moving it nearer or farther from the
         % source.
-        prof_loncorns = jitter_corners(loncorns);
-        prof_latcorns = jitter_corners(latcorns);
+        [prof_loncorns, prof_latcorns] = jitter_corners(loncorns, latcorns, 0.2);
     else
         prof_loncorns = loncorns;
         prof_latcorns = latcorns;
     end
         
-    
-    [no2Profile, temperature, wrf_profile_file, TropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(prof_date, prof_mode, region, prof_loncorns, prof_latcorns, time, surfPres, pressure, no2_profile_path, 'err_missing_att', err_wrf_missing_attr); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+    % For normal runs, we want the NO2 profiles and temperature profiles
+    % set to NaN outside the integration limits (actually before the bin
+    % just below the surface and after the bin just above the tropopause).
+    % However, when doing error analysis, we sometimes run into issues
+    % where the tropopause is different whether using precalculated or
+    % online computed temperature profiles. (The difference in the
+    % temperature profile itself is very small, but it is occasionally
+    % enough to move the lapse rate to the other side of the 2 K/km
+    % threshold.) Therefore in that case we need to keep the NO2 and
+    % temperature profiles over all bins.
+    keep_all_bins = ~lookup_profile;
+    [no2Profile, temperature, wrf_profile_file, TropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = ...
+        rProfile_WRF(prof_date, prof_mode, region, prof_loncorns, prof_latcorns, time, surfPres, pressure, no2_profile_path,...
+        'err_missing_att', err_wrf_missing_attr, 'clip_at_int_limits', ~keep_all_bins); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     if ~lookup_profile
         no2Profile_check = no2Profile;
         no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, pressure);
@@ -177,17 +204,32 @@ for d=1:length(Data)
             % profiles for the scattering weights.
             E.callError('profile_lookup', 'Looked up different temperature profiles than the NO2 profiles given in the file (difference exceeds 1 pptv)')
         end
+        TropoPres = Data(d).BEHRTropopausePressure;
     end
     bad_profs = squeeze(all(isnan(no2Profile),1));
     
-    if lookup_sweights
+    if lookup_sweights || randomize_profile_loc || randomize_profile_time
+        % If we change the profiles, we need to allow for the tropopause to
+        % have changed and the effect of the different temperature profile.
+        % The latter should be minimal, but I've run into cases where the
+        % old temperature wasn't defined at enough pressure levels for the
+        % new calculation to work (i.e. there were NaNs left during the
+        % integration).
         if DEBUG_LEVEL > 1; fprintf('   Calculating clear and cloudy AMFs\n'); end
         dAmfClr = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres); %JLL 18 Mar 2014: Interpolate the values in dAmf to the albedo and other conditions input
         cloudalbedo=0.8*ones(size(Data(d).CloudFraction)); %JLL 18 Mar 2014: Assume that any cloud has an albedo of 0.8
         dAmfCld = rDamf2(fileDamf, pressure, sza, vza, phi, cloudalbedo, cldPres); %JLL 18 Mar 2014: Interpolate dAmf again, this time taking the cloud top and albedo as the bottom pressure
     else
-        dAmfClr = remove_nonstandard_pressures(Data(d).BEHRScatteringWeightsClear, Data(d).BEHRPressureLevels);
-        dAmfCld = remove_nonstandard_pressures(Data(d).BEHRScatteringWeightsCloudy, Data(d).BEHRPressureLevels);
+        % Really we will almost never get here; if we're running BEHR
+        % normally, then we obviously need to look up the scattering
+        % weights; if we're running an error analysis and perturb one of
+        % the scattering weight input parameters, we need to look up the
+        % scattering weights; if we're running an error analysis and
+        % perturb the profiles, we need to look up the scattering weights
+        % again because the tropopause may have changed. I'm leaving this
+        % here in case it becomes useful in the future.
+        dAmfClr = remove_nonstandard_pressures(Data(d).BEHRScatteringWeightsClear, Data(d).BEHRPressureLevels, pressure);
+        dAmfCld = remove_nonstandard_pressures(Data(d).BEHRScatteringWeightsCloudy, Data(d).BEHRPressureLevels, pressure);
         % The scattering weights in the Data structures already include the
         % temperature correction, so we need to set the temperature
         % profiles to something that makes that correction 1, i.e. no
@@ -266,28 +308,36 @@ end
 
 
 function val_out = remove_nonstandard_pressures(val, pres, std_pres)
+n_std_pres = numel(std_pres);
+
 E = JLLErrors;
-if size(val,1) ~= 30 || ndims(val) ~= 3
-    E.badinput('VAL should be 3D with the first dimension having length 30')
+if size(val,1) ~= n_std_pres + 3 || ndims(val) ~= 3
+    E.badinput('VAL should be 3D with the first dimension having length %d', n_std_pres + 3)
 end
 if ~isequal(size(pres), size(val))
     E.badinput('PRES must be the same size as VAL')
 end
 
 sz = size(val);
-val_out = nan([28, sz(2:end)]);
+val_out = nan([n_std_pres, sz(2:end)]);
 for a=1:prod(sz(2:end))
     if all(isnan(pres(:,a)))
         if ~all(isnan(val(:,a)))
             E.callError('find_std_pres', 'Trying to remove nonstandard pressures, but PRES(:,a) is all NaNs and VAL(:,a) is not');
         end
         xx = false(size(pres(:,a)));
-        xx(1:28) = true;
+        % If all the pressures are NaNs for this profile, then there's no
+        % way that we can find the standard pressures. This usually happens
+        % when the pixel is outside of the WRF domain, so there's no
+        % profile data of any sort. As long as that is true (i.e. VAL(:,a)
+        % is all NaNs, checked above), just take the first n NaNs so that
+        % the value out is the right size.
+        xx(1:n_std_pres) = true;
     else
         xx = ismember(pres(:,a), std_pres);
     end
-    if sum(xx) ~= 28
-        E.callError('find_std_pres','Did not find the 28 standard pressures')
+    if sum(xx) ~= n_std_pres
+        E.callError('find_std_pres','Did not find the %d standard pressures', n_std_pres)
     end
     val_out(:,a) = val(xx,a);
 end

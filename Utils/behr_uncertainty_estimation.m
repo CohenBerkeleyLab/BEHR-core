@@ -32,6 +32,13 @@ function [ Delta, DeltaGrid ] = behr_uncertainty_estimation( Data, OMI, paramete
 
 E = JLLErrors;
 
+% This function requires that rProfile_WRF.m in the BEHR-core-utils repo
+% has the commit that allows it to keep the full extrapolated NO2 and
+% temperature profiles instead of clipping them just below and above the
+% surface pressure and tropopause pressure, respectively.
+G = GitChecker;
+G.addReqCommits(behr_paths.behr_utils, 'ca2faf3');
+
 p = inputParser;
 p.KeepUnmatched = true; % this should avoid errors with extra parameters to be passed through to BEHR_main_one_day
 p.addParameter('remove_unchanged_fields', false);
@@ -40,15 +47,14 @@ p.addParameter('DEBUG_LEVEL', 2);
 p.parse(varargin{:});
 pout = p.Results;
 
-remove_unchanged_fields = pout.remove_fields;
+remove_unchanged_fields = pout.remove_unchanged_fields;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 if ~isstruct(Data)
     E.badinput('DATA must be a structure')
 end
-if ~ischar(parameter) || ~isfield(Data, parameter)
-    % Modify later to account for the special "profile" options
-    E.badinput('PARAMETER must be a field name in DATA')
+if ~ischar(parameter) || (~isfield(Data, parameter) && ~any(strcmpi(parameter, {'profileloc', 'profiletime'})))
+    E.badinput('PARAMETER must be a field name in DATA or the special strings "profileloc" or "profiletime"')
 end
 if isnumeric(percent_change) 
     if ~isscalar(percent_change)
@@ -79,7 +85,7 @@ elseif strcmpi(parameter, 'profiletime')
     [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', true, 'lookup_sweights', false,...
         'randomize_profile_time', true, varargin{:});
 else
-    [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', false, 'lookup_sweights', false, varargin{:});
+    [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', false, 'lookup_sweights', true, varargin{:});%, 'no2_profile_path', '/Users/Josh/Downloads/WRF-Test');
 end
 
 
@@ -113,6 +119,6 @@ function Data = cut_down_fields(Data, fields_to_keep)
 fns = fieldnames(Data);
 numeric_fields = structfun(@isnumeric, Data(1));
 keep_fields = ismember(fns, fields_to_keep);
-fields_to_remove = fns(~keep_fields & ~numeric_fields);
+fields_to_remove = fns(~keep_fields & numeric_fields);
 Data = rmfield(Data, fields_to_remove);
 end
