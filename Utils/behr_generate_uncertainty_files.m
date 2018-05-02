@@ -130,7 +130,7 @@ for i_param = 1:numel(params)
         fprintf('Perturbing %s for month %d\n', this_param, test_months(i_month));
         start_date = datenum(test_year, test_months(i_month), 1);
         end_date = datenum(test_year, test_months(i_month), 31);
-        for this_date = start_date:end_date
+        parfor this_date = start_date:end_date
             savename = behr_filename(this_date, prof_mode, region);
             savename = strrep(savename, 'BEHR', sprintf('BEHR-%s-UNCERTAINTY', this_param));
             full_savename = fullfile(output_dir, savename);
