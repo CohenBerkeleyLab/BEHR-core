@@ -73,7 +73,7 @@ classdef O2O2CloudUncert < handle
         function value = figure_text_file()
             % FIGURE_TEXT_FILE Return the path to the GraphClick-generated text file that this reads.
             mydir = fileparts(mfilename('fullpath'));
-            value = fullfile(mydir, '..', 'Workspaces', 'Validation', 'Error-Analysis', 'AcarrataCldPresUncert.txt');
+            value = fullfile(mydir, 'Constants', 'ErrorAnalysis', 'AcarrataCldPresUncert.txt');
         end
         
     end

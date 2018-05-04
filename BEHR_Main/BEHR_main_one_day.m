@@ -196,8 +196,15 @@ for d=1:length(Data)
         rProfile_WRF(prof_date, prof_mode, region, prof_loncorns, prof_latcorns, time, surfPres, pressure, no2_profile_path,...
         'err_missing_att', err_wrf_missing_attr, 'clip_at_int_limits', ~keep_all_bins); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     if ~lookup_profile
-        no2Profile_check = no2Profile;
-        no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, pressure);
+        % If we want to use the exact same NO2 profiles as in the original
+        % run, we can't use the ones in the Data file directly because we 
+        % might need the profile extrapolated over all the standard
+        % pressure levels. Since rProfile_WRF has an option to leave those
+        % in, instead of trying to extrapolate the stored profiles, we just
+        % check that there are no differences greater than 1 pptv. This will
+        % not fail if there are NaNs in the stored profiles but not the
+        % extrapolated ones because NaN > x will always be false.
+        no2Profile_check = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, pressure);
         if ~lookup_sweights && any(abs(no2Profile(:) - no2Profile_check(:)) > 1e-12)
             % If not using the scattering weights from the Data structure,
             % then we need to verify that we loaded the right temperature

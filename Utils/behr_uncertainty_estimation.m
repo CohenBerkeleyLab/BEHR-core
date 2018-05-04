@@ -108,9 +108,9 @@ if remove_unchanged_fields
     % parameter, but remove all other data fields (attribute fields will be
     % kept, i.e. any non-numeric field)
     fields_to_keep = {parameter, 'BEHRColumnAmountNO2Trop', 'BEHRAMFTrop', 'BEHRColumnAmountNO2TropVisOnly', 'BEHRAMFTropVisOnly',...
-        'PercentChangeNO2', 'PercentChangeAMF', 'PercentChangeNO2Vis', 'PercentChangeAMFVis'};
+        'PercentChangeNO2', 'PercentChangeAMF', 'PercentChangeNO2Vis', 'PercentChangeAMFVis', 'BEHRQualityFlags'};
     Delta = cut_down_fields(Delta, fields_to_keep);
-    DeltaGrid = cut_down_fields(DeltaGrid, fields_to_keep);
+    DeltaGrid = cut_down_fields(DeltaGrid, [fields_to_keep, {'Areaweight'}]);
 end
 
 end
