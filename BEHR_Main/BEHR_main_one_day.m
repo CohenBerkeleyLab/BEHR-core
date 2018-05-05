@@ -122,20 +122,20 @@ for d=1:length(Data)
     sza = Data(d).SolarZenithAngle;
     vza = Data(d).ViewingZenithAngle;
     phi = Data(d).RelativeAzimuthAngle;
-    surfPres = Data(d).GLOBETerpres;
+    globe_terpres = Data(d).GLOBETerpres;
     albedo = Data(d).MODISAlbedo;
     cldFrac = Data(d).CloudFraction;
     cldRadFrac = Data(d).CloudRadianceFraction;
     
     pressure = behr_pres_levels();
     
-    surfPres(surfPres>=1013)=1013; %JLL 17 Mar 2014: Clamp surface pressure to sea level or less.
+    if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
+    [no2Profile, temperature, wrf_profile_file, surfPres, surfPres_WRF, tropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, globe_terpres, pressure, no2_profile_path, 'err_missing_att', err_wrf_missing_attr); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+    
+    surfPres(surfPres > 1013) = 1013;
     cldPres = Data(d).CloudPressure;
     cldPres = min(cldPres, surfPres); % Clamp cldPres to be <= surface pressure, should not have below surface clouds.
     
-    
-    if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
-    [no2Profile, temperature, wrf_profile_file, TropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, surfPres, pressure, no2_profile_path, 'err_missing_att', err_wrf_missing_attr); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     if ~lookup_profile
         no2Profile_check = no2Profile;
         no2Profile = remove_nonstandard_pressures(Data(d).BEHRNO2apriori, Data(d).BEHRPressureLevels, pressure);
@@ -165,7 +165,7 @@ for d=1:length(Data)
     
     if DEBUG_LEVEL > 1; disp('   Calculating BEHR AMF'); end
 
-    [amf, amfVis, ~, ~, scattering_weights_clear, scattering_weights_cloudy, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, TropoPres, cldPres, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
+    [amf, amfVis, ~, ~, scattering_weights_clear, scattering_weights_cloudy, avg_kernels, no2_prof_interp, sw_plevels] = omiAmfAK2(surfPres, tropoPres, cldPres, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile); %JLl 18 Mar 2014: The meat and potatoes of BEHR, where the TOMRAD AMF is adjusted to use the GLOBE pressure and MODIS cloud fraction
     amf(bad_profs)=NaN;
     amfVis(bad_profs)=NaN;
     scattering_weights_clear(:,bad_profs)=NaN;
@@ -190,10 +190,12 @@ for d=1:length(Data)
     Data(d).BEHRProfileMode = prof_mode;
     Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
     % temporary fields, will be removed after the warning flag is set
-    Data(d).TropoPresVSCldPres = (TropoPres-cldPres) > 0;
+    Data(d).TropoPresVSCldPres = (tropoPres-cldPres) > 0;
     Data(d).Interp_TropopausePressure = tropopause_interp_flag;
     %
-    Data(d).BEHRTropopausePressure = TropoPres;
+    Data(d).BEHRSurfacePressure = surfPres;
+    Data(d).WRFSurfacePressure = surfPres_WRF; % mainly for testing, I'm curious how much WRF's surface pressure differs when adjusted with GLOBE
+    Data(d).BEHRTropopausePressure = tropoPres;
     Data(d).BEHRQualityFlags = behr_quality_flags(Data(d));   
 end
 % remove the field 'TropoPresVSCldPres' as it's only used in behr_quality_flags
