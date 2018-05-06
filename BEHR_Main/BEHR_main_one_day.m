@@ -122,7 +122,7 @@ for d=1:length(Data)
     sza = Data(d).SolarZenithAngle;
     vza = Data(d).ViewingZenithAngle;
     phi = Data(d).RelativeAzimuthAngle;
-    globe_terpres = Data(d).GLOBETerpres;
+    globe_terheight = Data(d).GLOBETerrainHeight;
     albedo = Data(d).MODISAlbedo;
     cldFrac = Data(d).CloudFraction;
     cldRadFrac = Data(d).CloudRadianceFraction;
@@ -130,7 +130,7 @@ for d=1:length(Data)
     pressure = behr_pres_levels();
     
     if DEBUG_LEVEL > 1; fprintf('   Reading NO2 and temperature profiles\n'); end
-    [no2Profile, temperature, wrf_profile_file, surfPres, surfPres_WRF, tropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, globe_terpres, pressure, no2_profile_path, 'err_missing_att', err_wrf_missing_attr); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
+    [no2Profile, temperature, wrf_profile_file, surfPres, surfPres_WRF, tropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = rProfile_WRF(this_date, prof_mode, region, loncorns, latcorns, time, globe_terheight, pressure, no2_profile_path, 'err_missing_att', err_wrf_missing_attr); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     
     surfPres(surfPres > 1013) = 1013;
     cldPres = Data(d).CloudPressure;
