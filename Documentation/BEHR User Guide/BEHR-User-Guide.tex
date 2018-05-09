@@ -122,11 +122,15 @@ equivalent to the one with the period and is used interchangeably.
 	
 	\item \textbf{BEHRQualityFlags}: flags field that combines the NASA XTrackQualityFlags and VcdQualityFlags summary bits with processing errors or warnings from the BEHR algorithm. The meaning of each bit is given in Table \ref{tab:behr-quality-flags}. Discussion of how to use these flags is given in \S\ref{sec:native-filtering}.
 	
-	\item \textbf{BEHRScatteringWeights}: the vectors of scattering weights that can be used to recompute AMFs using custom \emph{a priori} profiles. See \S\ref{sec:scweights} for more details.
+	\item \textbf{BEHRScatteringWeightsClear}: the vectors of scattering weights for clear-sky (non-cloudy) conditions that can be used to recompute AMFs using custom \emph{a priori} profiles. See \S\ref{sec:scweights} for more details.
+	
+	\item \textbf{BEHRScatteringWeightsCloudy}: the vectors of scattering weights for cloudy conditions that can be used to recompute AMFs using custom \emph{a priori} profiles. See \S\ref{sec:scweights} for more details.
+	
+	\item \textbf{BEHRSurfacePressure}: The surface pressure of the pixel used in the AMF calculation; it is calculated by using the difference in surface elevation between WRF and the GLOBE database to scale the WRF surface pressure.
 	
 	\item \textbf{BEHRTropopausePressure}: the tropopause pressure derived from WRF temperature profiles and used as the upper limit in the BEHR AMF calculation.
 	
-	\item \textbf{GLOBETerpress}: The average surface pressure of the pixel calculated from the GLOBE database (\url{http://www.ngdc.noaa.gov/mgg/topo/globe.html}). Currently it is calculated from the GLOBE terrain heights using a simple scale height calculation, with scale height set to 7.4 km.
+	\item \textbf{GLOBETerrainHeight}: The average surface elevation of the pixel calculated from the GLOBE database (\url{http://www.ngdc.noaa.gov/mgg/topo/globe.html}). 
 	
 	
 	\item \textbf{MODISAlbedo}: The average surface reflectance of the pixel calculated from Band 3 of the MCD43D combined MODIS BRDF product for the viewing geometry of this pixel. 
@@ -145,9 +149,11 @@ equivalent to the one with the period and is used interchangeably.
 	\end{align*}
 	The extra factor of 180 transforms the RAA into the definition used in the TOMRAD look up table.
 	
-	\item \textbf{XTrackQualityFlags}: directly taken from the OMNO2 product; however, while they should always be considered a bit array (and thus integers) in some version of BEHR these are converted to floating point numbers.  Also, in the gridded product, in any case where more than one pixel contributed to a grid cell, the value given will be the result of a bitwise OR operation applied to the flags from each pixel. Thus, if a flag is set in any contributing pixel, it will be set in the grid cell.
+	\item \textbf{VcdQualityFlags}: directly taken from the OMNO2 product; however, while they should always be considered a bit array (and thus integers) in some versions of BEHR these are converted to floating point numbers.  Also, in the gridded product, in any case where more than one pixel contributed to a grid cell, the value given will be the result of a bitwise OR operation applied to the flags from each pixel. Thus, if a flag is set in any contributing pixel, it will be set in the grid cell.
 	
-	\item \textbf{vcdQualityFlags}: same notes as XTrackQualityFlags.
+	\item \textbf{WRFSurfacePressure}: surface pressure calculated as a simple average of WRF profile falling within the pixel. Not used in the AMF calculation.
+	
+	\item \textbf{XTrackQualityFlags}: same notes as VcdQualityFlags.
 	
 	\end{itemize}
 
@@ -168,8 +174,8 @@ equivalent to the one with the period and is used interchangeably.
 	\hline
 	\endlastfoot
 	
-	AMFStrat				&	Native		&	SP			&	[0, $\infty$)	&	unitless \\
-	AMFTrop				&	Both	 		&	SP			& 	[0, $\infty$)	& unitless \\
+	AmfStrat				&	Native		&	SP			&	[0, $\infty$)	&	unitless \\
+	AmfTrop				&	Both	 		&	SP			& 	[0, $\infty$)	& unitless \\
 	Areaweight			&	Gridded		&	BEHR			&	[0, $\infty$) & km$^{-2}$ \\
 	BEHRAMFTrop			&	Both 		& 	BEHR			&	[0, $\infty$)	& unitless \\
 	BEHRAMFTropVisOnly	&	Both 		& 	BEHR			&	[0, $\infty$)	& unitless \\
@@ -179,7 +185,9 @@ equivalent to the one with the period and is used interchangeably.
 	BEHRNO2Apriori		&	Native 		&	BEHR			& 	($-\infty$, $\infty$) & unscaled mixing ratio\\
 	BEHRPressureLevels	&	Native	 	& 	BEHR			& 	[0, $\infty$) & hPa \\
 	BEHRQualityFlags		& 	Both			& 	BEHR			&	[0, $2^{32}-1$] & bit array flag \\
-	BEHRScatteringWeights & Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRScatteringWeightsClear & Native 	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRScatteringWeightsCloudy & Native	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRSurfacePressure	& 	Both			&	BEHR			&	[0, 1013]	& hPa \\
 	BEHRTropopausePressure & Both		&	BEHR			&	[0, $\infty$) & hPa \\
 	CloudFraction		&	Both 		&	SP			&	[0, 1]	 & unitless \\
 	CloudPressure		&	Native	 	&	SP			& 	[0, $\infty$) & hPa \\
@@ -191,7 +199,7 @@ equivalent to the one with the period and is used interchangeably.
 	FoV75Area			& 	Native		& 	PIXCOR		&	[0, $\infty$)	&km$^2$ \\
 	FoV75CornerLatitude	&	Native		&	PIXCOR		&	[-90, 90]	& degrees \\
 	FoV75CornerLongitude &	Native		&	PIXCOR		&	[-180, 180] 	& degrees \\
-	GLOBETerpres			&	Both		 	&	BEHR			&	[0, $\infty$) & hPa \\
+	GLOBETerrainHeight	&	Native	 	&	BEHR			&	[$-\infty$, $\infty$) & hPa \\
 	Latitude				& 	Both 		&	SP			&	[-90, 90] & degrees \\
 	Longitude			& 	Both 		& 	SP			&	[-180, 180] & degrees \\
 	MODISAlbedo			&	Both		 	&	BEHR			&	[0, 1]	 & unitless \\
@@ -215,6 +223,7 @@ equivalent to the one with the period and is used interchangeably.
 	VcdQualityFlags		&	Both 		&	SP			&	N/A				& bit array flag \\
 	ViewingAzimuthAngle	&	Native	 	&	SP			&	[-180, 180]	& degrees \\
 	ViewingZenithAngle	&	Native	 	&	SP			&	[0, 90]		& degrees \\
+	WRFSurfacePressure	&	Native		& 	BEHR			&	[0, $\infty$)	& hPa \\
 	XTrackQualityFlags	&	Both 		&	SP			&	N/A				& bit array flag \\
 	
 	\end{longtable}
@@ -240,7 +249,8 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 17 & 65536 & High cloud fraction: OMI geometric cloud fraction exceeds 20\%. Not recommended for use if trying to retrieve a full tropospheric column (visible + ghost). \\
 18 & 131072 & MODIS ocean flag: MODIS land use table indicates that this pixel is majority ocean, used reflectance from a look up table based on solar zenith angle derived from the Couple Ocean-Atmosphere Radiative Transfer Model (\url{https://cloudsgate2.larc.nasa.gov/jin/coart.html}) \\ 
 19 & 262144 & MODIS BRDF quality flag: the average quality value for the MCD43D* values averaged to this pixel exceeds 2.5 or $>50\%$ of the MODIS grid cells in this OMI pixel are fill values. Accuracy of the surface reflectance used may be lower; use with caution. \\
-20--32 & $2^{19}$--$2^{31}$ & Unused: reserved for future use \\ \hline
+20--31 & $2^{19}$--$2^{30}$ & Unused: reserved for future use \\
+32 & $2^{31}$ & Fill value. If this bit is set, it indicates the quality flag itself was set as a fill value. (This should not happen, if it does, please contact the BEHR maintainer.) \\ \hline
 
 \end{tabularx}
 \caption{Meaning of the various bits in the BEHRQualityFlags field.}
