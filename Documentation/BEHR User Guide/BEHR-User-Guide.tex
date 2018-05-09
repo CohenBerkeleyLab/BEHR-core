@@ -28,7 +28,7 @@
 \usepackage[round]{natbib} % A citation package that allows author-date citations
 
 % Define to use tabularx-style wrapping columns with longtable
-\newcolumntype{Y}{p{\dimexpr(\textwidth-7\arrayrulewidth-12\tabcolsep)/6\relax}}
+\newcolumntype{Y}{p{12cm\relax}}
 
 %title
 \title{BErkeley High Resolution (BEHR) \ce{NO2} product - User Guide}
@@ -234,12 +234,26 @@ equivalent to the one with the period and is used interchangeably.
 	\end{center}
 
 
-\begin{table}
-\def\arraystretch{1.5}
-\begin{tabularx}{\linewidth}{ccX}
+
+%\def\arraystretch{1.5}
+\begin{center}
+
+\begin{longtable}{ccY}
+\caption{Meaning of the various bits in the BEHRQualityFlags field.}
+\label{tab:behr-quality-flags} \\
+
+	\endfirsthead
+	\multicolumn{3}{c}{\tablename\ \thetable\ -- \emph{Continued from previous page}} \\ 
+	Bit position & Bit value & Bit meaning \\ \hline	
+	\endhead	
+	\hline \multicolumn{3}{r}{\emph{Continued on next page}} \\
+	\endfoot
+	\hline
+	\endlastfoot
+
 \hline
 \multicolumn{3}{c}{\textbf{Error bits}} \\
-Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
+Bit position & Bit value & Bit meaning \\ \hline
 1 & 1 & Low quality flag: set if this pixel should not be used to generate high quality full tropospheric VCD (visible + ghost column) data. Set for any pixel with the critical error bit set, MODIS BRDF quality warning set, or cloud fraction $> 20\%$.\\
 2 & 2 & Critical error bit: set if any error present. Do not use either the standard or visible-only VCD from this pixel. \\
 3 & 4 & AMF error: set if either the BEHR AMF or BEHR visible-only AMF is less than or equal to the minimum allowed value \\
@@ -248,7 +262,7 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 6--16 & 32--32768 & Unused: reserved for future use \\ \hline
 %
 \multicolumn{3}{c}{\textbf{Warning bits}} \\
-Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
+Bit position & Bit value & Bit meaning \\ \hline
 17 & 65536 & High cloud fraction: OMI geometric cloud fraction exceeds 20\%. Not recommended for use if trying to retrieve a full tropospheric column (visible + ghost). \\
 18 & 131072 & MODIS ocean flag: MODIS land use table indicates that this pixel is majority ocean, used reflectance from a look up table based on solar zenith angle derived from the Couple Ocean-Atmosphere Radiative Transfer Model (\url{https://cloudsgate2.larc.nasa.gov/jin/coart.html}) \\ 
 19 & 262144 & MODIS BRDF quality flag: the average quality value for the MCD43D* values averaged to this pixel exceeds 2.5 or $>50\%$ of the MODIS grid cells in this OMI pixel are fill values. Accuracy of the surface reflectance used may be lower; use with caution. \\
@@ -257,11 +271,9 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 22--31 & $2^{21}$--$2^{30}$ & Unused: reserved for future use \\ 
 32 & $2^{31}$ & Fill value. If this bit is set, it indicates the quality flag itself was set as a fill value. (This should not happen, if it does, please contact the BEHR maintainer.) \\ \hline
 
+\end{longtable}
 
-\end{tabularx}
-\caption{Meaning of the various bits in the BEHRQualityFlags field.}
-\label{tab:behr-quality-flags}
-\end{table}
+\end{center}
 
 \subsection{Attributes}
 \subsubsection{Swath level}
