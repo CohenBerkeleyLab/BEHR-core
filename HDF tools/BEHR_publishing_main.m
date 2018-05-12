@@ -465,25 +465,22 @@ for d=1:numel(Data_in)
             nans = isnan(save_data);
             save_data(nans) = attr.(vars{v}).fillvalue;
         else
-            save_data_cell = save_data;
-            save_data = uint16(zeros(sz));
-            for c=1:numel(save_data_cell)
-                if DEBUG_LEVEL > 3 && mod(c,10000)==1; fprintf('Cell %d of %d\n',c,numel(save_data_cell)); end
-                flag = uint16(save_data_cell{c}(:));
-                % An empty matrix in the cell means there was no data
-                % there, so just assign it a value of 0.
-                if isempty(flag); 
-                    save_data(c) = uint16(0); 
-                else
-                    save_data(c) = bitopmat(flag,'or');
-                end
-            end
+            E.notimplemented('Cell array variable');
         end
         
         if isa(save_data,'double')
-            % Convert doubles to singles to save space for the data people
-            % will be downloading
-            save_data = single(save_data);
+            if ismember(vars{v}, BEHR_publishing_gridded_fields.flag_vars)
+                save_data_uint = uint32(save_data);
+                if ~isequal(save_data_uint, save_data)
+                    E.callError('flag_conversion_error', 'After conversion to uint32, the %s field changed', vars{v});
+                else
+                    save_data = save_data_uint;
+                end
+            else
+                % Convert doubles to singles to save space for the data people
+                % will be downloading
+                save_data = single(save_data);
+            end
         end
         % Ensure that the fill value is of the same type as the data
         fill_val = cast(attr.(vars{v}).fillvalue, 'like', save_data);
@@ -493,7 +490,7 @@ for d=1:numel(Data_in)
         h5write(hdf_fullfilename, var_name, save_data);
         
         atts = fieldnames(attr.(vars{v}));
-        for a=1:numel(atts);
+        for a=1:numel(atts)
             if strcmp(atts{a},'fillvalue')
                 continue % We've already handled the fill value with h5create
             end
