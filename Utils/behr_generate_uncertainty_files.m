@@ -34,7 +34,7 @@ function behr_generate_uncertainty_files(varargin)
 
 p = inputParser;
 p.addParameter('test_year', 2012);
-p.addParameter('test_months', 3:3:12);
+p.addParameter('test_months', 1:12);
 p.addParameter('output_root', '');
 p.addParameter('region', 'us');
 p.addParameter('prof_mode', 'daily');
@@ -99,7 +99,8 @@ end
 % assess that is to compare the average WRF surface pressures to the GLOBE
 % surface pressures. Using
 % misc_behr_v3_validation.plot_behr_wrf_surfpres_diffs, I get at most a
-% -1.5% bias (Jan, Sept, Nov 2012).
+% -1.5% bias (Jan, Sept, Nov 2012). I will carry that over into the 
+% new terrain height.
 
 % For cloud pressure and cloud fraction, Acarreta et al.
 % (doi:10.1029/2003JD003915) describes the error in sect. 6.1. They point
@@ -109,8 +110,8 @@ end
 % cloud fraction and pressure.
 O2 = O2O2CloudUncert();
 param_percent_changes = struct('MODISAlbedo', {{17, -17}},...
-    'GLOBETerpres', {{@(Data) percent_change_in_range(Data, 'GLOBETerpres', 1.5, [0 max(behr_pres_levels())]), @(Data) percent_change_in_range(Data, 'GLOBETerpres', -1.5, [0 max(behr_pres_levels())])}},...
-    'BEHRTropopausePressure', {{@(Data) Data.TropopausePressure, @(Data) percent_change_in_range(Data, 'BEHRTropopausePressure', 40, [min(behr_pres_levels()), max(behr_pres_levels())]), @(Data) percent_change_in_range(Data, 'BEHRTropopausePressure', -40, [min(behr_pres_levels()), max(behr_pres_levels())])}},...
+    'GLOBETerrainHeight', {{@(Data) percent_change_in_range(Data, 'GLOBETerrainHeight', 1.5, [0 Inf]), @(Data) percent_change_in_range(Data, 'GLOBETerrainHeight', -1.5, [0 Inf])}},...
+    'BEHRTropopausePressure', {{@(Data) Data.TropopausePressure}},...
     'CloudPressure', {{@(Data) Data.CloudPressure + O2.interpolant(Data.CloudFraction, Data.CloudPressure), @(Data) Data.CloudPressure - O2.interpolant(Data.CloudFraction, Data.CloudPressure)}},...
     'CloudRadianceFraction', {{@(Data) differential_crf(Data, 0.05), @(Data) differential_crf(Data, -0.05)}},...
     'ProfileLoc', 0,...
