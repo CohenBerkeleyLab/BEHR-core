@@ -32,6 +32,10 @@ function [ Data, OMI ] = BEHR_main_one_day( Data, varargin )
 %       the wrong units, there will be no way to catch that if "false" is
 %       given for this parameter.
 %
+%       'extra_gridding_fields' - a cell array of strings that lists extra
+%       fields that you wish to have gridded, beyond the standard fields
+%       listed in BEHR_publishing_gridded_fields.
+%
 %       'DEBUG_LEVEL' - level of progress messaged printed to the console.
 %       0 = none, 1 = minimal, 2 = all, 3 = processing times are added.
 %       Default is 2.
@@ -75,6 +79,7 @@ p.addParameter('no2_profile_path', '');
 p.addParameter('profile_mode', 'monthly');
 p.addParameter('use_psm_gridding', false);
 p.addParameter('err_wrf_missing_attr', true);
+p.addParameter('extra_gridding_fields', {});
 
 % Parameters relevant to error analysis
 p.addParameter('lookup_sweights', true);
@@ -93,6 +98,7 @@ no2_profile_path = pout.no2_profile_path;
 prof_mode = pout.profile_mode;
 use_psm = pout.use_psm_gridding;
 err_wrf_missing_attr = pout.err_wrf_missing_attr;
+extra_gridding_fields = pout.extra_gridding_fields;
 lookup_sweights = pout.lookup_sweights;
 lookup_profile = pout.lookup_profile;
 randomize_profile_time = pout.randomize_profile_time;
@@ -107,6 +113,10 @@ elseif ~ismember(prof_mode,allowed_prof_modes)
     E.badinput('prof_mode (if given) must be one of %s', strjoin(allowed_prof_modes,', '));
 elseif ~isscalar(use_psm) || (~islogical(use_psm) && ~isnumeric(use_psm))
     E.badinput('use_psm_gridding must be a scalar logical or number')
+end
+
+if ~iscellstr(extra_gridding_fields)
+    E.badinput('extra_gridding_fields must be a cell array of char arrays')
 end
 
 %Store paths to relevant files
@@ -311,7 +321,7 @@ end
 % GRIDDING DATA %
 %%%%%%%%%%%%%%%%%
 
-OMI = psm_wrapper(Data, Data(1).Grid, 'only_cvm', ~use_psm, 'DEBUG_LEVEL', DEBUG_LEVEL);
+OMI = psm_wrapper(Data, Data(1).Grid, 'only_cvm', ~use_psm, 'extra_cvm_fields', extra_gridding_fields, 'DEBUG_LEVEL', DEBUG_LEVEL);
 
 end
 

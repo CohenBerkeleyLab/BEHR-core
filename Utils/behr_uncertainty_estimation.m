@@ -85,7 +85,7 @@ elseif strcmpi(parameter, 'profiletime')
     [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', true, 'lookup_sweights', false,...
         'randomize_profile_time', true, varargin{:});
 else
-    [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', false, 'lookup_sweights', true, varargin{:});%, 'no2_profile_path', '/Users/Josh/Downloads/WRF-Test');
+    [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', false, 'lookup_sweights', true, 'extra_gridding_fields', {parameter}, varargin{:});
 end
 
 

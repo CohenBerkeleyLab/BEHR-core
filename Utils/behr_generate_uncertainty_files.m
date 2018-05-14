@@ -144,7 +144,10 @@ for i_param = 1:numel(params)
             this_percent_change = param_percent_changes.(this_param);
             ErrorData = struct('parameter', this_param, 'percent_change_op', this_percent_change, 'Delta', cell(size(this_percent_change)), 'DeltaGrid', cell(size(this_percent_change)));
             
-            [Data, OMI] = load_behr_file(this_date, prof_mode, region);
+            file_name = behr_filename(this_date, prof_mode, region);
+            F = load(fullfile(behr_paths.BEHRMatSubdir(region, prof_mode), file_name));
+            Data = F.Data;
+            OMI = F.OMI;
             for i_change = 1:numel(this_percent_change)
                 [ErrorData(i_change).Delta, ErrorData(i_change).DeltaGrid] = behr_uncertainty_estimation(Data, OMI, params{i_param}, ErrorData(i_change).percent_change_op, 'remove_unchanged_fields', true);
             end
