@@ -38,14 +38,14 @@ DEBUG_LEVEL = pout.DEBUG_LEVEL;
 loncorn_field = pout.LoncornField;
 latcorn_field = pout.LatcornField;
 
-GLOBETerpres = nan(size(data.Latitude));
+GLOBETerrainHeight = nan(size(data.Latitude));
 
 %GLOBE matrices are arrange s.t. terpres(1,1) is in the SW
 %corner and terpres(end, end) is in the NE corner.
 
-for a=1:numel(GLOBETerpres)
+for a=1:numel(GLOBETerrainHeight)
     
-    if DEBUG_LEVEL > 3; fprintf('Averaging GLOBE data to pixel %u of %u \n',a,numel(GLOBETerpres)); end
+    if DEBUG_LEVEL > 3; fprintf('Averaging GLOBE data to pixel %u of %u \n',a,numel(GLOBETerrainHeight)); end
     if DEBUG_LEVEL > 3; tic; end
     
     xall=[data.(loncorn_field)(:,a); data.(loncorn_field)(1,a)];
@@ -66,7 +66,7 @@ for a=1:numel(GLOBETerpres)
     if DEBUG_LEVEL > 4; t_cut = tic; end
     ai=find(globe_lat_matrix(:,1)>=min(yall) & globe_lat_matrix(:,1)<=max(yall));
     bi=find(globe_lon_matrix(1,:)>=min(xall) & globe_lon_matrix(1,:)<=max(xall));
-    pressurex=globe_elevations(ai,bi);
+    elevation_x=globe_elevations(ai,bi);
     pressure_latx=globe_lat_matrix(ai,bi);
     pressure_lonx=globe_lon_matrix(ai,bi);
     if DEBUG_LEVEL > 4; fprintf('    Time to cut down GLOBE data = %f\n', toc(t_cut)); end
@@ -79,13 +79,13 @@ for a=1:numel(GLOBETerpres)
     xx_globe = inpolygon(pressure_latx,pressure_lonx,yall,xall);
     if DEBUG_LEVEL > 4; fprintf('    Time to apply inpolygon to GLOBE data = %f\n', toc(t_poly)); end
     
-    pres_vals=pressurex(xx_globe);
-    GLOBETerpres(a)=1013.25 .* exp(-mean(pres_vals) / 7400 ); %Originally divided by 7640 m
+    elev_vals=elevation_x(xx_globe);
+    GLOBETerrainHeight(a)=mean(elev_vals);
     
     
-    if DEBUG_LEVEL > 3; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',a,numel(GLOBETerpres),telap); end
+    if DEBUG_LEVEL > 3; telap = toc; fprintf('Time for GLOBE --> pixel %u/%u = %g sec \n',a,numel(GLOBETerrainHeight),telap); end
 end
 
-data.GLOBETerpres = GLOBETerpres;
+data.GLOBETerrainHeight = GLOBETerrainHeight;
 end
 

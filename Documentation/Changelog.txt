@@ -53,6 +53,12 @@ equivalent to the one with the period and is used interchangeably.
    weights could be undefined but the cloudy sky scattering weights were not, and the AMF would
    still be computed.
 -- Cloud pressure now clamped to <= surface pressure.
+-- The surface pressure is now calculated as suggested in Zhou et al. 2009 (doi:
+   10.5194/amt-2-401-2009), that is, the GLOBE elevation is used to adjust the WRF surface
+   pressure using the hypometric equation. Published variables have changed: GLOBETerpres
+   has been removed and replaced with GLOBETerrainHeight; new variables BEHRSurfacePressure
+   and WRFSurfacePressure added (WRFSurfacePressure is the unmodified surface pressure from
+   WRF, BEHRSurfacePressure is that used in the AMF calculation).
 
 **** 3.0A ****
 -- We will no longer produce the csv file version of BEHR due to the increasing number
