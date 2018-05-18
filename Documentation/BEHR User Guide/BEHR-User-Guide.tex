@@ -27,6 +27,9 @@
 
 \usepackage[round]{natbib} % A citation package that allows author-date citations
 
+% Define to use tabularx-style wrapping columns with longtable
+\newcolumntype{Y}{p{12cm\relax}}
+
 %title
 \title{BErkeley High Resolution (BEHR) \ce{NO2} product - User Guide}
 \author{Josh Laughner}
@@ -122,11 +125,15 @@ equivalent to the one with the period and is used interchangeably.
 	
 	\item \textbf{BEHRQualityFlags}: flags field that combines the NASA XTrackQualityFlags and VcdQualityFlags summary bits with processing errors or warnings from the BEHR algorithm. The meaning of each bit is given in Table \ref{tab:behr-quality-flags}. Discussion of how to use these flags is given in \S\ref{sec:native-filtering}.
 	
-	\item \textbf{BEHRScatteringWeights}: the vectors of scattering weights that can be used to recompute AMFs using custom \emph{a priori} profiles. See \S\ref{sec:scweights} for more details.
+	\item \textbf{BEHRScatteringWeightsClear}: the vectors of scattering weights for clear-sky (non-cloudy) conditions that can be used to recompute AMFs using custom \emph{a priori} profiles. See \S\ref{sec:scweights} for more details.
+	
+	\item \textbf{BEHRScatteringWeightsCloudy}: the vectors of scattering weights for cloudy conditions that can be used to recompute AMFs using custom \emph{a priori} profiles. See \S\ref{sec:scweights} for more details.
+	
+	\item \textbf{BEHRSurfacePressure}: The surface pressure of the pixel used in the AMF calculation; it is calculated by using the difference in surface elevation between WRF and the GLOBE database to scale the WRF surface pressure.
 	
 	\item \textbf{BEHRTropopausePressure}: the tropopause pressure derived from WRF temperature profiles and used as the upper limit in the BEHR AMF calculation.
 	
-	\item \textbf{GLOBETerpress}: The average surface pressure of the pixel calculated from the GLOBE database (\url{http://www.ngdc.noaa.gov/mgg/topo/globe.html}). Currently it is calculated from the GLOBE terrain heights using a simple scale height calculation, with scale height set to 7.4 km.
+	\item \textbf{GLOBETerrainHeight}: The average surface elevation of the pixel calculated from the GLOBE database (\url{http://www.ngdc.noaa.gov/mgg/topo/globe.html}). 
 	
 	
 	\item \textbf{MODISAlbedo}: The average surface reflectance of the pixel calculated from Band 3 of the MCD43D combined MODIS BRDF product for the viewing geometry of this pixel. 
@@ -145,9 +152,11 @@ equivalent to the one with the period and is used interchangeably.
 	\end{align*}
 	The extra factor of 180 transforms the RAA into the definition used in the TOMRAD look up table.
 	
-	\item \textbf{XTrackQualityFlags}: directly taken from the OMNO2 product; however, while they should always be considered a bit array (and thus integers) in some version of BEHR these are converted to floating point numbers.  Also, in the gridded product, in any case where more than one pixel contributed to a grid cell, the value given will be the result of a bitwise OR operation applied to the flags from each pixel. Thus, if a flag is set in any contributing pixel, it will be set in the grid cell.
+	\item \textbf{VcdQualityFlags}: directly taken from the OMNO2 product; however, while they should always be considered a bit array (and thus integers) in some versions of BEHR these are converted to floating point numbers.  Also, in the gridded product, in any case where more than one pixel contributed to a grid cell, the value given will be the result of a bitwise OR operation applied to the flags from each pixel. Thus, if a flag is set in any contributing pixel, it will be set in the grid cell.
 	
-	\item \textbf{vcdQualityFlags}: same notes as XTrackQualityFlags.
+	\item \textbf{WRFSurfacePressure}: surface pressure calculated as a simple average of WRF profile falling within the pixel. Not used in the AMF calculation.
+	
+	\item \textbf{XTrackQualityFlags}: same notes as VcdQualityFlags.
 	
 	\end{itemize}
 
@@ -168,8 +177,8 @@ equivalent to the one with the period and is used interchangeably.
 	\hline
 	\endlastfoot
 	
-	AMFStrat				&	Native		&	SP			&	[0, $\infty$)	&	unitless \\
-	AMFTrop				&	Both	 		&	SP			& 	[0, $\infty$)	& unitless \\
+	AmfStrat				&	Native		&	SP			&	[0, $\infty$)	&	unitless \\
+	AmfTrop				&	Both	 		&	SP			& 	[0, $\infty$)	& unitless \\
 	Areaweight			&	Gridded		&	BEHR			&	[0, $\infty$) & km$^{-2}$ \\
 	BEHRAMFTrop			&	Both 		& 	BEHR			&	[0, $\infty$)	& unitless \\
 	BEHRAMFTropVisOnly	&	Both 		& 	BEHR			&	[0, $\infty$)	& unitless \\
@@ -179,7 +188,9 @@ equivalent to the one with the period and is used interchangeably.
 	BEHRNO2Apriori		&	Native 		&	BEHR			& 	($-\infty$, $\infty$) & unscaled mixing ratio\\
 	BEHRPressureLevels	&	Native	 	& 	BEHR			& 	[0, $\infty$) & hPa \\
 	BEHRQualityFlags		& 	Both			& 	BEHR			&	[0, $2^{32}-1$] & bit array flag \\
-	BEHRScatteringWeights & Native	 	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRScatteringWeightsClear & Native 	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRScatteringWeightsCloudy & Native	&	BEHR			&	[0, $\infty$) & unitless \\
+	BEHRSurfacePressure	& 	Both			&	BEHR			&	[0, 1013]	& hPa \\
 	BEHRTropopausePressure & Both		&	BEHR			&	[0, $\infty$) & hPa \\
 	CloudFraction		&	Both 		&	SP			&	[0, 1]	 & unitless \\
 	CloudPressure		&	Native	 	&	SP			& 	[0, $\infty$) & hPa \\
@@ -191,7 +202,7 @@ equivalent to the one with the period and is used interchangeably.
 	FoV75Area			& 	Native		& 	PIXCOR		&	[0, $\infty$)	&km$^2$ \\
 	FoV75CornerLatitude	&	Native		&	PIXCOR		&	[-90, 90]	& degrees \\
 	FoV75CornerLongitude &	Native		&	PIXCOR		&	[-180, 180] 	& degrees \\
-	GLOBETerpres			&	Both		 	&	BEHR			&	[0, $\infty$) & hPa \\
+	GLOBETerrainHeight	&	Native	 	&	BEHR			&	[$-\infty$, $\infty$) & hPa \\
 	Latitude				& 	Both 		&	SP			&	[-90, 90] & degrees \\
 	Longitude			& 	Both 		& 	SP			&	[-180, 180] & degrees \\
 	MODISAlbedo			&	Both		 	&	BEHR			&	[0, 1]	 & unitless \\
@@ -215,6 +226,7 @@ equivalent to the one with the period and is used interchangeably.
 	VcdQualityFlags		&	Both 		&	SP			&	N/A				& bit array flag \\
 	ViewingAzimuthAngle	&	Native	 	&	SP			&	[-180, 180]	& degrees \\
 	ViewingZenithAngle	&	Native	 	&	SP			&	[0, 90]		& degrees \\
+	WRFSurfacePressure	&	Native		& 	BEHR			&	[0, $\infty$)	& hPa \\
 	XTrackQualityFlags	&	Both 		&	SP			&	N/A				& bit array flag \\
 	
 	\end{longtable}
@@ -222,12 +234,26 @@ equivalent to the one with the period and is used interchangeably.
 	\end{center}
 
 
-\begin{table}
-\def\arraystretch{1.5}
-\begin{tabularx}{\linewidth}{ccX}
+
+%\def\arraystretch{1.5}
+\begin{center}
+
+\begin{longtable}{ccY}
+\caption{Meaning of the various bits in the BEHRQualityFlags field.}
+\label{tab:behr-quality-flags} \\
+
+	\endfirsthead
+	\multicolumn{3}{c}{\tablename\ \thetable\ -- \emph{Continued from previous page}} \\ 
+	Bit position & Bit value & Bit meaning \\ \hline	
+	\endhead	
+	\hline \multicolumn{3}{r}{\emph{Continued on next page}} \\
+	\endfoot
+	\hline
+	\endlastfoot
+
 \hline
 \multicolumn{3}{c}{\textbf{Error bits}} \\
-Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
+Bit position & Bit value & Bit meaning \\ \hline
 1 & 1 & Low quality flag: set if this pixel should not be used to generate high quality full tropospheric VCD (visible + ghost column) data. Set for any pixel with the critical error bit set, MODIS BRDF quality warning set, or cloud fraction $> 20\%$.\\
 2 & 2 & Critical error bit: set if any error present. Do not use either the standard or visible-only VCD from this pixel. \\
 3 & 4 & AMF error: set if either the BEHR AMF or BEHR visible-only AMF is less than or equal to the minimum allowed value \\
@@ -236,16 +262,18 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 6--16 & 32--32768 & Unused: reserved for future use \\ \hline
 %
 \multicolumn{3}{c}{\textbf{Warning bits}} \\
-Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
+Bit position & Bit value & Bit meaning \\ \hline
 17 & 65536 & High cloud fraction: OMI geometric cloud fraction exceeds 20\%. Not recommended for use if trying to retrieve a full tropospheric column (visible + ghost). \\
 18 & 131072 & MODIS ocean flag: MODIS land use table indicates that this pixel is majority ocean, used reflectance from a look up table based on solar zenith angle derived from the Couple Ocean-Atmosphere Radiative Transfer Model (\url{https://cloudsgate2.larc.nasa.gov/jin/coart.html}) \\ 
 19 & 262144 & MODIS BRDF quality flag: the average quality value for the MCD43D* values averaged to this pixel exceeds 2.5 or $>50\%$ of the MODIS grid cells in this OMI pixel are fill values. Accuracy of the surface reflectance used may be lower; use with caution. \\
-20--32 & $2^{19}$--$2^{31}$ & Unused: reserved for future use \\ \hline
+20 & $2^{19}$ & Cloud pressure is less than BEHRTropopausePressure. This means that the AMF calculation assumed no above-cloud component. \\
+21 & $2^{20}$ & Tropopause pressure was interpolated from neighboring pixels because the algorithm could not find a level in the temperature profile with a lapse rate $< 2$ K/km. \\
+22--31 & $2^{21}$--$2^{30}$ & Unused: reserved for future use \\ 
+32 & $2^{31}$ & Fill value. If this bit is set, it indicates the quality flag itself was set as a fill value. (This should not happen, if it does, please contact the BEHR maintainer.) \\ \hline
 
-\end{tabularx}
-\caption{Meaning of the various bits in the BEHRQualityFlags field.}
-\label{tab:behr-quality-flags}
-\end{table}
+\end{longtable}
+
+\end{center}
 
 \subsection{Attributes}
 \subsubsection{Swath level}
@@ -377,15 +405,25 @@ Bit position & Bit value & \multicolumn{1}{c}{Bit meaning} \\ \hline
 	\subsubsection{Variable layout}
 	These are for advanced users who might wish to either use their own \emph{a priori} \ce{NO2} profile or to compare modeled \ce{NO2} VCDs correctly with BEHR VCDs.  Starting with v3.0B separate clear and cloudy scattering weights are provided, which allows users to follow Eqs. \eqref{eqn:total-amf} and \eqref{eqn:vis-amf} exactly, while a single combined averaging kernel vector is given for each pixel. The relationship between them is:
 	
-	\begin{equation}
-	AK_i(p) = \frac{(1-f)w_{i,\mathrm{clear}}(p) + f w_{i,\mathrm{cloudy}}(p)}{A_{i,\mathrm{to-ground}}}
-	\end{equation}
+	\begin{align}
+	AK_i(p) &= \frac{(1-f_{r,i})w_{i,\mathrm{clear}}(p) + f_{r,i} w_{i,\mathrm{cloudy}}(p)}{A_{i,\mathrm{to-ground}}} \\
+	w_{i, \mathrm{clr}} &= \left\lbrace 
+		\begin{matrix}
+			10^{-30} & \text{ if } p_i > p_\mathrm{terr} \\
+			w_{i, \mathrm{clr}} & \text{ otherwise }
+		\end{matrix}\right. \\
+	w_{i, \mathrm{cld}} &= \left\lbrace 
+		\begin{matrix} 
+			10^{-30} & \text{ if } p_i > p_\mathrm{cld} \\
+			w_{i, \mathrm{cld}} & \text{ otherwise }
+		\end{matrix}\right. \label{eqn-cldSW}
+	\end{align}
 	
-that is, the averaging kernel for pixel $i$ at pressure $p$ is the cloud radiance fraction weighted average of the clear and cloudy scattering weights for pixel $i$ at pressure $p$, divided by the to-ground AMF for pixel $i$.
+that is, the averaging kernel for pixel $i$ at pressure $p$ is the cloud radiance fraction weighted average of the clear and cloudy scattering weights for pixel $i$ at pressure $p$, divided by the to-ground AMF for pixel $i$. Setting the scattering weights to $\sim 0$ below the terrain and cloud pressures represents the null contribution of \ce{NO2} from those parts of the pixel.
 	
 	For new users wishing to begin using these variables, several resources will be helpful. \citet{palmer2001} contains the original formulation of the relationship between scattering weights, \emph{a priori} \ce{NO2} profiles, and air mass factors and should definitely be studied. The first several chapters of \emph{The Remote Sensing of Tropospheric Composition from Space} assembled by Burrows, Platt, and Borrell \citep{burrows-platt} also describes the relationship of scattering weights, averaging kernels, and air mass factors.
 	
-    BEHRScatteringWeights, BEHRAvgKernels, BEHRPressureLevels, and BEHRNO2apriori are 3D variables; the first dimension is the vertical dimension, the second and third correspond to the dimensions of the normal 2D variables. To put this another way, if $X$ were the array of values for these variables, then $X(:,1,1)$ would be the vector of values for the $(1,1)$ pixel, $X(:,1,2)$ the vector for the $(1,2)$ pixel and so on. (Note: some programs may read the data in with C-style ordering and so put the vertical dimension last.)
+    BEHRScatteringWeightsClear/Cloudy, BEHRAvgKernels, BEHRPressureLevels, and BEHRNO2apriori are 3D variables; the first dimension is the vertical dimension, the second and third correspond to the dimensions of the normal 2D variables. To put this another way, if $X$ were the array of values for these variables, then $X(:,1,1)$ would be the vector of values for the $(1,1)$ pixel, $X(:,1,2)$ the vector for the $(1,2)$ pixel and so on. (Note: some programs may read the data in with C-style ordering and so put the vertical dimension last.)
 	
 	The BEHRPressureLevels variable gives the vertical coordinates for the other three.  30 of the pressure levels will be the same for every pixel; the remaining three will correspond to the terrain, cloud, and tropopause pressure. Should the terrain, cloud, or tropopause pressure match one of the standard 30 pressures, then the vector of values for this pixel will still be 33 elements long, but will end with fill values which should be removed.  The scattering weights and averaging kernels can have additional fill values compared to the pressure levels; this occurs when the pressures are outside those available from WRF-Chem. Such fill values should always be above the tropopause, and because AMF calculations integrate from surface (or cloud) pressure to tropopause, can be safely removed.
 	
@@ -416,24 +454,9 @@ that is, the averaging kernel for pixel $i$ at pressure $p$ is the cloud radianc
 	Before calculating custom AMFs, users should follow the code in the above link exactly to reproduce the BEHR AMFs from the published scattering weights and \ce{NO2} profiles. The difference between user calculated and published AMFs should be $< 0.1\%$.
 	
 	
-	\subsubsection{Calculation of averaging kernels}\label{sec:scattering-wt-calc}
-	The averaging kernels presented ($AK_i$) are calculated as the weighted average of a vector of clear and cloudy scattering weights obtained by interpolating the NASA OMNO2 TOMRAD look up table to the appropriate values of SZA, VZA, RAA (relative azimuth angle), albedo, and surface pressure, divided by the AMF for that pixel. Mathematically:
-	\begin{align}
-		AK_i = \frac{f_r w_{i, \mathrm{cld}} + (1 - f_r) w_{i, \mathrm{clr}}}{A} \label{eqn-pubSW}\\
-		w_{i, \mathrm{clr}} = \left\lbrace 
-			\begin{matrix}
-				10^{-30} & \text{ if } p_i > p_\mathrm{terr} \\
-				w_{i, \mathrm{clr}} & \text{ otherwise }
-			\end{matrix}\right. \\
-		w_{i, \mathrm{cld}} = \left\lbrace 
-			\begin{matrix} 
-				10^{-30} & \text{ if } p_i > p_\mathrm{cld} \\
-				w_{i, \mathrm{cld}} & \text{ otherwise }
-			\end{matrix}\right. \label{eqn-cldSW}
-	\end{align}
-	where $f_r$ is the radiance cloud fraction, $w_{i, \mathrm{clr}}$ is the $i$th element in the clear sky scattering weight vector, $w_{i, \mathrm{cld}}$ is the $i$th element in the cloudy scattering weight vector, $A$ is the BEHR tropospheric AMF, $p_i$ is the pressure level for the $i$th element in the vectors, $p_\mathrm{terr}$ is the terrain pressure for the pixel, and $p_\mathrm{cld}$ is the cloud top pressure for the pixel. Therefore the final vector of averaging kernels is the cloud radiance fraction-weighted average of the clear and cloudy scattering weight vectors after setting the clear sky vectors to essentially 0 below the ground, and the cloudy vectors to essentially 0 below the cloud top.
+	\subsubsection{Final notes}
 	
-	Two final notes: first, internally BEHR integrates the \emph{a priori} profile in mixing ratio (or mixing ratio times scattering weight) over pressure, see Appendix B of \citet{ziemka01} for information on how mixing ratio integrated over pressure should be done to be equivalent to number density integrated over altitude. Second, since the clear and cloudy scattering weights are set to 0 below the surface and cloud pressures, respectively, before they are combined to yield the averaging kernel, so there will implicitly be no below-ground or below-cloud contribution to the respective subscenes.
+	One final notes: first, internally BEHR integrates the \emph{a priori} profile in mixing ratio (or mixing ratio times scattering weight) over pressure, see Appendix B of \citet{ziemka01} for information on how mixing ratio integrated over pressure should be done to be equivalent to number density integrated over altitude. 
 	
 %%%%% BIBLIOGRAPHY %%%%%
 \bibliographystyle{copernicus}
