@@ -391,7 +391,7 @@ parfor(j=1:length(datenums), n_workers)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality','MODISAlbedoFillFlag', 'GLOBETerpres',...
+        'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality','MODISAlbedoFillFlag', 'GLOBETerrainHeight',...
         'IsZoomModeSwath', 'AlbedoOceanFlag','OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',...
         'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File', 'BEHRRegion'};
     
@@ -409,7 +409,7 @@ parfor(j=1:length(datenums), n_workers)
     n = length(sp_files);
     
     
-    if isempty(sp_files);
+    if isempty(sp_files)
         fprintf('No data available for %s\n', datestr(this_dnum));
         continue
     end
