@@ -107,10 +107,24 @@ for k=1:c;
     xx = band3data.lons >= min(xall) & band3data.lons <= max(xall);
     yy = band3data.lats >= min(yall) & band3data.lats <= max(yall);
     
+    % Checking here became necessary after we switched to using lon/lat
+    % vectors instead of arrays because if only one of xx or yy is all
+    % false, then brdf_quality_k will be empty but have non-zero "length"
+    % in one dimension while xx_inpoly will just be a regular empty array.
+    % This causes the calculation of xx_alb to fail, since xx_inpoly and
+    % brdf_quality_k have different dimensions (but both are empty).
+    if all(~xx) || all(~yy)
+        MODISAlbedo(k) = nan;
+        if DEBUG_LEVEL > 3; telap = toc(t_total); fprintf(' Time for MODIS alb --> pixel %u/%u = %g sec \n',k,c,telap); end
+        continue
+    end
+    
     band3_iso_k = band3data.iso(yy,xx);
     band3_geo_k = band3data.geo(yy,xx);
     band3_vol_k = band3data.vol(yy,xx);
     brdf_quality_k = band3data.quality(yy,xx);
+    
+    
     
     [lon_grid, lat_grid] = meshgrid(band3data.lons(xx), band3data.lats(yy));
     xx_inpoly = inpolygon(lon_grid,lat_grid,xall,yall);
