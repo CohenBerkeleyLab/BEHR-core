@@ -104,15 +104,16 @@ for k=1:c;
     % If we're here, we're over a land pixel.
     % should be able to speed this up by first restricting based on a
     % single lat and lon vector
-    xx = band3data.lons(1,:) >= min(xall) & band3data.lons(1,:) <= max(xall);
-    yy = band3data.lats(:,1) >= min(yall) & band3data.lats(:,1) <= max(yall);
+    xx = band3data.lons >= min(xall) & band3data.lons <= max(xall);
+    yy = band3data.lats >= min(yall) & band3data.lats <= max(yall);
     
     band3_iso_k = band3data.iso(yy,xx);
     band3_geo_k = band3data.geo(yy,xx);
     band3_vol_k = band3data.vol(yy,xx);
     brdf_quality_k = band3data.quality(yy,xx);
     
-    xx_inpoly = inpolygon(band3data.lons(yy,xx),band3data.lats(yy,xx),xall,yall);
+    [lon_grid, lat_grid] = meshgrid(band3data.lons(xx), band3data.lats(yy));
+    xx_inpoly = inpolygon(lon_grid,lat_grid,xall,yall);
     
     % Also remove data that has too low a quality. The quality values are
     % described in the "Description" attribute for the "BRDF_Quality" SDS.

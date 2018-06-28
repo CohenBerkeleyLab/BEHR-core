@@ -77,7 +77,10 @@ julian_day = modis_date_to_day(date_in);
 %need to worry about.  This will significantly speed up the search for
 %albedo values within each pixel, plus speed up loading, since fewer IO
 %reads are necessary.
-[band3_lons, band3_lats, in_lons, in_lats] = modis_cmg_latlon(1/120, lonlim, latlim, 'grid');
+[band3_lons, band3_lats, in_lons, in_lats] = modis_cmg_latlon(1/120, lonlim, latlim);
+% Make band3_lats a column vector since the first dim of the modis arrays
+% is latitude
+band3_lats = band3_lats';
 
 % As of version 6 of MCD43, a 16-day average is produced every day, so
 % unlike version 5 of MCD43 where we had to look forward and back in time

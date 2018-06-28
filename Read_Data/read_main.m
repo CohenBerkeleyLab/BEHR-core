@@ -299,7 +299,7 @@ if DEBUG_LEVEL > 2; fprintf('    Time to load land/ocean classification map: %f\
 if DEBUG_LEVEL > 1; fprintf('Loading globe elevations\n'); end
 if DEBUG_LEVEL > 2; t_load_globe = tic; end
 
-[globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(ancillary_lonlim, ancillary_latlim);
+[globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(ancillary_lonlim, ancillary_latlim, 'vector');
 globe_elevations(isnan(globe_elevations)) = 0;
 if DEBUG_LEVEL > 2; fprintf('    Time to load GLOBE elevations: %f\n', toc(t_load_globe)); end
 
