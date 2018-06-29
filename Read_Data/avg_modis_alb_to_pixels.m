@@ -75,13 +75,14 @@ for k=1:c;
     % insert a value from the look up table and move on.
     if DEBUG_LEVEL > 4; t_cut = tic; end
     
-    xx_mask_lon = ocean_mask.lon(1,:) >= min(xall) & ocean_mask.lon(1,:) <= max(xall);
-    xx_mask_lat = ocean_mask.lat(:,1) >= min(yall) & ocean_mask.lat(:,1) <= max(yall);
+    xx_mask_lon = ocean_mask.lon >= min(xall) & ocean_mask.lon <= max(xall);
+    xx_mask_lat = ocean_mask.lat >= min(yall) & ocean_mask.lat <= max(yall);
     
     if DEBUG_LEVEL > 4; fprintf('    Time to cut down ocean mask = %f\n', toc(t_cut)); end
     
     if DEBUG_LEVEL > 4; t_mask = tic; end
-    xx_ocean_mask = inpolygon(ocean_mask.lon(xx_mask_lat, xx_mask_lon), ocean_mask.lat(xx_mask_lat, xx_mask_lon), xall, yall);
+    [om_longrid, om_latgrid] = latlon_vec2grid(ocean_mask.lon, ocean_mask.lat, xx_mask_lon, xx_mask_lat);
+    xx_ocean_mask = inpolygon(om_longrid, om_latgrid, xall, yall);
     if DEBUG_LEVEL > 4; fprintf('    Time to apply inpolygon to mask = %f\n', toc(t_mask)); end
     
     if DEBUG_LEVEL > 4; t_avg_mask = tic; end
@@ -123,10 +124,8 @@ for k=1:c;
     band3_geo_k = band3data.geo(yy,xx);
     band3_vol_k = band3data.vol(yy,xx);
     brdf_quality_k = band3data.quality(yy,xx);
-    
-    
-    
-    [lon_grid, lat_grid] = meshgrid(band3data.lons(xx), band3data.lats(yy));
+
+    [lon_grid, lat_grid] = latlon_vec2grid(band3data.lons, band3data.lats, xx, yy);
     xx_inpoly = inpolygon(lon_grid,lat_grid,xall,yall);
     
     % Also remove data that has too low a quality. The quality values are
@@ -192,3 +191,6 @@ data.AlbedoOceanFlag = ocean_flag;
 
 end
 
+function [longrid, latgrid] = latlon_vec2grid(lonvec, latvec, xx_lon, xx_lat)
+[longrid, latgrid] = meshgrid(lonvec(xx_lon), latvec(xx_lat));
+end
