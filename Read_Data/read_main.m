@@ -518,6 +518,10 @@ parfor(j=1:length(datenums), n_workers)
         data_ind = data_ind + 1;
         Data(data_ind) = this_data;
 
+        % Clear the modis albedo structure, hopefully this will help with
+        % memory usage
+        modis_brdf_data = [];
+
         if DEBUG_LEVEL > 2; fprintf('    Time for one orbit on worker %d: %f\n', this_task.ID, toc(t_orbit)); end
         
     end %End the loop over all swaths in a day
