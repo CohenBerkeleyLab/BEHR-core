@@ -1,4 +1,4 @@
-function [ data ] = avg_globe_data_to_pixels( data, globe_elevations, globe_lon_matrix, globe_lat_matrix, varargin )
+function [ data ] = avg_globe_data_to_pixels( data, globe_elevations, globe_lon_vector, globe_lat_vector, varargin )
 %AVG_GLOBE_DATA_TO_PIXELS Averages GLOBE elevation data to OMI pixels
 %   DATA = AVG_GLOBE_DATA_TO_PIXELS( DATA, GLOBE_ELEV, GLOBE_LON,
 %   GLOBE_LAT) Averages Global Land One-km Elevation (GLOBE) data given in
@@ -61,14 +61,14 @@ for a=1:numel(GLOBETerrainHeight)
     % Since GLOBE data is on a grid where a row of
     % latitudinal points all have the same longitude and
     % vice versa, we can quickly reduce the number of
-    % points by comparing just one lat and lon vector to
+    % points by comparing the lat and lon vector to
     % the extent of the pixel.
     if DEBUG_LEVEL > 4; t_cut = tic; end
-    ai=find(globe_lat_matrix(:,1)>=min(yall) & globe_lat_matrix(:,1)<=max(yall));
-    bi=find(globe_lon_matrix(1,:)>=min(xall) & globe_lon_matrix(1,:)<=max(xall));
-    elevation_x=globe_elevations(ai,bi);
-    pressure_latx=globe_lat_matrix(ai,bi);
-    pressure_lonx=globe_lon_matrix(ai,bi);
+    yy=find(globe_lat_vector(:,1)>=min(yall) & globe_lat_vector(:,1)<=max(yall));
+    xx=find(globe_lon_vector(1,:)>=min(xall) & globe_lon_vector(1,:)<=max(xall));
+    
+    elevation_x=globe_elevations(yy,xx);
+    [elevation_lonx, elevation_latx] = meshgrid(globe_lon_vector(xx), globe_lat_vector(yy));
     if DEBUG_LEVEL > 4; fprintf('    Time to cut down GLOBE data = %f\n', toc(t_cut)); end
     %%%%%%%%%%%%%%%%%%%
     
@@ -76,7 +76,7 @@ for a=1:numel(GLOBETerrainHeight)
     % so we only apply it to the subset of GLOBE heights
     % immediately around our pixel.
     if DEBUG_LEVEL > 4; t_poly = tic; end
-    xx_globe = inpolygon(pressure_latx,pressure_lonx,yall,xall);
+    xx_globe = inpolygon(elevation_latx,elevation_lonx,yall,xall);
     if DEBUG_LEVEL > 4; fprintf('    Time to apply inpolygon to GLOBE data = %f\n', toc(t_poly)); end
     
     elev_vals=elevation_x(xx_globe);

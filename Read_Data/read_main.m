@@ -299,7 +299,7 @@ if DEBUG_LEVEL > 2; fprintf('    Time to load land/ocean classification map: %f\
 if DEBUG_LEVEL > 1; fprintf('Loading globe elevations\n'); end
 if DEBUG_LEVEL > 2; t_load_globe = tic; end
 
-[globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(ancillary_lonlim, ancillary_latlim);
+[globe_elevations, globe_lon_matrix, globe_lat_matrix] = load_globe_alts(ancillary_lonlim, ancillary_latlim, 'vector');
 globe_elevations(isnan(globe_elevations)) = 0;
 if DEBUG_LEVEL > 2; fprintf('    Time to load GLOBE elevations: %f\n', toc(t_load_globe)); end
 
@@ -391,7 +391,7 @@ parfor(j=1:length(datenums), n_workers)
     % intervention if you choose to add more variables since they're not
     % being copied directly from existing files.
     behr_variables = {'Date', 'Grid', 'LatBdy', 'LonBdy', 'Row', 'Swath', 'RelativeAzimuthAngle',...
-        'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality','MODISAlbedoFillFlag', 'GLOBETerpres',...
+        'MODISCloud',  'MODISAlbedo', 'MODISAlbedoQuality','MODISAlbedoFillFlag', 'GLOBETerrainHeight',...
         'IsZoomModeSwath', 'AlbedoOceanFlag','OMPIXCORFile', 'MODISCloudFiles', 'MODISAlbedoFile',...
         'GitHead_Core_Read', 'GitHead_BEHRUtils_Read', 'GitHead_GenUtils_Read', 'OMNO2File', 'BEHRRegion'};
     
@@ -409,17 +409,10 @@ parfor(j=1:length(datenums), n_workers)
     n = length(sp_files);
     
     
-    if isempty(sp_files);
+    if isempty(sp_files)
         fprintf('No data available for %s\n', datestr(this_dnum));
         continue
     end
-    
-    % Read in the MODIS albedo data for this day. We do it outside the loop
-    % over orbits to limit the number of reads of the (fairly large) MCD43D
-    % files.
-    if DEBUG_LEVEL > 2; t_alb_read = tic; end
-    modis_brdf_data = read_modis_albedo(modis_mcd43_dir, this_dnum, ancillary_lonlim, ancillary_latlim);
-    if DEBUG_LEVEL > 2; fprintf('Worker %d: Time to read MODIS BRDF = %f\n', this_task.ID, toc(t_alb_read)); end
     
     data_ind = 0;
     for a=1:n %For loop over all the swaths in a given day.
@@ -478,13 +471,6 @@ parfor(j=1:length(datenums), n_workers)
         raa_tmp(raa_tmp > 180)=360-raa_tmp(raa_tmp > 180);
         this_data.RelativeAzimuthAngle = raa_tmp;
         
-        % Add our calculated lat and lon corners. This should only be
-        % temporary until the unit testing to verify that the version 3
-        % read function produces identical files to the version 2 read
-        % function is complete, since the MODIS and GLOBE variables rely on
-        % the lat/lon corners to be averaged to the pixel.
-        %this_data = add_behr_corners(this_data, this_sp_filename);
-        
         % Add MODIS cloud info to the files 
         if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS cloud data \n'); end
         
@@ -497,6 +483,17 @@ parfor(j=1:length(datenums), n_workers)
         % Add MODIS albedo info to the files
         if DEBUG_LEVEL > 0; fprintf('\n Adding MODIS albedo information \n'); end
         if DEBUG_LEVEL > 2; t_modis_alb = tic; end
+        
+        [orbit_lonlim, orbit_latlim] = calc_orbit_latlon_limis(this_data.FoV75CornerLongitude, this_data.FoV75CornerLatitude, ancillary_lonlim, ancillary_latlim);
+        
+        % Previously we tried doing this outside the orbit loop, which used
+        % a lot of memory but limited the number of times that we had to
+        % read these files. Now, we'll try it inside the loop, but only
+        % read the part relevant to each orbit.
+        if DEBUG_LEVEL > 2; t_alb_read = tic; end
+        modis_brdf_data = read_modis_albedo(modis_mcd43_dir, this_dnum, orbit_lonlim, orbit_latlim);
+        if DEBUG_LEVEL > 2; fprintf('Worker %d: Time to read MODIS BRDF = %f\n', this_task.ID, toc(t_alb_read)); end
+        
         this_data = avg_modis_alb_to_pixels(modis_brdf_data, coart_lut, ocean_mask, this_data, 'QualityLimit', 3, 'DEBUG_LEVEL', DEBUG_LEVEL);
 
         if DEBUG_LEVEL > 2; fprintf('      Time to average MODIS albedo on worker %d: %f\n', this_task.ID, toc(t_modis_alb)); end
@@ -520,6 +517,10 @@ parfor(j=1:length(datenums), n_workers)
         
         data_ind = data_ind + 1;
         Data(data_ind) = this_data;
+
+        % Clear the modis albedo structure, hopefully this will help with
+        % memory usage
+        modis_brdf_data = [];
 
         if DEBUG_LEVEL > 2; fprintf('    Time for one orbit on worker %d: %f\n', this_task.ID, toc(t_orbit)); end
         
@@ -759,32 +760,17 @@ for a=1:numel(fns)
 end
 end
 
+function [lonlim, latlim] = calc_orbit_latlon_limis(lons, lats, anc_lonlim, anc_latlim)
+% Figure out the lat/lon extents of the orbit, with a small buffer. Right
+% now, this is just used for the MODIS BRDF data, which is at 30 arc sec
+% (i.e. 1/120 of a degree or ~ 1 km) resolution, so we'll add about two
+% grid cells in each direction. Also restrict it to the ancillary data
+% limits so that it is consistent with ancillary data loaded for the whole
+% day.
+buffer = 2/120;
+lonlim = [min(lons(:))-buffer, max(lons(:))+buffer];
+lonlim = [max(lonlim(1), anc_lonlim(1)), min(lonlim(2), anc_lonlim(2))];
 
-function data = add_behr_corners(data, sp_filename)
-spacecraft_vars = {'Longitude', 'Latitude', 'SpacecraftAltitude', 'SpacecraftLatitude', 'SpacecraftLongitude'};
-spacecraft = make_empty_struct_from_cell(spacecraft_vars);
-spacecraft = read_omi_sp(sp_filename, '/HDFEOS/SWATHS/ColumnAmountNO2', spacecraft_vars, spacecraft, [-180 180], [-90 90]);
-
-% If dealing with a zoom mode day, then rows 30-59 will be NaNs in the
-% pixel coordinates. NaNs mess up find_submatrix2, so we need to identify
-% the non-NaN piece and work with that, then put the corners in the right
-% place.
-datanans = all(isnan(data.Longitude),1) & all(isnan(data.Latitude),1);
-scnans = all(isnan(spacecraft.Longitude),1) & all(isnan(spacecraft.Latitude),1);
-subinds = find_submatrix2(data.Longitude(:,~datanans), data.Latitude(:,~datanans), spacecraft.Longitude(:,~scnans), spacecraft.Latitude(:,~scnans));
-
-corners = fxn_corner_coordinates(spacecraft.Latitude(:,~scnans), spacecraft.Longitude(:,~scnans), spacecraft.SpacecraftLatitude, spacecraft.SpacecraftLongitude, spacecraft.SpacecraftAltitude);
-
-xx = subinds(1,1):subinds(1,2);
-yy = subinds(2,1):subinds(2,2);
-loncorn = squeeze(corners(xx,yy,1,1:4));
-loncorn = permute(loncorn, [3 1 2]);
-latcorn = squeeze(corners(xx,yy,2,1:4));
-latcorn = permute(latcorn, [3 1 2]);
-
-data.Loncorn = nan([4, size(data.Longitude)]);
-data.Latcorn = nan([4, size(data.Latitude)]);
-data.Loncorn(:,:,~datanans) = loncorn;
-data.Latcorn(:,:,~datanans) = latcorn;
-
+latlim = [min(lats(:))-buffer, max(lats(:))+buffer];
+latlim = [max(latlim(1), anc_latlim(1)), min(latlim(2), anc_latlim(2))];
 end
