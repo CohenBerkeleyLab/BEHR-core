@@ -1,5 +1,4 @@
-*
-************************************
+**************************************
 ****   Berkeley High Resolution   ****
 **** (BEHR) NO2 Product Changelog ****
 **************************************
@@ -37,7 +36,8 @@ equivalent to the one with the period and is used interchangeably.
 -- Bug in the BEHRQualityFlags field fixed; previously the quality summary bit (least
    significant bit) only flagged pixels with low quality albedo data and the error
    summary bit (2nd least significant bit) only flagged pixels affected by the row
-   anomaly.
+   anomaly. Now these two summary bits correctly summarize all sources of low quality
+   or error in each pixel.
 -- Clear and cloudy scattering weights are now published separately; averaging kernels
    are still the cloud radiance fraction-weighted sum of clear and cloudy sensitivities.
 -- The ocean reflectivity look up table was updated so that the reflectivity was calculated
