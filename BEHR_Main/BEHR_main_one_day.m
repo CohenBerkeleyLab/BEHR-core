@@ -156,6 +156,7 @@ for d=1:length(Data)
     albedo = Data(d).MODISAlbedo;
     cldFrac = Data(d).CloudFraction;
     cldRadFrac = Data(d).CloudRadianceFraction;
+    tropoPres = Data(d).TropopausePressure;
     
     pressure = behr_pres_levels();
     
@@ -197,7 +198,7 @@ for d=1:length(Data)
     % threshold.) Therefore in that case we need to keep the NO2 and
     % temperature profiles over all bins.
     keep_all_bins = ~lookup_profile;
-    [no2Profile, temperature, wrf_profile_file, surfPres, surfPres_WRF, tropoPres, tropopause_interp_flag, wrf_pres_mode, wrf_temp_mode] = ...
+    [no2Profile, temperature, wrf_profile_file, surfPres, surfPres_WRF, wrf_pres_mode, wrf_temp_mode] = ...
         rProfile_WRF(prof_date, prof_mode, region, prof_loncorns, prof_latcorns, time, globe_terheight, pressure, no2_profile_path,...
         'err_missing_att', err_wrf_missing_attr, 'clip_at_int_limits', ~keep_all_bins); %JLL 18 Mar 2014: Bins the NO2 profiles to the OMI pixels; the profiles are averaged over the pixel
     
@@ -282,15 +283,12 @@ for d=1:length(Data)
     Data(d).BEHRPressureLevels = reshape(sw_plevels, [len_vecs, sz]);
     % temporary fields, will be removed after the warning flag is set
     Data(d).TropoPresVSCldPres = (tropoPres-cldPres) > 0;
-    Data(d).Interp_TropopausePressure = tropopause_interp_flag;
-    %
     Data(d).BEHRSurfacePressure = surfPres;
     Data(d).WRFSurfacePressure = surfPres_WRF; % mainly for testing, I'm curious how much WRF's surface pressure differs when adjusted with GLOBE
-    Data(d).BEHRTropopausePressure = tropoPres;
     Data(d).BEHRQualityFlags = behr_quality_flags(Data(d));   
 end
 % remove the field 'TropoPresVSCldPres' as it's only used in behr_quality_flags
-Data = rmfield(Data,{'TropoPresVSCldPres','Interp_TropopausePressure'});
+Data = rmfield(Data,{'TropoPresVSCldPres'});
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CALCULATE VCDS FROM NASA SCDS AND OUR AMFS %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
