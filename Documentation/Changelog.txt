@@ -31,6 +31,8 @@ equivalent to the one with the period and is used interchangeably.
 ============
 2) Changelog
 ============
+**** 3.0C ****
+-- The tropopause pressure is now switched to NASA tropopause pressure instead of calculating from WRF temperature profiles
 
 **** 3.0B ****
 -- Bug in the BEHRQualityFlags field fixed; previously the quality summary bit (least
