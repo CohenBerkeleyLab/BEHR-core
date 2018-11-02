@@ -80,12 +80,12 @@ end
 % Now run BEHR but for the modified parameters
 if strcmpi(parameter, 'profileloc')
     [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', true, 'lookup_sweights', false,...
-        'randomize_profile_loc', true, varargin{:});
+        'randomize_profile_loc', true, varargin{:},'err_wrf_missing_attr',false);
 elseif strcmpi(parameter, 'profiletime')
     [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', true, 'lookup_sweights', false,...
-        'randomize_profile_time', true, varargin{:});
+        'randomize_profile_time', true, varargin{:},'err_wrf_missing_attr',false);
 else
-    [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', false, 'lookup_sweights', true, 'extra_gridding_fields', {parameter}, varargin{:});
+    [Delta, DeltaGrid] = BEHR_main_one_day(Delta, 'profile_mode', Delta(1).BEHRProfileMode, 'lookup_profile', false, 'lookup_sweights', true, 'extra_gridding_fields', {parameter}, varargin{:},'err_wrf_missing_attr',false);
 end
 
 

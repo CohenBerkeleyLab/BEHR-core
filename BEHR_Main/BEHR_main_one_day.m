@@ -222,7 +222,7 @@ for d=1:length(Data)
             % profiles for the scattering weights.
             E.callError('profile_lookup', 'Looked up different temperature profiles than the NO2 profiles given in the file (difference exceeds 1 pptv)')
         end
-        tropoPres = Data(d).BEHRTropopausePressure;
+        tropoPres = Data(d).TropopausePressure;
     end
     bad_profs = squeeze(all(isnan(no2Profile),1));
     
