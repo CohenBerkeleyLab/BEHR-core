@@ -1,4 +1,6 @@
 # BEHR Core
+[![DOI](https://zenodo.org/badge/103979665.svg)](https://zenodo.org/badge/latestdoi/103979665)
+
 ## Core code for the Berkeley High Resolution OMI NO2 Retrieval
 
 This repository contains the core algorithm for the BEHR retrieval, written in Matlab.
